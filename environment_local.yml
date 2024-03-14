@@ -1,0 +1,30 @@
+# environment.yaml
+name: mountainash_settings_p312
+dependencies:
+  - python>=3.12.0
+  - ipython
+  - pip
+  - pip:
+    - ipykernel
+    - pathlib
+    - pandas
+    - pydantic>=2
+    # - lxml
+    # - simplejson
+    # - jsonschema
+    # - autopep8
+    - pydantic-settings
+    - universal_pathlib
+    # - ruff
+    # - faker
+    # - duckdb
+    # - pysqlite3
+    # - boltons
+    # - rstr
+    # - flake8
+    # - flake8-bugbear
+    - pytest
+    # - scipy
+    # - sphinx
+    # - sphinx-rtd-theme
+    # - pytest_check
