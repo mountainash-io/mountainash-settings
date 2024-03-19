@@ -3,9 +3,9 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
-from mountainash_acdrs.utils.file_utils import LocalFileUtils
+from mountainash_utils.os_utils import get_platform_slash
 
-PLATFORM_SLASH = LocalFileUtils.get_platform_slash()
+PLATFORM_SLASH = get_platform_slash()
 
 
 class AuthSettingsTemplates(BaseSettings):

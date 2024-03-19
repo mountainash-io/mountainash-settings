@@ -4,8 +4,9 @@ from upath import UPath
 from pydantic import ValidationError
 from importlib import import_module
 
-from mountainash_acdrs.utils.file_utils import LocalFileUtils
-from .settings_utils import SettingsUtils
+from mountainash_utils_files.file_interface import FileInterface
+
+from .settings_utils import SettingsUtils, SettingsParameters
 from .base_settings import MountainAshBaseSettings
 
 
@@ -25,27 +26,36 @@ class SettingsManager:
     protected_attributes: List[str] = ['BATCH_TIER', 'BATCH_VERSION']
     reserved_kwargs = {"_env_file","_env_file_encoding", "_env_prefix","_dummy"}
 
+    auth_parameters: Optional[SettingsParameters] = None
 
-    @classmethod
-    def validate_config_files_exist(cls, 
+
+    def __init__(self,
+                 auth_parameters: Optional[SettingsParameters] = None
+                 ) -> None:
+        
+        self.auth_parameters = auth_parameters
+
+
+    # # @classmethod
+    def validate_config_files_exist(self, 
                                     config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]] = None
                                     ) -> None:
         
         config_files_list = SettingsUtils.format_config_file_list(config_files=config_files)
 
         if config_files_list:
+
             for config_file_temp in config_files_list:
-                config_file = LocalFileUtils.format_path(path=config_file_temp)
                 
-                if not LocalFileUtils.path_exists(path=config_file):
-                    raise FileNotFoundError(f"Config file {config_file} not found.")
+                if not FileInterface.path_exists(path=config_file_temp, auth_parameters=self.auth_parameters):
+                    raise FileNotFoundError(f"Config file {config_file_temp} not found.")
                     
                 print(f"Config file found: {config_file_temp}")
 
 
 
-    @classmethod
-    def validate_kwargs_keys(cls, 
+    # @classmethod
+    def validate_kwargs_keys(self, 
                              settings_class:    Type[MountainAshBaseSettings],                             
                              kwargs:            Optional[Dict[str, Any]]=None, 
         ) -> None:
@@ -60,7 +70,7 @@ class SettingsManager:
         # Build a set of all keys/elements from the inputs to be combined
 
         if kwargs:
-            combined_elements: set = cls.reserved_kwargs
+            combined_elements: set = self.reserved_kwargs
 
             valid_setting_kwargs = SettingsUtils.get_valid_setting_kwargs(p_kwargs=kwargs, settings_class=settings_class)
             if valid_setting_kwargs:
@@ -77,14 +87,14 @@ class SettingsManager:
 
 
         
-    @classmethod
-    def validate_init_existing_namespace(cls, 
+    # @classmethod
+    def validate_init_existing_namespace(self, 
                     settings_namespace: str, 
                     config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
                     **kwargs) -> None:
         
         #This will raise an error if not found
-        obj_settings: MountainAshBaseSettings = cls.get_config_object(settings_namespace=settings_namespace)
+        obj_settings: MountainAshBaseSettings = self.get_config_object(settings_namespace=settings_namespace)
 
         existing_config_files = SettingsUtils.format_config_file_list(config_files=obj_settings.SETTINGS_SOURCE_ENV_FILES)
         existing_kwargs = obj_settings.SETTINGS_SOURCE_KWARGS
@@ -101,8 +111,8 @@ class SettingsManager:
 
 
 
-    @classmethod
-    def init_config(cls, 
+    # @classmethod
+    def init_config(self, 
                     settings_namespace: str, 
                     settings_class:     Type[MountainAshBaseSettings],                    
                     config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
@@ -124,23 +134,23 @@ class SettingsManager:
 
 
         #Check if the namespace is already initialised
-        if cls.is_namespace_initialised(settings_namespace=settings_namespace):
+        if self.is_namespace_initialised(settings_namespace=settings_namespace):
 
             #If it was already initialised, why are we trying to re-initialse it? Fail if parameters have changed. Pass if the same, but with a warning.
-            cls.validate_init_existing_namespace(settings_namespace=settings_namespace, config_files=config_files, **kwargs)
+            self.validate_init_existing_namespace(settings_namespace=settings_namespace, config_files=config_files, **kwargs)
             
             #Get the existing settings object
-            obj_settings: MountainAshBaseSettings = cls.get_config_object(settings_namespace=settings_namespace)
+            obj_settings: MountainAshBaseSettings = self.get_config_object(settings_namespace=settings_namespace)
 
         #Otherwise We have a new config to create
         else:
             ### HANDLE CONFIG FILES ###
 
             config_files_list: Optional[List[UPath | str]] = SettingsUtils.format_config_file_list(config_files=config_files)
-            cls.validate_config_files_exist(config_files=config_files_list)            
+            self.validate_config_files_exist(config_files=config_files_list)            
             
             ### HANDLE KWARGS ###
-            cls.validate_kwargs_keys(settings_class=settings_class, kwargs=kwargs)
+            self.validate_kwargs_keys(settings_class=settings_class, kwargs=kwargs)
 
             #Create the AppSettings object
             settings_class_ref: Type[MountainAshBaseSettings] = getattr(import_module(name=settings_class.__module__), settings_class.__name__)
@@ -150,22 +160,22 @@ class SettingsManager:
                                               SETTINGS_CLASS_NAME = settings_class.__name__, 
                                               **kwargs)
 
-            cls.app_settings_objects[settings_namespace] = obj_settings
+            self.app_settings_objects[settings_namespace] = obj_settings
 
         return obj_settings
 
  
-    @classmethod
-    def is_namespace_initialised(cls, settings_namespace: str) -> bool:
+    # @classmethod
+    def is_namespace_initialised(self, settings_namespace: str) -> bool:
 
         #check if the namespace is already initialised by looking at the keys in the app_settings_objects dict
-        return settings_namespace in cls.app_settings_objects.keys()
+        return settings_namespace in self.app_settings_objects.keys()
 
 
-    @classmethod
-    def get_config_object(cls,settings_namespace: str) -> MountainAshBaseSettings:
+    # @classmethod
+    def get_config_object(self,settings_namespace: str) -> MountainAshBaseSettings:
 
-        obj_settings: Optional[MountainAshBaseSettings] = cls.app_settings_objects.get(settings_namespace, None)
+        obj_settings: Optional[MountainAshBaseSettings] = self.app_settings_objects.get(settings_namespace, None)
 
         if isinstance(obj_settings, MountainAshBaseSettings):
             return obj_settings
@@ -173,8 +183,8 @@ class SettingsManager:
             raise ValueError(f"Configuration for namespace '{settings_namespace}' found, but is not an MountainAshBaseSettings object.")
 
 
-    @classmethod
-    def get_existing_config(cls,
+    # @classmethod
+    def get_existing_config(self,
                 settings_namespace: str,
                 #config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
                 **kwargs) -> MountainAshBaseSettings:
@@ -182,7 +192,7 @@ class SettingsManager:
         print(f"Getting existing config via get_existing_config(): {settings_namespace}")
 
         # Get the existing settings object
-        obj_settings: MountainAshBaseSettings = cls.get_config_object(settings_namespace=settings_namespace)       
+        obj_settings: MountainAshBaseSettings = self.get_config_object(settings_namespace=settings_namespace)       
         settings_class: Type = obj_settings.SETTINGS_CLASS
 
         # Overwrite the settings with valid runtime kwargs
@@ -199,8 +209,8 @@ class SettingsManager:
 
         return obj_settings
 
-    @classmethod
-    def get_new_config(cls,
+    # @classmethod
+    def get_new_config(self,
                 settings_namespace: str,
                 settings_class:     Type[MountainAshBaseSettings],  
                 config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
@@ -208,7 +218,7 @@ class SettingsManager:
 
         print(f"Initialising new config via get_new_config(): {settings_namespace}")
 
-        obj_settings: MountainAshBaseSettings = cls.init_config(settings_namespace=settings_namespace, settings_class=settings_class, config_files=config_files,  **kwargs)
+        obj_settings: MountainAshBaseSettings = self.init_config(settings_namespace=settings_namespace, settings_class=settings_class, config_files=config_files,  **kwargs)
 
         if isinstance(obj_settings, MountainAshBaseSettings):
             return obj_settings
@@ -216,8 +226,8 @@ class SettingsManager:
             raise ValueError(f"Configuration for namespace '{settings_namespace}' created, but is not a MountainAshBaseSettings object.")        
 
 
-    @classmethod
-    def get_config(cls,
+    # @classmethod
+    def get_config(self,
                 settings_namespace: str,
                 settings_class:     Optional[Type[MountainAshBaseSettings]] = None,  
                 config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
@@ -229,17 +239,17 @@ class SettingsManager:
             # settings_namespace = SettingsUtils.default_namespace
 
         # Check if the namespace is already initialised
-        if cls.is_namespace_initialised(settings_namespace=settings_namespace):
+        if self.is_namespace_initialised(settings_namespace=settings_namespace):
 
             # Get the existing settings object
-            obj_settings: MountainAshBaseSettings = cls.get_existing_config(settings_namespace=settings_namespace, **kwargs)
+            obj_settings: MountainAshBaseSettings = self.get_existing_config(settings_namespace=settings_namespace, **kwargs)
 
         else:
             if not settings_class:
                 raise ValueError(f"Settings class not provided for namespace '{settings_namespace}'.")
 
             # Create a new one
-            obj_settings = cls.get_new_config(settings_namespace=settings_namespace, settings_class=settings_class, config_files=config_files, **kwargs)
+            obj_settings = self.get_new_config(settings_namespace=settings_namespace, settings_class=settings_class, config_files=config_files, **kwargs)
 
         if not obj_settings:
             raise ValueError(f"Configuration for namespace '{settings_namespace}' not found.")

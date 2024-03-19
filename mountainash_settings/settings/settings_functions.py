@@ -14,14 +14,14 @@ from .base_settings import MountainAshBaseSettings
 
 
 @lru_cache(maxsize=None)
-def get_settings_manager() -> SettingsManager:
+def get_settings_manager(auth_parameters: Optional[SettingsParameters]=None) -> SettingsManager:
     """
     Retrieves the AppSettingsManager instance.
 
     Returns:
         AppSettingsManager: The singleton instance of AppSettingsManager.
     """
-    return SettingsManager()
+    return SettingsManager(auth_parameters=auth_parameters)
 
 
 
