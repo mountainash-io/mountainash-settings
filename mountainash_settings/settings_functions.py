@@ -3,9 +3,9 @@ from functools import lru_cache
 from upath import UPath
 
 
-from .settings import SettingsUtils, SettingsParameters
-from .settings import SettingsManager
-from .settings import MountainAshBaseSettings
+from . import SettingsUtils, SettingsParameters
+from . import SettingsManager
+from . import MountainAshBaseSettings
 
 # @lru_cache()
 # def get_app_file_templates() -> AppFileTemplates:

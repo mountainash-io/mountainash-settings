@@ -3,7 +3,7 @@ name: Python Package using Conda
 on: 
   push:
     paths:
-      - 'mountainash_acrds/**'    
+      - 'mountainash_settings/**'    
   workflow_dispatch:
 
 jobs:

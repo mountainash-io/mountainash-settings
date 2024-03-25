@@ -1,0 +1,7 @@
+# environment.yaml
+name: base
+dependencies:
+  - pip
+  # - pip:
+  #   - git+https://github.com/mountainash-io/mountainash-constants.git@main
+

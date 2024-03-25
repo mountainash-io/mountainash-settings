@@ -1,4 +1,5 @@
 from mountainash_settings import SettingsUtils, SettingsManager
+from typing import Any, List
 import pytest
 
 ##===========================
@@ -77,7 +78,7 @@ def test_format_kwargs_dict_invalid_type():
 
     # Act
     with pytest.raises(ValueError):
-        result = SettingsUtils.format_kwargs_dict(p_kwargs=p_kwargs)
+        result = SettingsUtils.format_kwargs_dict(p_kwargs = p_kwargs)
 
     # Assert
     # assert result is None
@@ -95,22 +96,23 @@ def test_resolve_config_files_both_none():
 
 # Test case for when new_config_files is not None and original_config_files is None
 def test_resolve_config_files_new_not_none():
-    new_config_files: list[str] = ["file1", "file2"]
+    new_config_files: List[Any] = ["file1", "file2"]
 
     assert SettingsUtils.resolve_config_files(new_config_files=new_config_files) == new_config_files
 
 # Test case for when new_config_files is None and original_config_files is not None
 def test_resolve_config_files_original_not_none():
-    original_config_files: list[str] = ["file1", "file2"]
+
+    original_config_files: List[Any] = ["file1", "file2"]
 
     assert SettingsUtils.resolve_config_files(original_config_files=original_config_files) == original_config_files
 
 # Test case for when both new_config_files and original_config_files are not None
 def test_resolve_config_files_both_not_none():
 
-    new_config_files = ["file2", "file1"]
-    original_config_files = ["file4", "file3", "file1"]
-    expected_result = ["file1", "file2", "file3", "file4"]
+    new_config_files: liListst[Any] = ["file2", "file1"]
+    original_config_files: List[Any] = ["file4", "file3", "file1"]
+    expected_result: List[Any] = ["file1", "file2", "file3", "file4"]
 
     assert SettingsUtils.resolve_config_files(new_config_files=new_config_files,
                                         original_config_files=original_config_files) == expected_result
