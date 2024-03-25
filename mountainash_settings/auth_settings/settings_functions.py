@@ -2,9 +2,9 @@ from typing import Optional, Union, List, Any, Dict, Tuple
 from functools import lru_cache
 from upath import UPath
 
-from mountainash_settings.settings.settings_functions import get_settings
-from mountainash_settings.settings.settings_utils import  SettingsParameters, SettingsUtils
-from mountainash_settings.settings.base_settings import MountainAshBaseSettings
+from ..settings_functions import get_settings
+from ..settings import  SettingsParameters, SettingsUtils
+from ..settings import MountainAshBaseSettings
 from .auth_settings import AuthSettings
 
 

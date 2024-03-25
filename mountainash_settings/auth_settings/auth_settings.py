@@ -3,7 +3,7 @@ from typing import Optional, Union, List, Any, Tuple, Dict
 from pydantic import Field
 from pydantic_settings import SettingsConfigDict
 
-from mountainash_settings.settings.base_settings import MountainAshBaseSettings
+from ..settings import MountainAshBaseSettings
 
 
 class AuthSettings(MountainAshBaseSettings):

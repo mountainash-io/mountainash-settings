@@ -5,8 +5,6 @@ from importlib import import_module
 import platform
 
 from .settings_parameters import SettingsParameters
-# from .app_settings import AppSettings
-# from .auth_settings import AuthSettings
 from .base_settings import MountainAshBaseSettings
 
 

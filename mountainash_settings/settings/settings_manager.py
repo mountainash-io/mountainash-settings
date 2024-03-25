@@ -1,12 +1,14 @@
 from typing import Optional, Union, List, Any, Tuple, Dict, Type
 from upath import UPath
- 
+import os 
+
 from pydantic import ValidationError
 from importlib import import_module
+from functools import lru_cache
+# from mountainash_utils_files.file_interface import FileInterface
 
-from mountainash_utils_files.file_interface import FileInterface
-
-from .settings_utils import SettingsUtils, SettingsParameters
+from .settings_utils import SettingsUtils
+from .settings_parameters import SettingsParameters
 from .base_settings import MountainAshBaseSettings
 
 
@@ -47,7 +49,8 @@ class SettingsManager:
 
             for config_file_temp in config_files_list:
                 
-                if not FileInterface.path_exists(path=config_file_temp, auth_parameters=self.auth_parameters):
+                #Only works for local files
+                if not os.path.exists(path=config_file_temp):
                     raise FileNotFoundError(f"Config file {config_file_temp} not found.")
                     
                 print(f"Config file found: {config_file_temp}")
@@ -255,4 +258,5 @@ class SettingsManager:
             raise ValueError(f"Configuration for namespace '{settings_namespace}' not found.")
 
         return obj_settings
+
 
