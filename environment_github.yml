@@ -1,5 +1,5 @@
 # environment.yaml
-name: base
+# name: base
 dependencies:
   - python>=3.12.0
   - pip
