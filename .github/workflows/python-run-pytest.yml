@@ -50,7 +50,7 @@ jobs:
         run: hatch env create radon
 
       - name: Complexity checks with radon - cc
-        run: hatch run radon:radon_cc
+        run: hatch run radon:radon-cc
 
       - name: Complexity checks with radon - mi
-        run: hatch run radon:radon_mi
+        run: hatch run radon:radon-mi
