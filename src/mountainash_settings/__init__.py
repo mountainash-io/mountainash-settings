@@ -8,6 +8,7 @@ from .settings_parameters import SettingsParameters
 from .settings_functions import get_settings
 
 __all__ = [
+    "__version__",
     "MountainAshBaseSettings",
     "SettingsManager", 
     "SettingsParameters", 

@@ -16,8 +16,6 @@ authors = [
 classifiers = [
   "Development Status :: 4 - Beta",
   "Programming Language :: Python",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -60,6 +58,14 @@ cov = [
   "test-cov",
   "cov-report",
 ]
+
+# Ruff Linting Checks
+[tool.hatch.envs.ruff]
+dependencies = [
+  "ruff"
+]
+[tool.hatch.envs.ruff.scripts]
+check = "ruff check ./src"
 
 # Radon Complexity Checks
 [tool.hatch.envs.radon]
