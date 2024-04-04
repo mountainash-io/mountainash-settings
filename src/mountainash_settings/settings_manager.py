@@ -227,7 +227,7 @@ class SettingsManager:
             raise ValueError(f"Configuration for namespace '{settings_namespace}' created, but is not a MountainAshBaseSettings object.")        
 
 
-    # @classmethod
+ 
     def get_config(self,
                 settings_namespace: str,
                 settings_class:     Optional[Type[MountainAshBaseSettings]] = None,  
