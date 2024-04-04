@@ -1,6 +1,5 @@
 from .__version__ import __version__
 
-
 from .base_settings import MountainAshBaseSettings
 from .settings_manager import SettingsManager
 from .settings_utils import SettingsUtils

@@ -14,7 +14,7 @@ from . import MountainAshBaseSettings
 
 
 @lru_cache(maxsize=None)
-def get_settings_manager(auth_parameters: Optional[SettingsParameters]=None) -> SettingsManager:
+def _get_settings_manager(auth_parameters: Optional[SettingsParameters]=None) -> SettingsManager:
     """
     Retrieves the AppSettingsManager instance.
 
@@ -22,6 +22,16 @@ def get_settings_manager(auth_parameters: Optional[SettingsParameters]=None) -> 
         AppSettingsManager: The singleton instance of AppSettingsManager.
     """
     return SettingsManager(auth_parameters=auth_parameters)
+
+
+def get_settings_manager(auth_parameters: Optional[SettingsParameters]=None) -> SettingsManager:
+    """
+    Retrieves the AppSettingsManager instance.
+
+    Returns:
+        AppSettingsManager: The singleton instance of AppSettingsManager.
+    """
+    return _get_settings_manager(auth_parameters=auth_parameters)
 
 
 @lru_cache(maxsize=None)

@@ -1,5 +1,0 @@
-pytest
-radon
-pydantic>=2
-pydantic-settings
-universal_pathlib

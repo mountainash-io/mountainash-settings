@@ -11,22 +11,9 @@ dependencies:
     - coverage
     - ruff
     - hatch
-    # - pathlib
-    # - pandas
-    # - polars
     - pydantic>=2
     - pydantic-settings
-    # - pyarrow
-    # - boltons
-    # - paramiko
-    # - gnupg
-    # - minio
-    # - boto3
     - universal_pathlib
-    # - smart_open[s3]
-    # - paramiko
-    # - python-gnupg
-    # - xsdata
     #This package
     - -e .
     #Other Mountain Ash Packages
