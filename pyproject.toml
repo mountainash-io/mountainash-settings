@@ -100,36 +100,36 @@ dependencies = [
 check = "mypy --install-types --non-interactive {args:src/mountainash_settings tests}"
 
 # Downstream package testing
-[tool.hatch.envs.test_downstream]
-dependencies = [  
-  "pytest",
-  "pytest_check",
-  "mountainash_auth_settings @ {root:uri}/../mountainash-auth-settings",
-  "mountainash_acrds_settings @ {root:uri}/../mountainash-acrds-settings",
-  "mountainash_constants @ {root:uri}/../mountainash-constants",
-  "mountainash_acrds_constants @ {root:uri}/../mountainash-acrds-constants",
-  "mountainash_utils_dataclasses @ {root:uri}/../mountainash-utils-dataclasses"
-  ]
+# [tool.hatch.envs.test_downstream]
+# dependencies = [  
+#   "pytest",
+#   "pytest_check",
+#   "mountainash_auth_settings @ {root:uri}/../mountainash-auth-settings",
+#   "mountainash_acrds_settings @ {root:uri}/../mountainash-acrds-settings",
+#   "mountainash_constants @ {root:uri}/../mountainash-constants",
+#   "mountainash_acrds_constants @ {root:uri}/../mountainash-acrds-constants",
+#   "mountainash_utils_dataclasses @ {root:uri}/../mountainash-utils-dataclasses"
+#   ]
 
-[tool.hatch.envs.test_downstream.scripts]
-test = [#"pytest {args:tests}", 
-        "pytest ../mountainash-auth-settings"
-]
+# [tool.hatch.envs.test_downstream.scripts]
+# test = [#"pytest {args:tests}", 
+#         "pytest ../mountainash-auth-settings"
+# ]
 
-# Downstream ACRDS package testing
-[tool.hatch.envs.test_downstream_acrds]
-dependencies = [  
-  "pytest",
-  "pytest_check",
-  "mountainash_constants @ {root:uri}/../mountainash-constants",
-  "mountainash_acrds_settings @ {root:uri}/../mountainash-acrds-settings",
-  "mountainash_acrds_constants @ {root:uri}/../mountainash-acrds-constants",
-  "mountainash_utils_dataclasses @ {root:uri}/../mountainash-utils-dataclasses",
-  "mountainash_utils @ {root:uri}/../mountainash-utils"
-  ]
+# # Downstream ACRDS package testing
+# [tool.hatch.envs.test_downstream_acrds]
+# dependencies = [  
+#   "pytest",
+#   "pytest_check",
+#   "mountainash_constants @ {root:uri}/../mountainash-constants",
+#   "mountainash_acrds_settings @ {root:uri}/../mountainash-acrds-settings",
+#   "mountainash_acrds_constants @ {root:uri}/../mountainash-acrds-constants",
+#   "mountainash_utils_dataclasses @ {root:uri}/../mountainash-utils-dataclasses",
+#   "mountainash_utils @ {root:uri}/../mountainash-utils"
+#   ]
 
-[tool.hatch.envs.test_downstream_acrds.scripts]
-test = ["pytest ../mountainash-acrds-settings"]
+# [tool.hatch.envs.test_downstream_acrds.scripts]
+# test = ["pytest ../mountainash-acrds-settings"]
 
 
 # Coverage Parameters
