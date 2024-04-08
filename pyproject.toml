@@ -72,8 +72,8 @@ cov-report = [
 ]
 cov = [
   "test-cov",
-  "test-xml",
   "cov-report",
+  "test-xml",
 ]
 
 # Ruff Linting Checks
