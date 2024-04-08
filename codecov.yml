@@ -11,3 +11,6 @@ cli:
   plugins:
     pycoverage:
       report_type: "xml"
+
+codecov: 
+ token: cbae6630-bdcf-4042-a2a1-ced987e69500
