@@ -1,11 +1,11 @@
-flag_management:
-  individual_flags:
-    - name: smart-tests
-      carryforward: true
-      carryforward_mode: "labels"
-      statuses:
-        - type: "project"
-        - type: "patch"
+# flag_management:
+#   individual_flags:
+#     - name: smart-tests
+#       carryforward: true
+#       carryforward_mode: "labels"
+#       statuses:
+#         - type: "project"
+#         - type: "patch"
 
 cli:
   plugins:
