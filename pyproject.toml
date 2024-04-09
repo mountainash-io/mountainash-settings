@@ -50,6 +50,20 @@ dependencies = [
 ]
 [tool.hatch.envs.test_github.scripts]
 test = "pytest"
+test-cov = "coverage run -m pytest"
+test-xml = "coverage xml"
+cov-report = [
+  "- coverage combine",
+  "coverage report",
+]
+cov = [
+  "test-cov",
+  "cov-report",
+  "test-xml",
+]
+cov-html = [
+  "coverage html",
+]
 
 
 # Pytest and Test Coverage
@@ -74,6 +88,9 @@ cov = [
   "test-cov",
   "cov-report",
   "test-xml",
+]
+cov-html = [
+  "coverage html",
 ]
 
 # Ruff Linting Checks

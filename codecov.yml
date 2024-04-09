@@ -1,16 +1,5 @@
-# flag_management:
-#   individual_flags:
-#     - name: smart-tests
-#       carryforward: true
-#       carryforward_mode: "labels"
-#       statuses:
-#         - type: "project"
-#         - type: "patch"
 
 cli:
   plugins:
     pycoverage:
       report_type: "xml"
-
-codecov: 
- token: cbae6630-bdcf-4042-a2a1-ced987e69500
