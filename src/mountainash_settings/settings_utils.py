@@ -84,17 +84,23 @@ class SettingsUtils:
         """
 
 
-        settings_class_mod: Type[MountainAshBaseSettings] = getattr(import_module(name=settings_class.__module__), settings_class.__name__)       
-        obj_dummy_settings: MountainAshBaseSettings = settings_class_mod(_dummy=True)
+        
+        try:
+            settings_class_mod: Type[MountainAshBaseSettings] = getattr(import_module(name=settings_class.__module__), settings_class.__name__)       
+            obj_dummy_settings: MountainAshBaseSettings = settings_class_mod(_dummy=True)
 
-        # valid_attribute_names = set(vars(__object=obj_dummy_settings))
-        valid_attribute_names = set(obj_dummy_settings.model_fields)
+            # valid_attribute_names = set(vars(__object=obj_dummy_settings))
+            valid_attribute_names = set(obj_dummy_settings.model_fields)
 
-        # Filter the kwargs dictionary to include only valid attributes
-        valid_kwargs = {key: value for key, value in p_kwargs.items() if key in valid_attribute_names}
+            # Filter the kwargs dictionary to include only valid attributes
+            valid_kwargs = {key: value for key, value in p_kwargs.items() if key in valid_attribute_names}
 
-        # If an empty dictionary, return None
-        if not valid_kwargs:
+            # If an empty dictionary, return None
+            if not valid_kwargs:
+                return None
+
+        except Exception as e:
+            print(f"Error dummy settings from settings class {settings_class} : {e}")
             return None
 
         return valid_kwargs

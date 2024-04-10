@@ -3,9 +3,9 @@ from functools import lru_cache
 from upath import UPath
 
 
-from . import SettingsUtils, SettingsParameters
-from . import SettingsManager
-from . import MountainAshBaseSettings
+from .settings_utils import SettingsUtils, SettingsParameters
+from .settings_manager import SettingsManager
+from .base_settings import MountainAshBaseSettings
 
 # @lru_cache()
 # def get_app_file_templates() -> AppFileTemplates:
@@ -16,20 +16,20 @@ from . import MountainAshBaseSettings
 @lru_cache(maxsize=None)
 def _get_settings_manager(auth_parameters: Optional[SettingsParameters]=None) -> SettingsManager:
     """
-    Retrieves the AppSettingsManager instance.
+    Retrieves the SettingsManager instance.
 
     Returns:
-        AppSettingsManager: The singleton instance of AppSettingsManager.
+        SettingsManager: The singleton instance of SettingsManager.
     """
     return SettingsManager(auth_parameters=auth_parameters)
 
 
 def get_settings_manager(auth_parameters: Optional[SettingsParameters]=None) -> SettingsManager:
     """
-    Retrieves the AppSettingsManager instance.
+    Retrieves the SettingsManager instance.
 
     Returns:
-        AppSettingsManager: The singleton instance of AppSettingsManager.
+        SettingsManager: The singleton instance of SettingsManager.
     """
     return _get_settings_manager(auth_parameters=auth_parameters)
 
