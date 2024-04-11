@@ -47,9 +47,8 @@ class MountainAshBaseSettings(BaseSettings):
                 setattr(self, "SETTINGS_SOURCE_ENV_PREFIX", kwargs.get("_env_prefix"))
 
 
+            # Handle kwargs via Initialisation
             if kwargs:
-
-                init_settings = InitSettingsSource(settings_cls=settings_class, init_kwargs=kwargs)
 
                 #Remove special flags from the stored kwargs
                 kwargs_to_remove = set(["SETTINGS_CLASS", "SETTINGS_CLASS_NAME", "SETTINGS_NAMESPACE"])
@@ -58,14 +57,23 @@ class MountainAshBaseSettings(BaseSettings):
                 #Set attribute for inspection
                 setattr(self, "SETTINGS_SOURCE_KWARGS", config_kwargs)
 
+                init_settings = InitSettingsSource(settings_cls=settings_class, init_kwargs=config_kwargs)
+
             else:
                 init_settings = InitSettingsSource(settings_cls=settings_class, init_kwargs = {})
             
 
+            # Handle env files
             if kwargs.get("_env_file", None):                
                 setattr(self, "SETTINGS_SOURCE_ENV_FILES", kwargs.get("_env_file"))
 
-                dotenv_settings = DotEnvSettingsSource(settings_cls=type(self), case_sensitive = True, env_ignore_empty = True, env_parse_none_str = "None")
+                dotenv_settings = DotEnvSettingsSource(settings_cls=type(self), 
+                                                       env_file =self.SETTINGS_SOURCE_ENV_FILES,
+                                                       env_file_encoding = 'utf-8',
+                                                       env_prefix = self.SETTINGS_SOURCE_ENV_PREFIX,
+                                                       case_sensitive = True, 
+                                                       env_ignore_empty = True, 
+                                                       env_parse_none_str = "None")
             else:
                 dotenv_settings = DotEnvSettingsSource(settings_cls=settings_class)
 
@@ -90,6 +98,8 @@ class MountainAshBaseSettings(BaseSettings):
     SETTINGS_SOURCE_ENV_FILES: Optional[Union[Any, str, List[Any|str]]] =       Field(default=None)
     SETTINGS_SOURCE_ENV_PREFIX: Optional[str] =                                 Field(default=None)
     SETTINGS_SOURCE_KWARGS: Optional[Dict[str,Any]] =                           Field(default=None)
+
+
 
     #TODO: Create dictionary that indicates the source of each variable
     # default, env_file, kwarg, env_var, etc
