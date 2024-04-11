@@ -13,72 +13,49 @@ class MountainAshBaseSettings(BaseSettings):
             validate_default=False,
             #validate_assignment=True,
             arbitrary_types_allowed=True,
-            case_sensitive = True,
-            env_file_encoding = 'utf-8',
-            env_ignore_empty = True,
-            env_parse_none_str = "None",
+            # case_sensitive = True,
+            # env_file_encoding = 'utf-8',
+            # env_ignore_empty = True,
+            # env_parse_none_str = "None",
         )
 
     def __init__(self, 
-                 #_env_file=None, 
-                 #_env_prefix=None,
-                 _dummy=False,
+                 _dummy:bool = False,
                  **kwargs) -> None:  
 
-
-        super().__init__(#_case_sensitive=   True,
-                        #_env_file=         _env_file, 
-                        #  _env_file_encoding=_env_file_encoding,
-                        #_env_prefix=       _env_prefix,
-                        **kwargs # - do not pass through kwargs to BaseSettings. Only these specified settings!
-                         )
+        super().__init__(_case_sensitive=True, 
+                            _env_prefix=kwargs.get("SETTINGS_SOURCE_ENV_PREFIX", None),
+                            _env_file=kwargs.get("SETTINGS_SOURCE_ENV_FILES", None), 
+                            _env_file_encoding = 'utf-8',
+                            _env_igore_empty = True,
+                            _env_ignore_empty = True,
+                            _env_parse_none_str = "None",
+                            _secrets_dir=kwargs.get("SETTINGS_SOURCE_SECRETS_DIR", None),
+                            #**config_kwargs
+                        )
 
         if not _dummy:
 
             # Set attributes from kwargs - including SETTINGS_NAMESPACE
             #self.__dict__.update(kwargs)                    
+            # settings_class = kwargs.get("SETTINGS_CLASS", MountainAshBaseSettings)
 
-            settings_class = kwargs.get("SETTINGS_CLASS", MountainAshBaseSettings)
-            env_settings = EnvSettingsSource(settings_cls=type(self), case_sensitive = True, env_ignore_empty = True, env_parse_none_str = "None")
-            secrets_settings = SecretsSettingsSource(settings_cls=type(self))
-
-            if kwargs.get("_env_prefix", None):
-                # setattr(self.model_config, "env_prefix", _env_prefix)
-                setattr(self, "SETTINGS_SOURCE_ENV_PREFIX", kwargs.get("_env_prefix"))
-
-
+            config_kwargs = {}
             # Handle kwargs via Initialisation
             if kwargs:
-
                 #Remove special flags from the stored kwargs
-                kwargs_to_remove = set(["SETTINGS_CLASS", "SETTINGS_CLASS_NAME", "SETTINGS_NAMESPACE"])
+                kwargs_to_remove = set(["SETTINGS_CLASS", "SETTINGS_CLASS_NAME", "SETTINGS_NAMESPACE", "SETTINGS_SOURCE_ENV_FILES", "SETTINGS_SOURCE_ENV_PREFIX", "SETTINGS_SOURCE_KWARGS", "SETTINGS_SOURCE_SECRETS_DIR"])
                 config_kwargs = {k: v for k, v in kwargs.items() if k not in kwargs_to_remove}
 
-                #Set attribute for inspection
-                setattr(self, "SETTINGS_SOURCE_KWARGS", config_kwargs)
+                #Update all vals from valid kwargs                
+                self.update_settings_from_dict(config_kwargs)
 
-                init_settings = InitSettingsSource(settings_cls=settings_class, init_kwargs=config_kwargs)
-
-            else:
-                init_settings = InitSettingsSource(settings_cls=settings_class, init_kwargs = {})
-            
-
-            # Handle env files
-            if kwargs.get("_env_file", None):                
-                setattr(self, "SETTINGS_SOURCE_ENV_FILES", kwargs.get("_env_file"))
-
-                dotenv_settings = DotEnvSettingsSource(settings_cls=type(self), 
-                                                       env_file =self.SETTINGS_SOURCE_ENV_FILES,
-                                                       env_file_encoding = 'utf-8',
-                                                       env_prefix = self.SETTINGS_SOURCE_ENV_PREFIX,
-                                                       case_sensitive = True, 
-                                                       env_ignore_empty = True, 
-                                                       env_parse_none_str = "None")
-            else:
-                dotenv_settings = DotEnvSettingsSource(settings_cls=settings_class)
-
-
-            self.settings_customise_sources(settings_cls=settings_class, init_settings=init_settings, env_settings=env_settings, dotenv_settings=dotenv_settings, file_secret_settings=secrets_settings)
+            setattr(self, "SETTINGS_NAMESPACE", kwargs.get("SETTINGS_NAMESPACE", "DEFAULT"))
+            setattr(self, "SETTINGS_CLASS", kwargs.get("SETTINGS_CLASS", MountainAshBaseSettings))
+            setattr(self, "SETTINGS_CLASS_NAME", kwargs.get("SETTINGS_CLASS_NAME", "MountainAshBaseSettings"))
+            setattr(self, "SETTINGS_SOURCE_ENV_PREFIX", kwargs.get("SETTINGS_SOURCE_ENV_PREFIX", None))
+            setattr(self, "SETTINGS_SOURCE_ENV_FILES", kwargs.get("SETTINGS_SOURCE_ENV_FILES", None))
+            setattr(self, "SETTINGS_SOURCE_SECRETS_DIR", kwargs.get("SETTINGS_SOURCE_SECRETS_DIR", None))
 
             # Initialise templated variables
             self.post_init()
@@ -94,10 +71,10 @@ class MountainAshBaseSettings(BaseSettings):
     SETTINGS_CLASS: Type =                                            Field(default=None)
     SETTINGS_CLASS_NAME: str =                                        Field(default=None)
 
-    # SETTINGS_SOURCE_ENV_FILES: Optional[Union[UPath, str, List[UPath|str]]] =   Field(default=None)
     SETTINGS_SOURCE_ENV_FILES: Optional[Union[Any, str, List[Any|str]]] =       Field(default=None)
     SETTINGS_SOURCE_ENV_PREFIX: Optional[str] =                                 Field(default=None)
     SETTINGS_SOURCE_KWARGS: Optional[Dict[str,Any]] =                           Field(default=None)
+    SETTINGS_SOURCE_SECRETS_DIR: Optional[Dict[str,Any]] =                      Field(default=None)
 
 
 
@@ -151,6 +128,7 @@ class MountainAshBaseSettings(BaseSettings):
                 setattr(self, key, value)
             else:
                 raise AttributeError(f"The object does not have an attribute named '{key}'")
+                # print(f"The object does not have an attribute named '{key}'")
 
         setattr(self, 'SETTINGS_SOURCE_KWARGS', settings_dict)
 

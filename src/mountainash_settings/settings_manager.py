@@ -153,15 +153,15 @@ class SettingsManager:
             ### HANDLE KWARGS ###
             self.validate_kwargs_keys(settings_class=settings_class, kwargs=kwargs)
 
-            #Create the AppSettings object
+            #Create the Settings object
             settings_class_ref: Type[MountainAshBaseSettings] = getattr(import_module(name=settings_class.__module__), settings_class.__name__)
-            obj_settings = settings_class_ref(_env_file=config_files_list, 
+            obj_settings = settings_class_ref(                
+                                              SETTINGS_SOURCE_ENV_FILES =config_files_list,                                               
+                                            #   _env_file=config_files_list, 
                                               SETTINGS_NAMESPACE=settings_namespace, 
                                               SETTINGS_CLASS = settings_class_ref, 
                                               SETTINGS_CLASS_NAME = settings_class.__name__, 
                                               **kwargs)
-
-            print(f"init_config: {obj_settings.model_config}")
 
             self.app_settings_objects[settings_namespace] = obj_settings
 
@@ -221,7 +221,9 @@ class SettingsManager:
 
         print(f"Initialising new config via get_new_config(): {settings_namespace}")
 
-        obj_settings: MountainAshBaseSettings = self.init_config(settings_namespace=settings_namespace, settings_class=settings_class, config_files=config_files,  **kwargs)
+        obj_settings: MountainAshBaseSettings = self.init_config(settings_namespace=settings_namespace, 
+                                                                 settings_class=settings_class, 
+                                                                 config_files=config_files,  **kwargs)
 
         if isinstance(obj_settings, MountainAshBaseSettings):
             return obj_settings

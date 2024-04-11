@@ -17,48 +17,8 @@ def settings_manager() -> SettingsManager:
     # settings_manager: SettingsManager = SettingsManager()
     return settings_manager
 
-def test_init_sets_namespace():
-    namespace = "test"
-    settings = MountainAshBaseSettings(SETTINGS_NAMESPACE=namespace)
-    assert settings.SETTINGS_NAMESPACE == namespace
-
-
-def test_init_sets_kwargs():
-    kwargs: dict[str, Any] = {"key1": "value1", "key2": "value2"}
-    settings = MountainAshBaseSettings(**kwargs)
-    assert settings.SETTINGS_SOURCE_KWARGS == kwargs
-
-
-def test_init_sets_env_file():
-    env_file = "test.env"
-    settings = MountainAshBaseSettings(_env_file=env_file)
-    assert settings.SETTINGS_SOURCE_ENV_FILES == env_file
-
-
-def test_init_sets_env_prefix():
-    prefix = "PREFIX_"
-    settings = MountainAshBaseSettings(_env_prefix=prefix)
-    assert settings.SETTINGS_SOURCE_ENV_PREFIX == prefix
-
-
-def test_init_removes_special_kwargs():
-    kwargs: dict[str, Any] = {"SETTINGS_NAMESPACE": "test", "key1": "value1"}
-    settings = MountainAshBaseSettings(**kwargs)
-
-    if settings.SETTINGS_SOURCE_KWARGS:
-        assert "SETTINGS_NAMESPACE" not in settings.SETTINGS_SOURCE_KWARGS
-
-
-def test_init_dummy_sets_defaults():
-    settings = MountainAshBaseSettings(_dummy=True)
-    assert settings.SETTINGS_NAMESPACE == "DUMMY"
-    assert settings.SETTINGS_CLASS == MountainAshBaseSettings
-    assert settings.SETTINGS_CLASS_NAME == "MountainAshBaseSettings"
-
-
-## ============================================================
-## Test using variables with a prefix in the test config files, and in kwargs!
-        
+##############
+# Test Settings Class
 class TestSettings(MountainAshBaseSettings):
     def __init__(
         self,
@@ -89,14 +49,62 @@ def get_test_settings(settings_parameters: SettingsParameters,
                                                           settings_class=settings_class, 
                                                           settings_namespace=settings_namespace, 
                                                           config_files=config_files,
-                                                            **kwargs)
-
-
-
+                                                          **kwargs)
     if isinstance(test_settings, TestSettings):
         return test_settings
     else:
         raise ValueError("The settings object retrieved is not of type AppSettings.")
+
+
+################
+# TESTS #
+
+def test_init_sets_namespace():
+    namespace = "test"
+    settings = TestSettings(SETTINGS_NAMESPACE=namespace)
+    assert settings.SETTINGS_NAMESPACE == namespace
+
+
+def test_init_sets_kwargs():
+    kwargs: dict[str, Any] = {"TEST_VAL_1": "value1", "TEST_VAL_2": "value2"}
+    settings = TestSettings(**kwargs)
+    assert settings.SETTINGS_SOURCE_KWARGS == kwargs
+
+
+def test_init_sets_env_file():
+    env_file = "test.env"
+    settings = TestSettings(SETTINGS_SOURCE_ENV_FILES=env_file)
+    assert settings.SETTINGS_SOURCE_ENV_FILES == env_file
+
+
+def test_init_sets_env_prefix():
+    prefix = "PREFIX_"
+    settings = TestSettings(SETTINGS_SOURCE_ENV_PREFIX=prefix)
+    assert settings.SETTINGS_SOURCE_ENV_PREFIX == prefix
+
+
+def test_init_removes_special_kwargs():
+    kwargs: dict[str, Any] = {"SETTINGS_NAMESPACE": "test", "TEST_VAL_1": "value1"}
+    settings = TestSettings(**kwargs)
+
+    if settings.SETTINGS_SOURCE_KWARGS:
+        assert "SETTINGS_NAMESPACE" not in settings.SETTINGS_SOURCE_KWARGS
+
+
+def test_init_dummy_sets_defaults():
+    settings = MountainAshBaseSettings(_dummy=True)
+    assert settings.SETTINGS_NAMESPACE == "DUMMY"
+    assert settings.SETTINGS_CLASS == MountainAshBaseSettings
+    assert settings.SETTINGS_CLASS_NAME == "MountainAshBaseSettings"
+
+
+## ============================================================
+## Test using variables with a prefix in the test config files, and in kwargs!
+        
+
+
+
+
 
 
 def test_init_no_file(settings_manager: SettingsManager):
@@ -171,7 +179,7 @@ def test_init_file_and_kwarg2(settings_manager: SettingsManager):
 def test_init_file_prefix1(settings_manager: SettingsManager):
     namespace = "test_init_file_prefix1"
     config_files: List[Any] = ["./tests/config_testing1.env"]
-    kwargs = {"_env_prefix": "PREFIX_"}
+    kwargs = {"SETTINGS_SOURCE_ENV_PREFIX": "PREFIX_"}
     
     settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
 
@@ -184,7 +192,7 @@ def test_init_file_prefix1(settings_manager: SettingsManager):
 def test_init_file_prefix2(settings_manager: SettingsManager):
     namespace = "test_init_file_prefix2"
     config_files: List[Any] = ["./tests/config_testing_prefix1.env"]
-    kwargs = {"_env_prefix": "PREFIX_"}
+    kwargs = {"SETTINGS_SOURCE_ENV_PREFIX": "PREFIX_"}
     
     settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
 

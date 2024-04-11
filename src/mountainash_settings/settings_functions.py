@@ -120,6 +120,8 @@ def get_settings(    settings_parameters: SettingsParameters,
                                                                     config_files=final_config_files, 
                                                                     p_kwargs=final_kwargs)
  
+    print(f"settings_parameters: {settings_parameters.config_files}")
+
 
     return _get_settings(settings_parameters=settings_parameters, settings_class=settings_class)
 
