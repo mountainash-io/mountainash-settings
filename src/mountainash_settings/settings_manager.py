@@ -5,9 +5,9 @@ import os
 from importlib import import_module
 # from mountainash_utils_files.file_interface import FileInterface
 
-from .settings_utils import SettingsUtils
-from .settings_parameters import SettingsParameters
-from .base_settings import MountainAshBaseSettings
+from mountainash_settings.settings_utils import SettingsUtils
+from mountainash_settings.settings_parameters import SettingsParameters
+from mountainash_settings.base_settings import MountainAshBaseSettings
 
 
 #TODO: The settings need to be thread/process safe. Not necessarily the sma eobject, but an identical object, given the same init parameters.
@@ -160,6 +160,8 @@ class SettingsManager:
                                               SETTINGS_CLASS = settings_class_ref, 
                                               SETTINGS_CLASS_NAME = settings_class.__name__, 
                                               **kwargs)
+
+            print(f"init_config: {obj_settings.model_config}")
 
             self.app_settings_objects[settings_namespace] = obj_settings
 

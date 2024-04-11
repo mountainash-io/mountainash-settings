@@ -4,14 +4,14 @@ from upath import UPath
 from importlib import import_module
 import platform
 
-from .settings_parameters import SettingsParameters
-from .base_settings import MountainAshBaseSettings
+from mountainash_settings.settings_parameters import SettingsParameters
+from mountainash_settings.base_settings import MountainAshBaseSettings
 
 
 class SettingsUtils:
 
     #Hashable format for settings parameters
-    default_namespace = "DEFAULT"
+    default_namespace: str = "DEFAULT"
 
 
     @classmethod
@@ -41,13 +41,12 @@ class SettingsUtils:
         if not settings_class:
             raise ValueError("A settings_class must be provided.")
 
-
         # Config_files
         config_files_tuple: Optional[Tuple[UPath | str]] = cls.format_config_file_tuple(config_files=config_files)
 
         #Consolidate and validate the kwargs
-        kwargs_resolved: Dict[str, Any] | None = cls.resolve_kwargs(new_kwargs=kwargs, original_kwargs=p_kwargs)
-        kwargs_validated = cls.get_valid_setting_kwargs(p_kwargs=kwargs_resolved, settings_class=settings_class)
+        kwargs_resolved: Dict[str, Any]| None = cls.resolve_kwargs(new_kwargs=kwargs, original_kwargs=p_kwargs)
+        kwargs_validated: Dict[str, Any] | None = cls.get_valid_setting_kwargs(p_kwargs=kwargs_resolved, settings_class=settings_class)
 
         kwarg_keys_resolved:    set = set(kwargs_resolved.keys()) if kwargs_resolved else set() 
         kwarg_keys_validated:   set = set(kwargs_validated.keys()) if kwargs_validated else set()
@@ -71,7 +70,7 @@ class SettingsUtils:
     @classmethod
     def get_valid_setting_kwargs(cls, 
                                  settings_class:    Type[MountainAshBaseSettings],
-                                 p_kwargs:          Dict[Any, Any]
+                                 p_kwargs:          Optional[Dict[str, Any]]
                                  ) -> Optional[Dict[Any, Any]]:
         """
         Returns a dictionary of valid kwargs for AppSettings.
@@ -83,14 +82,21 @@ class SettingsUtils:
             dict: The valid kwargs.
         """
 
-
+        if not p_kwargs:
+            return None
         
         try:
             settings_class_mod: Type[MountainAshBaseSettings] = getattr(import_module(name=settings_class.__module__), settings_class.__name__)       
             obj_dummy_settings: MountainAshBaseSettings = settings_class_mod(_dummy=True)
 
-            # valid_attribute_names = set(vars(__object=obj_dummy_settings))
-            valid_attribute_names = set(obj_dummy_settings.model_fields)
+            #specified kwargs should be in the model fields
+            specified_kwargs = {"_env_file", "_env_file_encoding", "_env_prefix", "_dummy"}
+
+            # Combine sets
+            valid_attribute_names = set(obj_dummy_settings.model_fields).union(specified_kwargs)
+
+
+            print(f"Valid attribute names: {valid_attribute_names}")
 
             # Filter the kwargs dictionary to include only valid attributes
             valid_kwargs = {key: value for key, value in p_kwargs.items() if key in valid_attribute_names}
@@ -176,9 +182,9 @@ class SettingsUtils:
 
     @classmethod
     def resolve_kwargs(cls,
-                       new_kwargs: Optional[Dict[str,Any] | Tuple[Any,Any]] = None, 
+                       new_kwargs:      Optional[Dict[str,Any] | Tuple[Any,Any]] = None, 
                        original_kwargs: Optional[Dict[str,Any] | Tuple[Any,Any]] = None
-                       )-> Dict[str,Any]:
+                       )-> Optional[Dict[str,Any]]:
         
         new_kwargs = cls.format_kwargs_dict(p_kwargs=new_kwargs)
         original_kwargs = cls.format_kwargs_dict(p_kwargs=original_kwargs)
@@ -200,8 +206,8 @@ class SettingsUtils:
 
     @classmethod
     def format_kwargs_dict(cls, 
-                                 p_kwargs: None | Dict[str,Any] | Tuple[Any,Any] = None
-                                 ) -> Optional[Dict[str,Any]]:
+                            p_kwargs: None | Dict[str,Any] | Tuple[Any,Any] = None
+                            ) -> Optional[Dict[str,Any]]:
         if p_kwargs is None:
             return None
         
@@ -243,20 +249,20 @@ class SettingsUtils:
         if isinstance(config_files, (list, tuple)):
             mutable_config_files = list(sorted(set(config_files)))
         else:
-            mutable_config_files = [config_files]
+            mutable_config_files = sorted([config_files])
         
         return mutable_config_files
 
 
     @classmethod
     def format_config_file_tuple(cls, 
-                                     config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None
-                                     ) -> Optional[Tuple[UPath|str]]:
+                                config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None
+                                ) -> Optional[Tuple[UPath|str]]:
 
         if config_files is None:
             return None
         
-        hashable_config_files: Optional[Tuple[UPath|str]] = None
+        hashable_config_files: Optional[Tuple[UPath|str]|Tuple[Any]] = None
         if isinstance(config_files, tuple):
             hashable_config_files = config_files
         elif isinstance(config_files, list):
@@ -274,7 +280,8 @@ class SettingsUtils:
     #Extraction from immutable settings parameters
 
     @classmethod
-    def extract_settings_parameters(cls, settings_parameters: SettingsParameters) -> dict[str, Any]:
+    def extract_settings_parameters(cls, settings_parameters: SettingsParameters
+                                    ) -> dict[str, Any]:
 
         namespace = settings_parameters.namespace or cls.default_namespace
         config_files_mutable:   Optional[List[UPath | str]] =   cls.format_config_file_list(config_files=settings_parameters.config_files) if settings_parameters.config_files else None

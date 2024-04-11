@@ -2,7 +2,7 @@
 from typing import Optional, Union, Any, Tuple, Type
 # from pydantic.dataclasses import dataclass
 from dataclasses import dataclass
-from .base_settings import MountainAshBaseSettings
+from mountainash_settings.base_settings import MountainAshBaseSettings
 
 @dataclass(frozen=True)
 class SettingsParameters():

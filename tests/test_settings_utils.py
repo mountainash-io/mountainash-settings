@@ -110,7 +110,7 @@ def test_resolve_config_files_original_not_none():
 # Test case for when both new_config_files and original_config_files are not None
 def test_resolve_config_files_both_not_none():
 
-    new_config_files: liListst[Any] = ["file2", "file1"]
+    new_config_files: List[Any] = ["file2", "file1"]
     original_config_files: List[Any] = ["file4", "file3", "file1"]
     expected_result: List[Any] = ["file1", "file2", "file3", "file4"]
 

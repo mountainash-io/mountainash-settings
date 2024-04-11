@@ -3,27 +3,21 @@ from functools import lru_cache
 from upath import UPath
 
 
-from .settings_utils import SettingsUtils, SettingsParameters
-from .settings_manager import SettingsManager
-from .base_settings import MountainAshBaseSettings
+from mountainash_settings.settings_utils import SettingsUtils, SettingsParameters
+from mountainash_settings.settings_manager import SettingsManager
+from mountainash_settings.base_settings import MountainAshBaseSettings
 
-# @lru_cache()
-# def get_app_file_templates() -> AppFileTemplates:
-#     return AppFileTemplates()
+# @lru_cache(maxsize=None)
+# def _get_settings_manager(auth_parameters: Optional[SettingsParameters]=None) -> SettingsManager:
+#     """
+#     Retrieves the SettingsManager instance.
 
-
+#     Returns:
+#         SettingsManager: The singleton instance of SettingsManager.
+#     """
+#     return SettingsManager(auth_parameters=auth_parameters)
 
 @lru_cache(maxsize=None)
-def _get_settings_manager(auth_parameters: Optional[SettingsParameters]=None) -> SettingsManager:
-    """
-    Retrieves the SettingsManager instance.
-
-    Returns:
-        SettingsManager: The singleton instance of SettingsManager.
-    """
-    return SettingsManager(auth_parameters=auth_parameters)
-
-
 def get_settings_manager(auth_parameters: Optional[SettingsParameters]=None) -> SettingsManager:
     """
     Retrieves the SettingsManager instance.
@@ -31,7 +25,8 @@ def get_settings_manager(auth_parameters: Optional[SettingsParameters]=None) -> 
     Returns:
         SettingsManager: The singleton instance of SettingsManager.
     """
-    return _get_settings_manager(auth_parameters=auth_parameters)
+    return SettingsManager(auth_parameters=auth_parameters)
+    # return _get_settings_manager(auth_parameters=auth_parameters)
 
 
 @lru_cache(maxsize=None)
@@ -123,7 +118,7 @@ def get_settings(    settings_parameters: SettingsParameters,
     settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=final_namespace, 
                                                                     settings_class=settings_class, 
                                                                     config_files=final_config_files, 
-                                                                    p_kwargs=final_kwargs, )
+                                                                    p_kwargs=final_kwargs)
  
 
     return _get_settings(settings_parameters=settings_parameters, settings_class=settings_class)

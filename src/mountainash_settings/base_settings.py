@@ -2,7 +2,7 @@ from typing import Optional, Union, List, Any, Dict, Type
 
 # from pydantic import BaseModel, BaseSettings
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict, InitSettingsSource, EnvSettingsSource, DotEnvSettingsSource, SecretsSettingsSource
 from string import Formatter
 
 
@@ -11,43 +11,66 @@ class MountainAshBaseSettings(BaseSettings):
     model_config = SettingsConfigDict(
             extra="ignore",
             validate_default=False,
-            # validate_assignment=True
-            arbitrary_types_allowed=True
-
+            #validate_assignment=True,
+            arbitrary_types_allowed=True,
+            case_sensitive = True,
+            env_file_encoding = 'utf-8',
+            env_ignore_empty = True,
+            env_parse_none_str = "None",
         )
 
     def __init__(self, 
-                 _env_file=None, 
-                 _env_file_encoding='utf-8', 
-                 _env_prefix='',
+                 #_env_file=None, 
+                 #_env_prefix=None,
                  _dummy=False,
-
                  **kwargs) -> None:  
 
-        super().__init__(_case_sensitive=   True,
-                         _env_file=         _env_file, 
-                         _env_file_encoding=_env_file_encoding,
-                         _env_prefix=       _env_prefix,
+
+        super().__init__(#_case_sensitive=   True,
+                        #_env_file=         _env_file, 
+                        #  _env_file_encoding=_env_file_encoding,
+                        #_env_prefix=       _env_prefix,
+                        **kwargs # - do not pass through kwargs to BaseSettings. Only these specified settings!
                          )
-        
-        
+
         if not _dummy:
 
             # Set attributes from kwargs - including SETTINGS_NAMESPACE
-            self.__dict__.update(kwargs)                    
+            #self.__dict__.update(kwargs)                    
+
+            settings_class = kwargs.get("SETTINGS_CLASS", MountainAshBaseSettings)
+            env_settings = EnvSettingsSource(settings_cls=type(self), case_sensitive = True, env_ignore_empty = True, env_parse_none_str = "None")
+            secrets_settings = SecretsSettingsSource(settings_cls=type(self))
+
+            if kwargs.get("_env_prefix", None):
+                # setattr(self.model_config, "env_prefix", _env_prefix)
+                setattr(self, "SETTINGS_SOURCE_ENV_PREFIX", kwargs.get("_env_prefix"))
+
 
             if kwargs:
-                # remove 'SETTINGS_NAMESPACE' from the kwargs
+
+                init_settings = InitSettingsSource(settings_cls=settings_class, init_kwargs=kwargs)
+
+                #Remove special flags from the stored kwargs
                 kwargs_to_remove = set(["SETTINGS_CLASS", "SETTINGS_CLASS_NAME", "SETTINGS_NAMESPACE"])
+                config_kwargs = {k: v for k, v in kwargs.items() if k not in kwargs_to_remove}
 
-                kwargs = {k: v for k, v in kwargs.items() if k not in kwargs_to_remove}
-                setattr(self, "SETTINGS_SOURCE_KWARGS", kwargs)
+                #Set attribute for inspection
+                setattr(self, "SETTINGS_SOURCE_KWARGS", config_kwargs)
 
-            if _env_file:
-                setattr(self, "SETTINGS_SOURCE_ENV_FILES", _env_file)
+            else:
+                init_settings = InitSettingsSource(settings_cls=settings_class, init_kwargs = {})
+            
 
-            if _env_prefix:
-                setattr(self, "SETTINGS_SOURCE_ENV_PREFIX", _env_prefix)
+            if kwargs.get("_env_file", None):                
+                setattr(self, "SETTINGS_SOURCE_ENV_FILES", kwargs.get("_env_file"))
+
+                dotenv_settings = DotEnvSettingsSource(settings_cls=type(self), case_sensitive = True, env_ignore_empty = True, env_parse_none_str = "None")
+            else:
+                dotenv_settings = DotEnvSettingsSource(settings_cls=settings_class)
+
+
+            self.settings_customise_sources(settings_cls=settings_class, init_settings=init_settings, env_settings=env_settings, dotenv_settings=dotenv_settings, file_secret_settings=secrets_settings)
 
             # Initialise templated variables
             self.post_init()
