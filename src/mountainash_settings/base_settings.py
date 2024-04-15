@@ -12,11 +12,7 @@ class MountainAshBaseSettings(BaseSettings):
             extra="ignore",
             validate_default=False,
             #validate_assignment=True,
-            arbitrary_types_allowed=True,
-            # case_sensitive = True,
-            # env_file_encoding = 'utf-8',
-            # env_ignore_empty = True,
-            # env_parse_none_str = "None",
+            arbitrary_types_allowed=True
         )
 
     def __init__(self, 
@@ -24,23 +20,18 @@ class MountainAshBaseSettings(BaseSettings):
                  **kwargs) -> None:  
 
         super().__init__(_case_sensitive=True, 
-                            _env_prefix=kwargs.get("SETTINGS_SOURCE_ENV_PREFIX", None),
-                            _env_file=kwargs.get("SETTINGS_SOURCE_ENV_FILES", None), 
-                            _env_file_encoding = 'utf-8',
-                            _env_igore_empty = True,
-                            _env_ignore_empty = True,
-                            _env_parse_none_str = "None",
-                            _secrets_dir=kwargs.get("SETTINGS_SOURCE_SECRETS_DIR", None),
+                            _env_prefix=            kwargs.get("SETTINGS_SOURCE_ENV_PREFIX", None),
+                            _env_file=              kwargs.get("SETTINGS_SOURCE_ENV_FILES", None), 
+                            _env_file_encoding =    'utf-8',
+                            _env_igore_empty =      True,
+                            _env_ignore_empty =     True,
+                            _env_parse_none_str =   "None",
+                            _secrets_dir=           kwargs.get("SETTINGS_SOURCE_SECRETS_DIR", None),
                             #**config_kwargs
                         )
 
         if not _dummy:
 
-            # Set attributes from kwargs - including SETTINGS_NAMESPACE
-            #self.__dict__.update(kwargs)                    
-            # settings_class = kwargs.get("SETTINGS_CLASS", MountainAshBaseSettings)
-
-            config_kwargs = {}
             # Handle kwargs via Initialisation
             if kwargs:
                 #Remove special flags from the stored kwargs
