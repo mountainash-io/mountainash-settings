@@ -107,6 +107,34 @@ class MountainAshBaseSettings(BaseSettings):
                 
         return template_str.format(**mapping)
 
+
+    def format_template_from_settings(self, template_str:str) -> str:
+
+        """Formats a template string with values from the settings object.
+
+        Args:
+            template_str: The template string to format.
+
+        Returns:
+            The formatted string from the template.
+
+        Examples:
+
+            template = "my_{BATCH_ID}_file.csv"
+            settings.format_template_from_settings(template)
+            # Returns: "my_20230101_file.csv" if BATCH_ID is 20230101
+        """
+        mapping = {}
+        for _, field_name, _, _ in Formatter().parse(format_string=template_str):
+
+            if field_name:
+                if hasattr(self, field_name):
+                    mapping[field_name] = getattr(self, field_name)
+                else:
+                    raise AttributeError(f"The object does not have an attribute named '{field_name}'")
+                
+        return template_str.format(**mapping)
+
     def update_settings_from_dict(self, settings_dict: dict[str, Any]) -> None:
         """Updates the settings object with values from a dictionary.
 
