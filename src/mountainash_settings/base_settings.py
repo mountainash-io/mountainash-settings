@@ -125,6 +125,9 @@ class MountainAshBaseSettings(BaseSettings):
             # Returns: "my_20230101_file.csv" if BATCH_ID is 20230101
         """
         mapping = {}
+
+        print( Formatter().parse(format_string=template_str))
+
         for _, field_name, _, _ in Formatter().parse(format_string=template_str):
 
             if field_name:
