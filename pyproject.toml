@@ -37,6 +37,8 @@ Source = "https://github.com/mountainash-io/mountainash-settings"
 [tool.hatch.version]
 path = "src/mountainash_settings/__version__.py"
 
+# [tool.hatch.envs.default]
+# installer = "uv"
 
 # Pytest and Test Coverage - Githubb
 [[tool.hatch.envs.test_github.matrix]]
@@ -46,7 +48,8 @@ python = ["3.12","3.11", "3.10" ] # "3.8", "3.9","3.9",
 dependencies = [
   "coverage[toml]>=6.5",
   "pytest",
-  "pytest_check"
+  "pytest_check",
+  # "mountainash_utils_os @ {root:uri}/temp/mountainash-utils-os",  
 ]
 [tool.hatch.envs.test_github.scripts]
 test = "pytest"
@@ -75,6 +78,7 @@ dependencies = [
   "coverage[toml]>=6.5",
   "pytest",
   "pytest_check",
+  "mountainash_utils_os @ {root:uri}/../mountainash-utils-os",  
 ]
 [tool.hatch.envs.test.scripts]
 test = "pytest"

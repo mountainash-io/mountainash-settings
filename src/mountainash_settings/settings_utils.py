@@ -95,9 +95,6 @@ class SettingsUtils:
             # Combine sets
             valid_attribute_names = set(obj_dummy_settings.model_fields).union(specified_kwargs)
 
-
-            print(f"Valid attribute names: {valid_attribute_names}")
-
             # Filter the kwargs dictionary to include only valid attributes
             valid_kwargs = {key: value for key, value in p_kwargs.items() if key in valid_attribute_names}
 

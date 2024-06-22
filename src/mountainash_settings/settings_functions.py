@@ -1,12 +1,11 @@
-from typing import Optional, Union, List, Any, Dict, Type
+from typing import Optional, Union, List, Any, Dict, Type, Tuple
 from functools import lru_cache
 from upath import UPath
-
 
 from mountainash_settings.settings_utils import SettingsUtils, SettingsParameters
 from mountainash_settings.settings_manager import SettingsManager
 from mountainash_settings.base_settings import MountainAshBaseSettings
-
+from mountainash_settings.app_settings import AppSettings
 # @lru_cache(maxsize=None)
 # def _get_settings_manager(auth_parameters: Optional[SettingsParameters]=None) -> SettingsManager:
 #     """
@@ -122,3 +121,36 @@ def get_settings(    settings_parameters: SettingsParameters,
 
     return _get_settings(settings_parameters=settings_parameters, settings_class=settings_class)
 
+
+def prepare_settings_parameters(
+        settings_namespace: str,
+        settings_class:    Type[MountainAshBaseSettings],
+        config_files:       Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
+        p_kwargs:           Optional[Dict[Any,Any]] = None,
+        **kwargs
+        ) -> SettingsParameters:
+    
+    return SettingsUtils.prepare_settings_parameters(
+        settings_namespace=settings_namespace,
+        settings_class=settings_class,
+        config_files=config_files,
+        p_kwargs=p_kwargs,
+        **kwargs
+    )
+
+
+
+def get_app_settings(  app_settings_parameters: SettingsParameters,
+                        settings_namespace: Optional[str] = None,
+                        config_files: Optional[Union[UPath, str, List[UPath|str]]]  = None,
+                        **kwargs
+                     ) -> AppSettings:
+  
+    settings_class = AppSettings
+
+    auth_settings: AppSettings = get_settings(settings_parameters=app_settings_parameters, settings_class=settings_class, settings_namespace=settings_namespace, config_files=config_files, **kwargs)
+
+    if isinstance(auth_settings, AppSettings):
+        return auth_settings
+    else:
+        raise ValueError("The settings object retrieved is not of type AppSettings.")

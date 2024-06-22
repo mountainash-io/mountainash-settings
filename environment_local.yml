@@ -18,8 +18,9 @@ dependencies:
     - -e .
     #Other Mountain Ash Packages
     # - -e ../mountainash-constants
-    # - -e ../mountainash-auth-settings
-    # - -e ../mountainash-utils
+    # - -e ../mountainash-settings
+    - -e ../mountainash-auth-settings
+    # - -e ../mountainash-utils-os
     # - -e ../mountainash-utils-dataclasses
     # - -e ../mountainash-utils-dataframes
 

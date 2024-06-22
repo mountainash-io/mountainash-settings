@@ -51,7 +51,7 @@ class MountainAshBaseSettings(BaseSettings):
             # Initialise templated variables
             self.post_init()
 
-            print(f"Settings Initialised: SETTINGS_NAMESPACE: {self.SETTINGS_NAMESPACE}, SETTINGS_CLASS_NAME: {self.SETTINGS_CLASS_NAME},  SETTINGS_SOURCE_ENV_FILES: {self.SETTINGS_SOURCE_ENV_FILES}, SETTINGS_SOURCE_KWARGS: {self.SETTINGS_SOURCE_KWARGS}, SETTINGS_SOURCE_ENV_PREFIX: {self.SETTINGS_SOURCE_ENV_PREFIX}")
+            # print(f"Settings Initialised: SETTINGS_NAMESPACE: {self.SETTINGS_NAMESPACE}, SETTINGS_CLASS_NAME: {self.SETTINGS_CLASS_NAME},  SETTINGS_SOURCE_ENV_FILES: {self.SETTINGS_SOURCE_ENV_FILES}, SETTINGS_SOURCE_KWARGS: {self.SETTINGS_SOURCE_KWARGS}, SETTINGS_SOURCE_ENV_PREFIX: {self.SETTINGS_SOURCE_ENV_PREFIX}")
         else:
             setattr(self, "SETTINGS_NAMESPACE", "DUMMY")
             setattr(self, "SETTINGS_CLASS", MountainAshBaseSettings)
@@ -126,7 +126,7 @@ class MountainAshBaseSettings(BaseSettings):
         """
         mapping = {}
 
-        print( Formatter().parse(format_string=template_str))
+        # print( Formatter().parse(format_string=template_str))
 
         for _, field_name, _, _ in Formatter().parse(format_string=template_str):
 
