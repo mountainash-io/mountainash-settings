@@ -153,25 +153,3 @@ check = "mypy --install-types --non-interactive {args:src/mountainash_settings t
 # test = ["pytest ../mountainash-acrds-settings"]
 
 
-#================
-# Tool: Coverage
-#================
-[tool.coverage.run]
-source_pkgs = ["mountainash_settings", "tests"]
-branch = true
-parallel = true
-omit = [
-  "src/mountainash_settings/__version__.py",
-]
-
-[tool.coverage.paths]
-mountainash_settings = ["src/mountainash_settings", "*/mountainash-settings/src/mountainash_settings"]
-tests = ["tests", "*/mountainash-settings/tests"]
-
-[tool.coverage.report]
-exclude_lines = [
-  "no cov",
-  "if __name__ == .__main__:",
-  "if TYPE_CHECKING:",
-]
-
