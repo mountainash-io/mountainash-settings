@@ -4,6 +4,9 @@ on:
   push:
     paths:
       - 'src/mountainash_settings/**'    
+  pull_request:
+    paths:
+      - 'src/mountainash_settings/**'          
   workflow_dispatch:
 
 jobs:
