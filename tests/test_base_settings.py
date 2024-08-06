@@ -43,7 +43,6 @@ def get_test_settings(settings_parameters: SettingsParameters,
                      **kwargs
                      ) -> TestSettings:
     
-    settings_class = TestSettings
     
     test_settings: MountainAshBaseSettings = get_settings(settings_parameters=settings_parameters, 
                                                           settings_class=settings_class, 

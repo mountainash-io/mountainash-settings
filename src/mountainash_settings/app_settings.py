@@ -64,7 +64,6 @@ class AppSettings(MountainAshBaseSettings):
             settings.load_from_config()
             settings.post_init() # Dynamically initialize settings
         """
-        # print("Post-init")
         super().post_init()
 
         self.RUNDATETIME = self.init_setting_from_template(get_app_settings_templates().RUNDATETIME_TEMPLATE, self.RUNDATETIME)
