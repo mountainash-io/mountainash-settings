@@ -6,15 +6,7 @@ from mountainash_settings.settings_utils import SettingsUtils, SettingsParameter
 from mountainash_settings.settings_manager import SettingsManager
 from mountainash_settings.base_settings import MountainAshBaseSettings
 from mountainash_settings.app_settings import AppSettings
-# @lru_cache(maxsize=None)
-# def _get_settings_manager(auth_parameters: Optional[SettingsParameters]=None) -> SettingsManager:
-#     """
-#     Retrieves the SettingsManager instance.
 
-#     Returns:
-#         SettingsManager: The singleton instance of SettingsManager.
-#     """
-#     return SettingsManager(auth_parameters=auth_parameters)
 
 @lru_cache(maxsize=None)
 def get_settings_manager(auth_parameters: Optional[SettingsParameters]=None) -> SettingsManager:
@@ -148,7 +140,7 @@ def get_app_settings(  app_settings_parameters: SettingsParameters,
   
     settings_class = AppSettings
 
-    auth_settings: AppSettings = get_settings(settings_parameters=app_settings_parameters, settings_class=settings_class, settings_namespace=settings_namespace, config_files=config_files, **kwargs)
+    auth_settings: MountainAshBaseSettings = get_settings(settings_parameters=app_settings_parameters, settings_class=settings_class, settings_namespace=settings_namespace, config_files=config_files, **kwargs)
 
     if isinstance(auth_settings, AppSettings):
         return auth_settings

@@ -3,14 +3,10 @@ from upath import UPath
 import os 
 
 from importlib import import_module
-# from mountainash_utils_files.file_interface import FileInterface
 
 from mountainash_settings.settings_utils import SettingsUtils
 from mountainash_settings.settings_parameters import SettingsParameters
 from mountainash_settings.base_settings import MountainAshBaseSettings
-
-
-#TODO: The settings need to be thread/process safe. Not necessarily the sma eobject, but an identical object, given the same init parameters.
 
 class SettingsManager:
     """
@@ -256,7 +252,7 @@ class SettingsManager:
             # Create a new one
             obj_settings = self.get_new_config(settings_namespace=settings_namespace, settings_class=settings_class, config_files=config_files, **kwargs)
 
-        if not obj_settings:
+        if not isinstance(obj_settings, MountainAshBaseSettings):
             raise ValueError(f"Configuration for namespace '{settings_namespace}' not found.")
 
         return obj_settings
