@@ -22,7 +22,7 @@ def get_settings_manager(auth_parameters: Optional[SettingsParameters]=None) -> 
 
 @lru_cache(maxsize=None)
 def _get_settings(settings_parameters: SettingsParameters,
-                  settings_class:     Optional[Type[MountainAshBaseSettings]] = None, 
+                  settings_class:     Optional[Type[MountainAshBaseSettings]] = MountainAshBaseSettings, 
                     ) -> MountainAshBaseSettings:
     """
     Retrieves the AppSettings object for a given namespace.
@@ -55,7 +55,7 @@ def _get_settings(settings_parameters: SettingsParameters,
 
 
 def get_settings(    settings_parameters: SettingsParameters,
-                     settings_class:     Type[MountainAshBaseSettings], 
+                     settings_class:     Type[MountainAshBaseSettings] = MountainAshBaseSettings, 
                      settings_namespace: Optional[str] = None,
                      config_files: Optional[Union[UPath, str, List[UPath|str]]]  = None,
                      **kwargs

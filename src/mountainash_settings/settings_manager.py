@@ -230,7 +230,7 @@ class SettingsManager:
  
     def get_config(self,
                 settings_namespace: str,
-                settings_class:     Optional[Type[MountainAshBaseSettings]] = None,  
+                settings_class:     Optional[Type[MountainAshBaseSettings]] = MountainAshBaseSettings,  
                 config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
                 **kwargs) -> MountainAshBaseSettings:
                     
