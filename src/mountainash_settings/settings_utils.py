@@ -10,6 +10,10 @@ from mountainash_settings.base_settings import MountainAshBaseSettings
 
 class SettingsUtils:
 
+    """
+    Utility class for handling settings parameters.
+    """
+
     #Hashable format for settings parameters
     default_namespace: str = "DEFAULT"
 
@@ -27,8 +31,10 @@ class SettingsUtils:
         Initializes the application settings for a given namespace.
 
         Args:
-            namespace (str): The namespace for the configuration.
+            settings_namespace (str): The namespace for the configuration.
+            settings_class (Type[MountainAshBaseSettings]): The settings class.
             config_files (Union[UPath, List[UPath]]): The configuration file or list of configuration files.
+            p_kwargs (dict): The keyword arguments to set the configuration attributes.
             **kwargs: Keyword arguments to set the configuration attributes.
 
         Raises:
@@ -76,6 +82,7 @@ class SettingsUtils:
         Returns a dictionary of valid kwargs for AppSettings.
 
         Args:
+            settings_class (Type[MountainAshBaseSettings]): The settings class.
             kwargs (dict): The kwargs to validate.
 
         Returns:
@@ -110,7 +117,17 @@ class SettingsUtils:
     
 
     @classmethod
-    def get_settings_parameters(cls, objSettings) -> SettingsParameters:
+    def get_settings_parameters(cls, objSettings: MountainAshBaseSettings) -> SettingsParameters:
+        """
+        Returns a SettingsParameters object reconstructed from a MountainAshBaseSettings object.
+
+        Args:
+            objSettings (MountainAshBaseSettings): The settings object.
+
+        Returns:
+            SettingsParameters: The settings parameters object
+        """
+
 
         existing_namespace = objSettings.SETTINGS_NAMESPACE
         existing_config_files = cls.format_config_file_list(config_files=objSettings.SETTINGS_SOURCE_ENV_FILES)
@@ -130,6 +147,18 @@ class SettingsUtils:
                                     new_config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
                                     original_config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None
                                     ) -> Optional[List[UPath|str]]:
+        
+        """
+        Reseolves the list of configuarttion files to be used in the settings
+
+        Args:
+            new_config_files (Union[UPath, str, List[UPath|str], Tuple[UPath|str]]): The new configuration files.
+            original_config_files (Union[UPath, str, List[UPath|str], Tuple[UPath|str]]): The original configuration files.
+
+        Returns:
+            List[UPath|str]: The list of configuration files to be used in the settings.
+        
+        """
 
         prep_new_config_files: List[UPath | str] | None = cls.format_config_file_list(new_config_files)
         prep_original_config_files: List[UPath | str] | None = cls.format_config_file_list(original_config_files)
@@ -161,6 +190,17 @@ class SettingsUtils:
                           new_namespace: Optional[str] = None, 
                           original_namespace: Optional[str] = None)-> str:
         
+        """
+        Resolves the namespace to be used in the settings
+
+        Args:
+            new_namespace (str): The new namespace.
+            original_namespace (str): The original namespace.
+
+        Returns:
+            str: The namespace to be used in the settings.
+        """
+        
         #Set the namespace
         if new_namespace is not None: 
             if original_namespace and new_namespace != original_namespace:
@@ -182,7 +222,18 @@ class SettingsUtils:
                        new_kwargs:      Optional[Dict[str,Any] | Tuple[Any,Any]] = None, 
                        original_kwargs: Optional[Dict[str,Any] | Tuple[Any,Any]] = None
                        )-> Optional[Dict[str,Any]]:
-        
+        """
+        Resolves the keyword arguments to be used in the settings
+
+        Args:
+            new_kwargs (dict): The new keyword arguments.
+            original_kwargs (dict): The original keyword arguments.
+
+        Returns:
+            dict: The keyword arguments to be used in the settings.
+        """
+
+
         new_kwargs = cls.format_kwargs_dict(p_kwargs=new_kwargs)
         original_kwargs = cls.format_kwargs_dict(p_kwargs=original_kwargs)
 
@@ -205,6 +256,17 @@ class SettingsUtils:
     def format_kwargs_dict(cls, 
                             p_kwargs: None | Dict[str,Any] | Tuple[Any,Any] = None
                             ) -> Optional[Dict[str,Any]]:
+        
+        """
+        Ensures the kwargs are formatted as a dictionary.
+
+        Args:
+            p_kwargs (dict): The keyword arguments.
+
+        Returns:
+            dict: The keyword arguments as a dictionary, or None if not provided.
+        """
+
         if p_kwargs is None:
             return None
         
@@ -222,6 +284,16 @@ class SettingsUtils:
                             p_kwargs: None | Dict[str,Any] | Tuple[Any,Any]  = None
                             ) -> Optional[Tuple[Any,Any]]:
         
+        """
+        Forces the kwargs to be formatted as a tuple for immutability in the parameters.
+
+        Args:
+            p_kwargs (dict): The keyword arguments.
+
+        Returns:
+            dict: The keyword arguments as a dictionary, or None if not provided.
+        """
+
 
         if p_kwargs is None:
             return None
@@ -240,6 +312,17 @@ class SettingsUtils:
                                  config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None
                                  ) -> Optional[List[UPath|str]]:
         
+        """
+        Ensures the config_files are formatted as a list.
+
+        Args:
+            config_files (Union[UPath, List[UPath]]): The configuration file or list of configuration files.
+
+        Returns:
+            List[UPath|str]: The list of configuration files, or None if not provided
+        """
+
+        
         if config_files is None:
             return None
         
@@ -255,6 +338,17 @@ class SettingsUtils:
     def format_config_file_tuple(cls, 
                                 config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None
                                 ) -> Optional[Tuple[UPath|str]]:
+        """
+        Formats the config_files as a tuple for immutability in the parameters.
+
+        Args:
+            config_files (Union[UPath, List[UPath]]): The configuration file or list of configuration files.
+
+        Returns:
+            Tuple[UPath|str]: The configuration files as a tuple, or None if not provided.
+
+        """
+
 
         if config_files is None:
             return None
@@ -280,6 +374,17 @@ class SettingsUtils:
     def extract_settings_parameters(cls, settings_parameters: SettingsParameters
                                     ) -> dict[str, Any]:
 
+        """
+        Extracts the settings parameters from the SettingsParameters object.
+
+        Args:
+            settings_parameters (SettingsParameters): The settings parameters object.
+
+        Returns:
+            dict: The settings parameters.
+        """
+        
+
         namespace = settings_parameters.namespace or cls.default_namespace
         config_files_mutable:   Optional[List[UPath | str]] =   cls.format_config_file_list(config_files=settings_parameters.config_files) if settings_parameters.config_files else None
         kwargs_mutable:         Optional[dict[str, Any]] =      cls.format_kwargs_dict(p_kwargs=settings_parameters.kwargs) if settings_parameters.kwargs else None
@@ -294,12 +399,32 @@ class SettingsUtils:
     @classmethod
     def extract_namespace_from_settings_parameters(cls, settings_parameters: SettingsParameters) -> Optional[str]:
 
+        """
+        Extracts the namespace from the SettingsParameters object.
+        
+        Args:
+            settings_parameters (SettingsParameters): The settings parameters object.
+
+        Returns:
+            str: The namespace.        
+        """
+
         mutable_parameters: dict[str, Any] = cls.extract_settings_parameters(settings_parameters=settings_parameters)
 
         return mutable_parameters["namespace"]
 
     @classmethod
     def extract_config_files_from_settings_parameters(cls, settings_parameters: SettingsParameters) -> Optional[List[UPath|str]]:
+        """
+        Extracts the config_files from the SettingsParameters object.
+
+        Args:
+            settings_parameters (SettingsParameters): The settings parameters object.
+
+        Returns:
+            List[UPath|str]: The configuration files.
+        """
+
 
         mutable_parameters: dict[str, Any] = cls.extract_settings_parameters(settings_parameters=settings_parameters)
 
@@ -308,12 +433,29 @@ class SettingsUtils:
     @classmethod
     def extract_kwargs_from_settings_parameters(cls, settings_parameters: SettingsParameters) -> Optional[dict[str, Any]]:
 
+        """
+        Extracts the keyword arguments from the SettingsParameters object.
+
+        Args:
+            settings_parameters (SettingsParameters): The settings parameters object.
+
+        Returns:
+            dict: The keyword arguments.
+        """
+
         mutable_parameters: dict[str, Any] = cls.extract_settings_parameters(settings_parameters=settings_parameters)
 
         return mutable_parameters["kwargs"]
 
     @classmethod
     def get_platform_slash(cls) -> str:
+
+        """
+        Returns the platform-specific slash.
+
+        Returns:
+            str: The platform-specific slash.
+        """
 
         if platform.system() == "Windows":
             return "\\"
