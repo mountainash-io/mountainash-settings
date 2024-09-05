@@ -14,7 +14,9 @@ class SettingsManager:
 
     Attributes:
         app_settings_objects (dict): A dictionary to store AppSettings objects with their namespaces.
-        default_namespace (str): The default namespace for the application settings.
+        protected_attributes (list): A list of attributes that are protected from being overwritten.
+        reserved_kwargs (set): A set of reserved keyword arguments that are not allowed to be passed to the settings object.
+        auth_parameters (SettingsParameters): The parameters needed to create an authentication settings object.
 
     """
 
@@ -36,7 +38,17 @@ class SettingsManager:
     def validate_config_files_exist(self, 
                                     config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]] = None
                                     ) -> None:
+        """
+        Validates that the configuration files exist.
         
+        Args:
+            config_files (Union[UPath, List[UPath]]): The configuration file or list of configuration files.
+
+        Raises:
+            FileNotFoundError: If the configuration file does not exist.
+        """
+
+
         config_files_list = SettingsUtils.format_config_file_list(config_files=config_files)
 
         if config_files_list:
@@ -60,9 +72,12 @@ class SettingsManager:
         Combines multiple dictionaries or sets and checks if a comparison dictionary or set
         has elements not present in the combined inputs. Returns a set of unique elements.
 
-        :param inputs_to_combine: Variable number of dictionaries or sets to combine.
-        :param comparison_input: Dictionary or set to be checked against the combined inputs.
-        :return: Set of unique elements in comparison_input or an error message if input is invalid.
+        Args:
+            settings_class (Type[MountainAshBaseSettings]): The settings class to be used.
+            kwargs (Dict[str, Any]): The keyword arguments to be combined.
+
+        Raises:
+            ValueError: If the comparison dictionary has elements not present in the combined inputs.
         """
         # Build a set of all keys/elements from the inputs to be combined
 
@@ -89,6 +104,20 @@ class SettingsManager:
                     settings_namespace: str, 
                     config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
                     **kwargs) -> None:
+        """
+        
+        Validates that the namespace is already initialised and that the parameters have not changed.
+
+        Args:
+            settings_namespace (str): The namespace for the configuration.
+            config_files (Union[UPath, List[UPath]]): The configuration file or list of configuration files.
+            kwargs (Dict[str, Any]): The keyword arguments to be combined.
+
+        Raises:
+            ValueError: If the namespace is already initialised and the parameters have changed.
+
+        """
+
         
         #This will raise an error if not found
         obj_settings: MountainAshBaseSettings = self.get_config_object(settings_namespace=settings_namespace)
@@ -118,8 +147,10 @@ class SettingsManager:
         Initializes the configuration for a given namespace.
 
         Args:
-            namespace (str): The namespace for the configuration.
+            settings_namespace (str): The namespace for the configuration.
+            settings_class (Type[MountainAshBaseSettings]): The settings class to be used.
             config_files (Union[UPath, List[UPath]]): The configuration file or list of configuration files.
+            kwargs (Dict[str, Any]): The keyword arguments to be combined.
         """
 
 
@@ -167,12 +198,39 @@ class SettingsManager:
     # @classmethod
     def is_namespace_initialised(self, settings_namespace: str) -> bool:
 
+        """
+        Checks if the namespace is already initialised.
+
+        Args:
+            settings_namespace (str): The namespace for the configuration.
+
+        Returns:
+            bool: True if the namespace is already initialised, False otherwise.
+
+        Raises:
+            ValueError: If the namespace is not found in the app_settings_objects dictionary.
+        
+        """
+
         #check if the namespace is already initialised by looking at the keys in the app_settings_objects dict
         return settings_namespace in self.app_settings_objects.keys()
 
 
     # @classmethod
     def get_config_object(self,settings_namespace: str) -> MountainAshBaseSettings:
+
+        """
+        Gets the configuration object for a given namespace.
+
+        Args:
+            settings_namespace (str): The namespace for the configuration.
+
+        Returns:
+            MountainAshBaseSettings: The configuration object for the given namespace.
+
+        Raises:
+            ValueError: If the configuration object is is not an MountainAshBaseSettings object.
+        """
 
         obj_settings: Optional[MountainAshBaseSettings] = self.app_settings_objects.get(settings_namespace, None)
 
@@ -187,6 +245,19 @@ class SettingsManager:
                 settings_namespace: str,
                 #config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
                 **kwargs) -> MountainAshBaseSettings:
+
+        """
+        Gets the existing configuration object for a given namespace.
+
+        Args:
+            settings_namespace (str): The namespace for the configuration.
+            kwargs (Dict[str, Any]): The keyword arguments to be combined.
+
+        Returns:
+            MountainAshBaseSettings: The configuration object for the given namespace.
+
+        """
+
 
         print(f"Getting existing config via get_existing_config(): {settings_namespace}")
 
@@ -215,6 +286,21 @@ class SettingsManager:
                 config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
                 **kwargs) -> MountainAshBaseSettings:    
 
+        """
+        Creates a new configuration object for a given namespace.
+
+        Args:
+            settings_namespace (str): The namespace for the configuration.
+            settings_class (Type[MountainAshBaseSettings]): The settings class to be used.
+            config_files (Union[UPath, List[UPath]]): The configuration file or list of configuration files.
+            kwargs (Dict[str, Any]): The keyword arguments to be combined.
+
+        Returns:
+            MountainAshBaseSettings: The configuration object for the given namespace.
+        
+        """
+
+
         print(f"Initialising new config via get_new_config(): {settings_namespace}")
 
         obj_settings: MountainAshBaseSettings = self.init_config(settings_namespace=settings_namespace, 
@@ -223,21 +309,36 @@ class SettingsManager:
 
         if isinstance(obj_settings, MountainAshBaseSettings):
             return obj_settings
-        else:
-            raise ValueError(f"Configuration for namespace '{settings_namespace}' created, but is not a MountainAshBaseSettings object.")        
 
 
  
     def get_config(self,
                 settings_namespace: str,
-                settings_class:     Optional[Type[MountainAshBaseSettings]] = None,  
+                settings_class:     Optional[Type[MountainAshBaseSettings]] = MountainAshBaseSettings,  
                 config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
                 **kwargs) -> MountainAshBaseSettings:
                     
+        """
+        
+        Gets the configuration object for a given namespace. If the namespace is not initialised, it will create a new configuration object.
+        
+        Args:
+            settings_namespace (str): The namespace for the configuration.
+            settings_class (Type[MountainAshBaseSettings]): The settings class to be used.
+            config_files (Union[UPath, List[UPath]]): The configuration file or list of configuration files.
+            kwargs (Dict[str, Any]): The keyword arguments to be combined.
+
+        Returns:
+            MountainAshBaseSettings: The configuration object for the given namespace.
+
+        Raises:
+            ValueError: If the settings_class is empty.
+            
+        """
+
         # First step is the namespace only
         if settings_namespace is None:
             raise ValueError("get_config(): settings_namespace cannot be empty.")
-            # settings_namespace = SettingsUtils.default_namespace
 
         # Check if the namespace is already initialised
         if self.is_namespace_initialised(settings_namespace=settings_namespace):
