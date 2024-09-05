@@ -65,7 +65,11 @@ def get_settings(    settings_parameters: SettingsParameters,
     This function is exported from the module!
 
     Args:
-        namespace (str, optional): The namespace for the configuration. Defaults to None, which retrieves the default namespace.
+        settings_parameters (SettingsParameters): The settings parameters for the settings object.
+        settings_class (Type[MountainAshBaseSettings]): The class of the settings object to be retrieved.
+        settings_namespace (str, optional): The namespace for the configuration. Defaults to None, which retrieves the default namespace.
+        config_files (Optional[Union[UPath, str, List[UPath|str]]]): The configuration files that the settings object will use to load settings.
+        kwargs (Dict[Any,Any]): Additional keyword arguments that will be passed to the settings object.
 
     Returns:
         AppSettings: The AppSettings object for the given namespace.
@@ -122,6 +126,21 @@ def prepare_settings_parameters(
         **kwargs
         ) -> SettingsParameters:
     
+    """
+    Construct the settings parameters for the AppSettings object.
+
+    Args:
+        settings_namespace (str): The namespace for the configuration.
+        config_files (Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]): The configuration files that the settings object will use to load settings.
+        p_kwargs (Optional[Dict[Any,Any]]): Additional keyword arguments that will be passed to the settings object.
+        kwargs (Dict[Any,Any]): Additional keyword arguments that will be passed to the settings object.
+
+    Returns:
+        SettingsParameters: The settings parameters for the AppSettings object.
+        
+    """
+
+
     return SettingsUtils.prepare_settings_parameters(
         settings_namespace=settings_namespace,
         settings_class=settings_class,
@@ -138,6 +157,22 @@ def get_app_settings(  app_settings_parameters: SettingsParameters,
                         **kwargs
                      ) -> AppSettings:
   
+    """
+    The main function to be called to retrieve the application settings for a given namespace.
+
+    
+    Args:
+        settings_namespace (str, optional): The namespace for the configuration. Defaults to None, which retrieves the default namespace.
+        config_files (Optional[Union[UPath, str, List[UPath|str]]]): The configuration files that the settings object will use to load settings.
+        kwargs (Dict[Any,Any]): Additional keyword arguments that will be passed to the settings object.
+
+    Returns:
+        AppSettings: The AppSettings object for the given namespace.
+
+    Raises:
+        ValueError: If the settings object retrieved is not of type AppSettings.
+    """
+
     settings_class = AppSettings
 
     auth_settings: MountainAshBaseSettings = get_settings(settings_parameters=app_settings_parameters, settings_class=settings_class, settings_namespace=settings_namespace, config_files=config_files, **kwargs)

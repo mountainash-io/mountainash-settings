@@ -83,7 +83,7 @@ class SettingsUtils:
 
         Args:
             settings_class (Type[MountainAshBaseSettings]): The settings class.
-            kwargs (dict): The kwargs to validate.
+            p_kwargs (dict): The kwargs to validate.
 
         Returns:
             dict: The valid kwargs.
