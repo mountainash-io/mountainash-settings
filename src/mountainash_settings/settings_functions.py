@@ -132,7 +132,7 @@ def prepare_settings_parameters(
 
 
 
-def get_app_settings(  app_settings_parameters: SettingsParameters,
+def get_app_settings(  settings_parameters: SettingsParameters,
                         settings_namespace: Optional[str] = None,
                         config_files: Optional[Union[UPath, str, List[UPath|str]]]  = None,
                         **kwargs
@@ -140,7 +140,7 @@ def get_app_settings(  app_settings_parameters: SettingsParameters,
   
     settings_class = AppSettings
 
-    auth_settings: MountainAshBaseSettings = get_settings(settings_parameters=app_settings_parameters, settings_class=settings_class, settings_namespace=settings_namespace, config_files=config_files, **kwargs)
+    auth_settings: MountainAshBaseSettings = get_settings(settings_parameters=settings_parameters, settings_class=settings_class, settings_namespace=settings_namespace, config_files=config_files, **kwargs)
 
     if isinstance(auth_settings, AppSettings):
         return auth_settings

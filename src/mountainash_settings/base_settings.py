@@ -50,7 +50,6 @@ class MountainAshBaseSettings(BaseSettings):
             # Initialise templated variables
             self.post_init()
 
-            # print(f"Settings Initialised: SETTINGS_NAMESPACE: {self.SETTINGS_NAMESPACE}, SETTINGS_CLASS_NAME: {self.SETTINGS_CLASS_NAME},  SETTINGS_SOURCE_ENV_FILES: {self.SETTINGS_SOURCE_ENV_FILES}, SETTINGS_SOURCE_KWARGS: {self.SETTINGS_SOURCE_KWARGS}, SETTINGS_SOURCE_ENV_PREFIX: {self.SETTINGS_SOURCE_ENV_PREFIX}")
         else:
             setattr(self, "SETTINGS_NAMESPACE", "DUMMY")
             setattr(self, "SETTINGS_CLASS", MountainAshBaseSettings)
@@ -74,7 +73,7 @@ class MountainAshBaseSettings(BaseSettings):
     def __hash__(self) -> int:
         return hash((self.SETTINGS_NAMESPACE, self.SETTINGS_CLASS_NAME, self.SETTINGS_SOURCE_ENV_FILES, self.SETTINGS_SOURCE_ENV_PREFIX, self.SETTINGS_SOURCE_KWARGS))
 
-    def init_setting_from_template(self, template_str:str, current_value: Optional[str] = None ):
+    def init_setting_from_template(self, template_str:str, current_value: Optional[str] = None, reinitialise: bool = False):
 
         """Initializes a setting value from a template string, 
         replacing placeholders with  values from the settings object.
@@ -92,7 +91,7 @@ class MountainAshBaseSettings(BaseSettings):
             settings.init_setting_from_template(template)
             # Returns: "my_20230101_file.csv" if BATCH_ID is 20230101
         """
-        if current_value is not None:
+        if current_value is not None and reinitialise is False:
             return current_value
 
         mapping = {}
@@ -125,8 +124,6 @@ class MountainAshBaseSettings(BaseSettings):
         """
         mapping = {}
 
-        # print( Formatter().parse(format_string=template_str))
-
         for _, field_name, _, _ in Formatter().parse(format_string=template_str):
 
             if field_name:
@@ -149,15 +146,12 @@ class MountainAshBaseSettings(BaseSettings):
                 setattr(self, key, value)
             else:
                 raise AttributeError(f"The object does not have an attribute named '{key}'")
-                # print(f"The object does not have an attribute named '{key}'")
 
         setattr(self, 'SETTINGS_SOURCE_KWARGS', settings_dict)
 
-
-    def post_init(self):
+    def post_init(self, reinitialise: bool = False):
         """Post-initialization function to run after the settings object has been initialized."""
         # Set the settings namespace to the class name if not
-
         pass
 
 
