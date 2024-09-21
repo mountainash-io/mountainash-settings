@@ -7,6 +7,16 @@ from upath import UPath
 @dataclass(frozen=True)
 class SettingsParameters():
 
+    """
+    SettingsParameters is a dataclass that holds the parameters needed to create a settings object.
+    
+    Parameters:
+        namespace:      The namespace of the settings object. This is used to group settings together, and make the settings findable.
+        config_files:   The configuration files that the settings object will use to load settings.
+        kwargs:         Additional keyword arguments that will be passed to the settings object.
+        settings_class: The class/type that will be used to create the settings object.
+
+    """
     namespace:      Optional[str] = "DEFAULT"
     config_files:   Optional[Union[Any, str, Tuple[Any|str]]] = None
     kwargs:         Optional[Tuple[str,Any]] = None

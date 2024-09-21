@@ -66,11 +66,13 @@ class MountainAshBaseSettings(BaseSettings):
     SETTINGS_SOURCE_SECRETS_DIR: Optional[Dict[str,Any]] =                      Field(default=None)
 
 
-
-    #TODO: Create dictionary that indicates the source of each variable
-    # default, env_file, kwarg, env_var, etc
     
     def __hash__(self) -> int:
+        """
+        Hash the settings object based on the settings namespace, class name, and source kwargs.
+        
+        """
+
         return hash((self.SETTINGS_NAMESPACE, self.SETTINGS_CLASS_NAME, self.SETTINGS_SOURCE_ENV_FILES, self.SETTINGS_SOURCE_ENV_PREFIX, self.SETTINGS_SOURCE_KWARGS))
 
     def init_setting_from_template(self, template_str:str, current_value: Optional[str] = None, reinitialise: bool = False):
@@ -83,7 +85,7 @@ class MountainAshBaseSettings(BaseSettings):
             current_value: The current value in the settings object if already set.
 
         Returns:
-            The formatted string from the template.
+            (str) The formatted string from the template.
 
         Examples:
 
