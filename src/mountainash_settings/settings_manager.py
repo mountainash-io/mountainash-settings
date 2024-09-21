@@ -184,7 +184,6 @@ class SettingsManager:
             settings_class_ref: Type[MountainAshBaseSettings] = getattr(import_module(name=settings_class.__module__), settings_class.__name__)
             obj_settings = settings_class_ref(                
                                               SETTINGS_SOURCE_ENV_FILES =config_files_list,                                               
-                                            #   _env_file=config_files_list, 
                                               SETTINGS_NAMESPACE=settings_namespace, 
                                               SETTINGS_CLASS = settings_class_ref, 
                                               SETTINGS_CLASS_NAME = settings_class.__name__, 
