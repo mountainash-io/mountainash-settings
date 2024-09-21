@@ -37,7 +37,7 @@ class AppSettings(MountainAshBaseSettings):
     RUNDATETIME: str =                       Field(default=None)
 
 
-    def post_init(self):
+    def post_init(self, reinitialise: bool = False):
         """Initializes dynamic settings from template strings.
 
         This method sets attribute values that need to be dynamically 
@@ -66,7 +66,7 @@ class AppSettings(MountainAshBaseSettings):
         """
         super().post_init()
 
-        self.RUNDATETIME = self.init_setting_from_template(get_app_settings_templates().RUNDATETIME_TEMPLATE, self.RUNDATETIME)
+        self.RUNDATETIME = self.init_setting_from_template(template_str=get_app_settings_templates().RUNDATETIME_TEMPLATE, current_value=self.RUNDATETIME, reinitialise=reinitialise)
 
 
 
