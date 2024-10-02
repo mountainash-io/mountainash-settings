@@ -55,7 +55,7 @@ def _get_settings(settings_parameters: SettingsParameters,
 
 
 def get_settings(    settings_parameters: SettingsParameters,
-                     settings_class:     Type[MountainAshBaseSettings] = MountainAshBaseSettings, 
+                     settings_class:     Type[MountainAshBaseSettings] = None, 
                      settings_namespace: Optional[str] = None,
                      config_files: Optional[Union[UPath, str, List[UPath|str]]]  = None,
                      **kwargs
@@ -88,7 +88,8 @@ def get_settings(    settings_parameters: SettingsParameters,
         raise ValueError("The settings_parameters parameter must be provided.")
 
     if settings_class is None:
-        raise ValueError("The settings_class parameter must be provided.")
+        settings_class = settings_parameters.settings_class
+        # raise ValueError("The settings_class parameter must be provided.")
 
     if not issubclass(settings_class, MountainAshBaseSettings):
         raise ValueError("The settings_class parameter must be a subclass of MountainAshBaseSettings")
