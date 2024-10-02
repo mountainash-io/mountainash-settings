@@ -55,8 +55,13 @@ class SettingsManager:
 
             for config_file_temp in config_files_list:
                 
+
+                if not isinstance(config_file_temp, UPath):
+                    config_file_temp = UPath(config_file_temp)
+
                 #Only works for local files
-                if not os.path.exists(path=config_file_temp):
+                if not config_file_temp.exists():
+                # if not os.path.exists(path=config_file_temp):
                     raise FileNotFoundError(f"Config file {config_file_temp} not found.")
                     
                 print(f"Config file found: {config_file_temp}")

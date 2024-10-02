@@ -37,6 +37,8 @@ class AppSettings(MountainAshBaseSettings):
     RUNDATETIME: str =                       Field(default=None)
 
 
+    PANDERA_DATAFRAME_FRAMEWORK: str =              Field(default='pandas')
+
     def post_init(self, reinitialise: bool = False):
         """Initializes dynamic settings from template strings.
 
