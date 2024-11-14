@@ -1,0 +1,38 @@
+### config/auth/storage/cloud/s3.yaml ###
+PROVIDER_TYPE: "s3"
+# AWS Settings
+REGION: "us-west-2"
+BUCKET: "my-bucket"
+# ENDPOINT_URL: "https://custom-endpoint"
+
+# Authentication Settings
+# AUTH_METHOD: "key"  # key, iam
+# ACCESS_KEY_ID: "your_access_key"
+# SECRET_ACCESS_KEY: "your_secret_key"
+# SESSION_TOKEN: "your_session_token"
+# ROLE_ARN: "arn:aws:iam::123456789012:role/my-role"
+# EXTERNAL_ID: "external-id"
+
+# S3 Specific Settings
+ADDRESSING_STYLE: "auto"  # auto, path, virtual
+PATH_STYLE: false
+ACCELERATE_ENDPOINT: false
+DUALSTACK_ENDPOINT: false
+
+# Security Settings
+# USE_SSL: True
+# VERIFY_SSL: True
+# CA_BUNDLE: "/path/to/ca-bundle.pem"
+
+# Transfer Settings
+MAX_POOL_CONNECTIONS: 10
+MULTIPART_THRESHOLD: 8388608  # 8 MB
+MULTIPART_CHUNKSIZE: 8388608  # 8 MB
+MAX_CONCURRENCY: 10
+
+# Timeout Settings
+CONNECT_TIMEOUT: 30.0
+READ_TIMEOUT: 60.0
+
+#Base Settings
+# ENCRYPTION_ENABLED: True

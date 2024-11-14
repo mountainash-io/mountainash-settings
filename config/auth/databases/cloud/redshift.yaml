@@ -1,0 +1,27 @@
+### config/auth/database/cloud/redshift.yaml ###
+PROVIDER_TYPE: "redshift"
+REGION: "us-west-2"
+DATABASE: "mydb"
+PORT: 5439
+
+# Cluster Settings
+CLUSTER_IDENTIFIER: "my-cluster"
+# IAM_ROLE_ARN: "arn:aws:iam::123456789012:role/RedshiftRole"
+
+# Authentication Settings
+AUTH_METHOD: "password"
+USERNAME: "admin"
+PASSWORD: "your_password"
+# ACCESS_KEY_ID: "YOUR_ACCESS_KEY"
+# SECRET_ACCESS_KEY: "YOUR_SECRET_KEY"
+# SESSION_TOKEN: "YOUR_SESSION_TOKEN"
+
+# Connection Settings
+SSL: true
+# SERVERLESS: false
+# WORKGROUP_NAME: "my-workgroup"
+# AUTO_CREATE: false
+# ENDPOINT_URL: "https://custom-endpoint"
+# FORCE_IAM: false
+# CLUSTER_READ_ONLY: false
+# PROFILE_NAME: "default"

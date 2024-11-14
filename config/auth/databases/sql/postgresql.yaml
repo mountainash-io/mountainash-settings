@@ -1,0 +1,43 @@
+### config/auth/database/sql/postgresql.yaml ###
+PROVIDER_TYPE: "postgresql"
+HOST: "localhost"
+PORT: 5432
+DATABASE: "postgres"
+
+# Authentication Settings
+USERNAME: "postgres"
+PASSWORD: "your_password"
+
+# PostgreSQL-specific Settings
+APPLICATION_NAME: "MyApp"
+# OPTIONS: "-c statement_timeout=5000"
+# SEARCH_PATH: "public,myschema"
+
+# Connection Settings
+KEEPALIVES: true
+# KEEPALIVES_IDLE: 60
+# KEEPALIVES_INTERVAL: 10
+# KEEPALIVES_COUNT: 3
+
+# Security Settings
+SSL_MODE: "prefer"
+SSL_COMPRESSION: true
+SSL_MIN_PROTOCOL_VERSION: "TLSv1.2"
+GSS_ENCRYPTION: false
+KRBSRVNAME: "postgres"
+
+# Session Settings
+# ISOLATION_LEVEL: "READ COMMITTED"
+# STATEMENT_TIMEOUT: 0
+# LOCK_TIMEOUT: 0
+# IDLE_IN_TRANSACTION_SESSION_TIMEOUT: 0
+
+# Load Balancing Settings
+TARGET_SESSION_ATTRS: "any"
+# TCP_USER_TIMEOUT: 0
+LOAD_BALANCE_HOSTS: false
+
+# Client Encoding Settings
+CLIENT_ENCODING: "UTF8"
+DATESTYLE: "ISO, MDY"
+TIMEZONE: "UTC"

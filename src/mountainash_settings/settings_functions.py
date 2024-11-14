@@ -4,8 +4,8 @@ from upath import UPath
 
 from mountainash_settings.settings_utils import SettingsUtils, SettingsParameters
 from mountainash_settings.settings_manager import SettingsManager
-from mountainash_settings.base_settings import MountainAshBaseSettings
-from mountainash_settings.app_settings import AppSettings
+from mountainash_settings.base import MountainAshBaseSettings
+from mountainash_settings.app.app_settings import AppSettings
 
 
 @lru_cache(maxsize=None)

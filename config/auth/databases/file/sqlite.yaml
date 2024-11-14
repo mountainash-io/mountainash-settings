@@ -1,0 +1,16 @@
+### config/auth/database/file/sqlite.yaml ###
+PROVIDER_TYPE: "sqlite"
+DATABASE_PATH: "/path/to/mydb.sqlite3"
+MODE: "rwc"
+URI: true
+IMMUTABLE: false
+
+# Connection Settings
+ISOLATION_LEVEL: null  # autocommit
+TIMEOUT: 5.0
+CACHE_SIZE: -2000  # 2MB cache
+
+# Performance Settings
+JOURNAL_MODE: "WAL"
+SYNCHRONOUS: "NORMAL"
+# MMAP_SIZE: 0

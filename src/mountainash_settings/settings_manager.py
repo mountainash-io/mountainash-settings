@@ -5,7 +5,8 @@ from importlib import import_module
 
 from mountainash_settings.settings_utils import SettingsUtils
 from mountainash_settings.settings_parameters import SettingsParameters
-from mountainash_settings.base_settings import MountainAshBaseSettings
+from mountainash_settings.base import MountainAshBaseSettings
+from .settings_filehandler import SettingsFileHandler
 
 class SettingsManager:
     """
@@ -178,6 +179,14 @@ class SettingsManager:
         else:
             ### HANDLE CONFIG FILES ###
 
+            # Process config files
+            config_files_sorted = SettingsFileHandler.separate_config_files(config_files)
+            
+            # Validate config files exist
+            self.validate_config_files_exist(config_files_sorted.env_files)
+            self.validate_config_files_exist(config_files_sorted.yaml_files)
+            self.validate_config_files_exist(config_files_sorted.toml_files)
+
             config_files_list: Optional[List[UPath | str]] = SettingsUtils.format_config_file_list(config_files=config_files)
             self.validate_config_files_exist(config_files=config_files_list)            
             
@@ -187,7 +196,9 @@ class SettingsManager:
             #Create the Settings object
             settings_class_ref: Type[MountainAshBaseSettings] = getattr(import_module(name=settings_class.__module__), settings_class.__name__)
             obj_settings = settings_class_ref(                
-                                              SETTINGS_SOURCE_ENV_FILES =config_files_list,                                               
+                                              SETTINGS_SOURCE_ENV_FILES=config_files_sorted.env_files,
+                                              SETTINGS_SOURCE_YAML_FILES=config_files_sorted.yaml_files,
+                                              SETTINGS_SOURCE_TOML_FILES=config_files_sorted.toml_files,
                                               SETTINGS_NAMESPACE=settings_namespace, 
                                               SETTINGS_CLASS = settings_class_ref, 
                                               SETTINGS_CLASS_NAME = settings_class.__name__, 

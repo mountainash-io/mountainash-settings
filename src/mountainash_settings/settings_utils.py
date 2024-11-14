@@ -5,7 +5,7 @@ from importlib import import_module
 import platform
 
 from mountainash_settings.settings_parameters import SettingsParameters
-from mountainash_settings.base_settings import MountainAshBaseSettings
+from mountainash_settings.base import MountainAshBaseSettings
 
 
 class SettingsUtils:

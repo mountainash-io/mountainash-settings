@@ -1,7 +1,7 @@
 
 from typing import Optional, Union, Any, Tuple, Type, List, Dict
 from dataclasses import dataclass
-from mountainash_settings.base_settings import MountainAshBaseSettings
+from mountainash_settings.base import MountainAshBaseSettings
 from upath import UPath
 
 @dataclass(frozen=True)

@@ -18,6 +18,23 @@ class MountainAshBaseSettings(BaseSettings):
                  _dummy:bool = False,
                  **kwargs) -> None:  
 
+
+        if not _dummy:
+            config_updates = {}
+
+            if kwargs.get("SETTINGS_SOURCE_YAML_FILES", None) is not None:
+                config_updates["yaml_file"]=kwargs.get("SETTINGS_SOURCE_YAML_FILES", None),
+                config_updates["yaml_file_encoding"]='utf-8'
+                
+            if kwargs.get("SETTINGS_SOURCE_TOML_FILES", None) is not None:
+                config_updates["toml_file"]=kwargs.get("SETTINGS_SOURCE_TOML_FILES", None),
+                config_updates["toml_file_encoding"]='utf-8'
+
+            if config_updates:
+                # Update model_config with the file configurations
+                self.model_config.update(config_updates)
+
+
         super().__init__(_case_sensitive=True, 
                             _env_prefix=            kwargs.get("SETTINGS_SOURCE_ENV_PREFIX", None),
                             _env_file=              kwargs.get("SETTINGS_SOURCE_ENV_FILES", None), 
@@ -26,6 +43,8 @@ class MountainAshBaseSettings(BaseSettings):
                             _env_ignore_empty =     True,
                             _env_parse_none_str =   "None",
                             _secrets_dir=           kwargs.get("SETTINGS_SOURCE_SECRETS_DIR", None),
+                            # _yaml_file=             kwargs.get("SETTINGS_SOURCE_YAML_FILES", None),
+                            # _toml_file=             kwargs.get("SETTINGS_SOURCE_TOML_FILES", None),
                             #**config_kwargs
                         )
 
@@ -34,7 +53,7 @@ class MountainAshBaseSettings(BaseSettings):
             # Handle kwargs via Initialisation
             if kwargs:
                 #Remove special flags from the stored kwargs
-                kwargs_to_remove = set(["SETTINGS_CLASS", "SETTINGS_CLASS_NAME", "SETTINGS_NAMESPACE", "SETTINGS_SOURCE_ENV_FILES", "SETTINGS_SOURCE_ENV_PREFIX", "SETTINGS_SOURCE_KWARGS", "SETTINGS_SOURCE_SECRETS_DIR"])
+                kwargs_to_remove = set(["SETTINGS_CLASS", "SETTINGS_CLASS_NAME", "SETTINGS_NAMESPACE", "SETTINGS_SOURCE_ENV_FILES",  "SETTINGS_SOURCE_ENV_PREFIX", "SETTINGS_SOURCE_YAML_FILES", "SETTINGS_SOURCE_TOML_FILES", "SETTINGS_SOURCE_KWARGS", "SETTINGS_SOURCE_SECRETS_DIR"])
                 config_kwargs = {k: v for k, v in kwargs.items() if k not in kwargs_to_remove}
 
                 #Update all vals from valid kwargs                
@@ -45,7 +64,11 @@ class MountainAshBaseSettings(BaseSettings):
             setattr(self, "SETTINGS_CLASS_NAME", kwargs.get("SETTINGS_CLASS_NAME", "MountainAshBaseSettings"))
             setattr(self, "SETTINGS_SOURCE_ENV_PREFIX", kwargs.get("SETTINGS_SOURCE_ENV_PREFIX", None))
             setattr(self, "SETTINGS_SOURCE_ENV_FILES", kwargs.get("SETTINGS_SOURCE_ENV_FILES", None))
+            setattr(self, "SETTINGS_SOURCE_YAML_FILES", kwargs.get("SETTINGS_SOURCE_YAML_FILES", None))
+            setattr(self, "SETTINGS_SOURCE_TOML_FILES", kwargs.get("SETTINGS_SOURCE_TOML_FILES", None))
             setattr(self, "SETTINGS_SOURCE_SECRETS_DIR", kwargs.get("SETTINGS_SOURCE_SECRETS_DIR", None))
+
+
 
             # Initialise templated variables
             self.post_init()
@@ -62,6 +85,8 @@ class MountainAshBaseSettings(BaseSettings):
 
     SETTINGS_SOURCE_ENV_FILES: Optional[Union[Any, str, List[Any|str]]] =       Field(default=None)
     SETTINGS_SOURCE_ENV_PREFIX: Optional[str] =                                 Field(default=None)
+    SETTINGS_SOURCE_YAML_FILES: Optional[Union[Any, str, List[Any|str]]] =      Field(default=None)
+    SETTINGS_SOURCE_TOML_FILES: Optional[Union[Any, str, List[Any|str]]] =      Field(default=None)
     SETTINGS_SOURCE_KWARGS: Optional[Dict[str,Any]] =                           Field(default=None)
     SETTINGS_SOURCE_SECRETS_DIR: Optional[Dict[str,Any]] =                      Field(default=None)
 
@@ -73,7 +98,7 @@ class MountainAshBaseSettings(BaseSettings):
         
         """
 
-        return hash((self.SETTINGS_NAMESPACE, self.SETTINGS_CLASS_NAME, self.SETTINGS_SOURCE_ENV_FILES, self.SETTINGS_SOURCE_ENV_PREFIX, self.SETTINGS_SOURCE_KWARGS))
+        return hash((self.SETTINGS_NAMESPACE, self.SETTINGS_CLASS_NAME, self.SETTINGS_SOURCE_ENV_FILES, self.SETTINGS_SOURCE_ENV_PREFIX, self.SETTINGS_SOURCE_YAML_FILES, self.SETTINGS_SOURCE_TOML_FILES,self.SETTINGS_SOURCE_KWARGS))
 
     def init_setting_from_template(self, template_str:str, current_value: Optional[str] = None, reinitialise: bool = False):
 
