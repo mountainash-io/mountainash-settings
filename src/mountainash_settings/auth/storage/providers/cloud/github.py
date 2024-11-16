@@ -1,21 +1,19 @@
-from typing import Optional, Dict, Any, Set, List, Union
+from typing import Optional, List, Any, Dict, Tuple
+from upath import UPath
+
 from pydantic import Field, SecretStr, field_validator
 import re
 from enum import Enum
-from pathlib import Path
 
 from mountainash_settings.auth.storage.base import StorageAuthBase
 from mountainash_settings.auth.storage.constants import (
     CONST_STORAGE_PROVIDER_TYPE,
-    CONST_STORAGE_AUTH_METHOD,
-    CONST_STORAGE_ACCESS_TYPE
+    CONST_STORAGE_AUTH_METHOD
 )
 from mountainash_settings.auth.storage.exceptions import (
     StorageValidationError,
-    StorageConfigError,
-    StorageSecurityError
+    StorageConfigError
 )
-from mountainash_settings.auth.storage.utils.validation import StorageValidator
 
 class GitHubTokenType(str, Enum):
     """GitHub token types"""
@@ -89,20 +87,26 @@ class GitHubStorageAuthSettings(StorageAuthBase):
     PATH: Optional[str] = Field(default=None)
     CREATE_PATH: bool = Field(default=False)
     
-    # Security Settings
-    VERIFY_SSL: bool = Field(default=True)
-    SSL_VERIFY: Union[bool, str] = Field(default=True)
-    TIMEOUT: int = Field(default=30)
+    # # Security Settings
+    # VERIFY_SSL: bool = Field(default=True)
+    # SSL_VERIFY: Union[bool, str] = Field(default=True)
+    # TIMEOUT: int = Field(default=30)
     
-    # Rate Limiting Settings
-    RETRY_COUNT: int = Field(default=3)
-    RETRY_BACKOFF: float = Field(default=1.0)
-    RETRY_ON_RATE_LIMIT: bool = Field(default=True)
+    # # Rate Limiting Settings
+    # RETRY_COUNT: int = Field(default=3)
+    # RETRY_BACKOFF: float = Field(default=1.0)
+    # RETRY_ON_RATE_LIMIT: bool = Field(default=True)
     
-    # Cache Settings
-    CACHE_TTL: int = Field(default=300)  # 5 minutes
-    ENABLE_ETAGS: bool = Field(default=True)
+    # # Cache Settings
+    # CACHE_TTL: int = Field(default=300)  # 5 minutes
+    # ENABLE_ETAGS: bool = Field(default=True)
     
+    def __init__(self, 
+                 config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 _dummy: Optional[bool] = False,
+                 **kwargs) -> None:  
+        super().__init__(config_files=config_files, _dummy=_dummy, **kwargs)
+
     @field_validator("OWNER")
     def validate_owner(cls, v: str) -> str:
         """Validate GitHub owner/organization name"""
@@ -246,8 +250,8 @@ class GitHubStorageAuthSettings(StorageAuthBase):
             "owner": self.OWNER,
             "storage_type": self.STORAGE_TYPE,
             "api_version": self.API_VERSION,
-            "verify_ssl": self.VERIFY_SSL,
-            "ssl_verify": self.SSL_VERIFY,
+            # "verify_ssl": self.VERIFY_SSL,
+            # "ssl_verify": self.SSL_VERIFY,
             "timeout": self.TIMEOUT,
             "use_graphql": self.USE_GRAPHQL
         })
@@ -281,96 +285,96 @@ class GitHubStorageAuthSettings(StorageAuthBase):
                 "package_visibility": self.PACKAGE_VISIBILITY
             })
             
-        # Add rate limiting settings
-        args.update({
-            "retry_count": self.RETRY_COUNT,
-            "retry_backoff": self.RETRY_BACKOFF,
-            "retry_on_rate_limit": self.RETRY_ON_RATE_LIMIT
-        })
+        # # Add rate limiting settings
+        # args.update({
+        #     "retry_count": self.RETRY_COUNT,
+        #     "retry_backoff": self.RETRY_BACKOFF,
+        #     "retry_on_rate_limit": self.RETRY_ON_RATE_LIMIT
+        # })
         
-        # Add cache settings
-        if self.CACHE_TTL > 0:
-            args.update({
-                "cache_ttl": self.CACHE_TTL,
-                "enable_etags": self.ENABLE_ETAGS
-            })
+        # # Add cache settings
+        # if self.CACHE_TTL > 0:
+        #     args.update({
+        #         "cache_ttl": self.CACHE_TTL,
+        #         "enable_etags": self.ENABLE_ETAGS
+        #     })
             
         return {k: v for k, v in args.items() if v is not None}
 
-    def _validate_permissions(self) -> None:
-        """Validate storage permissions configuration"""
-        # Define required permissions based on storage and access type
-        if self.STORAGE_TYPE == GitHubStorageType.REPOSITORY:
-            if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
-                required_perms = {"contents:read"}
-            elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
-                required_perms = {"contents:write"}
-            elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
-                required_perms = {"contents:read", "contents:write"}
-            else:  # ADMIN
-                required_perms = {"contents:read", "contents:write", "repo:admin"}
+    # def _validate_permissions(self) -> None:
+    #     """Validate storage permissions configuration"""
+    #     # Define required permissions based on storage and access type
+    #     if self.STORAGE_TYPE == GitHubStorageType.REPOSITORY:
+    #         if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
+    #             required_perms = {"contents:read"}
+    #         elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
+    #             required_perms = {"contents:write"}
+    #         elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
+    #             required_perms = {"contents:read", "contents:write"}
+    #         else:  # ADMIN
+    #             required_perms = {"contents:read", "contents:write", "repo:admin"}
                 
-        elif self.STORAGE_TYPE == GitHubStorageType.PACKAGES:
-            if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
-                required_perms = {"packages:read"}
-            elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
-                required_perms = {"packages:write"}
-            elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
-                required_perms = {"packages:read", "packages:write"}
-            else:  # ADMIN
-                required_perms = {"packages:read", "packages:write", "packages:delete"}
+    #     elif self.STORAGE_TYPE == GitHubStorageType.PACKAGES:
+    #         if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
+    #             required_perms = {"packages:read"}
+    #         elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
+    #             required_perms = {"packages:write"}
+    #         elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
+    #             required_perms = {"packages:read", "packages:write"}
+    #         else:  # ADMIN
+    #             required_perms = {"packages:read", "packages:write", "packages:delete"}
                 
-        elif self.STORAGE_TYPE == GitHubStorageType.RELEASES:
-            if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
-                required_perms = {"contents:read"}
-            elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
-                required_perms = {"contents:write"}
-            elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
-                required_perms = {"contents:read", "contents:write"}
-            else:  # ADMIN
-                required_perms = {"contents:read", "contents:write", "repo:admin"}
+    #     elif self.STORAGE_TYPE == GitHubStorageType.RELEASES:
+    #         if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
+    #             required_perms = {"contents:read"}
+    #         elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
+    #             required_perms = {"contents:write"}
+    #         elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
+    #             required_perms = {"contents:read", "contents:write"}
+    #         else:  # ADMIN
+    #             required_perms = {"contents:read", "contents:write", "repo:admin"}
         
-        # Validate against required permissions
-        if not required_perms.issubset(self.REQUIRED_PERMISSIONS):
-            raise StorageValidationError(
-                f"Missing required permissions for access type {self.ACCESS_TYPE}",
-                validation_type="permissions"
-            )
+    #     # Validate against required permissions
+    #     if not required_perms.issubset(self.REQUIRED_PERMISSIONS):
+    #         raise StorageValidationError(
+    #             f"Missing required permissions for access type {self.ACCESS_TYPE}",
+    #             validation_type="permissions"
+    #         )
 
-    def _test_connection(self) -> bool:
-        """
-        Validate connection parameters without making actual connection
+    # def _test_connection(self) -> bool:
+    #     """
+    #     Validate connection parameters without making actual connection
         
-        Returns:
-            bool: True if configuration is valid
-        """
-        try:
-            # Validate connection URL
-            if not StorageValidator.validate_url(
-                self.get_connection_url(),
-                allowed_schemes={'https'},
-                required_parts={'netloc'}
-            ):
-                return False
+    #     Returns:
+    #         bool: True if configuration is valid
+    #     """
+    #     try:
+    #         # Validate connection URL
+    #         if not StorageValidator.validate_url(
+    #             self.get_connection_url(),
+    #             allowed_schemes={'https'},
+    #             required_parts={'netloc'}
+    #         ):
+    #             return False
             
-            # Validate timeout settings
-            if not StorageValidator.validate_timeout_settings(
-                connect_timeout=self.TIMEOUT,
-                read_timeout=self.TIMEOUT
-            ):
-                return False
+    #         # Validate timeout settings
+    #         if not StorageValidator.validate_timeout_settings(
+    #             connect_timeout=self.TIMEOUT,
+    #             read_timeout=self.TIMEOUT
+    #         ):
+    #             return False
             
-            # Validate retry settings
-            if not StorageValidator.validate_retry_settings(
-                max_retries=self.RETRY_COUNT,
-                retry_delay=self.RETRY_BACKOFF,
-                max_delay=self.RETRY_BACKOFF * (2 ** self.RETRY_COUNT)
-            ):
-                return False
+    #         # Validate retry settings
+    #         if not StorageValidator.validate_retry_settings(
+    #             max_retries=self.RETRY_COUNT,
+    #             retry_delay=self.RETRY_BACKOFF,
+    #             max_delay=self.RETRY_BACKOFF * (2 ** self.RETRY_COUNT)
+    #         ):
+    #             return False
             
-            return True
+    #         return True
             
-        except Exception as e:
-            if isinstance(e, StorageValidationError):
-                raise
-            return False
+    #     except Exception as e:
+    #         if isinstance(e, StorageValidationError):
+    #             raise
+    #         return False

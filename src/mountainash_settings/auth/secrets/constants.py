@@ -13,12 +13,14 @@ class CONST_SECRET_PROVIDER_TYPE(BaseConstant):
 class CONST_SECRET_AUTH_METHOD(BaseConstant):
     """Enumeration for authentication methods"""
     SERVICE_PRINCIPAL = "service_principal"
+    SERVICE_ACCOUNT = "service_account"
     MANAGED_IDENTITY = "managed_identity"
     CLIENT_SECRET = "client_secret"
     CERTIFICATE = "certificate"
     TOKEN = "token"
     IAM_ROLE = "iam_role"
     KUBERNETES = "kubernetes"
+
 
 class CONST_SECRET_VERSION_HANDLING(BaseConstant):
     """Enumeration for version handling strategies"""
@@ -27,12 +29,12 @@ class CONST_SECRET_VERSION_HANDLING(BaseConstant):
     RANGE = "range"
     ALL = "all"
 
-# class CONST_SECRET_ROTATION_POLICY(BaseConstant):
-#     """Enumeration for secret rotation policies"""
-#     MANUAL = "manual"
-#     SCHEDULED = "scheduled"
-#     ON_ACCESS = "on_access"
-#     NEVER = "never"
+class CONST_SECRET_ROTATION_POLICY(BaseConstant):
+    """Enumeration for secret rotation policies"""
+    MANUAL = "manual"
+    SCHEDULED = "scheduled"
+    ON_ACCESS = "on_access"
+    NEVER = "never"
 
 
 class CONST_SECRET_ENCODING(BaseConstant):
@@ -47,3 +49,10 @@ class CONST_AWS_SECRET_STAGES(BaseConstant):
     PENDING = "AWSPENDING"
     PREVIOUS = "AWSPREVIOUS"
     DEPRECATED = "AWSDEPRECATED"    
+
+
+class CONST_LOCAL_SECRETS_STORAGE(BaseConstant):
+    """Local secrets storage types"""
+    FILE = "file"
+    # KEYRING = "keyring"
+    # ENVIRONMENT = "environment"

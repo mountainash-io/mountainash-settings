@@ -1,12 +1,11 @@
 #utils/validation.py
 
-from typing import Optional, Dict, Any, List, Set, Callable, Union
+from typing import Optional, Dict, Any, Set, Callable
+from upath import UPath
 import re
 import os
-from pathlib import Path
 from urllib.parse import urlparse
 import ipaddress
-from datetime import datetime, timedelta
 
 from mountainash_settings.auth.storage.exceptions import StorageValidationError
 
@@ -30,7 +29,7 @@ class StorageValidator:
             allowed_types: Set of allowed path types ('file', 'dir')
         """
         try:
-            path_obj = Path(path).resolve()
+            path_obj = UPath(path).resolve()
             
             if must_exist and not path_obj.exists():
                 raise StorageValidationError(

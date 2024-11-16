@@ -1,20 +1,18 @@
 #path: mountainash_settings/auth/storage/providers/cloud/s3.py
-from typing import Optional, Dict, Any, Set, List
+from typing import Optional, Dict, Any, List, Tuple
+from upath import UPath
 from pydantic import Field, SecretStr, field_validator
 import re
 
 from mountainash_settings.auth.storage.base import StorageAuthBase
 from mountainash_settings.auth.storage.constants import (
     CONST_STORAGE_PROVIDER_TYPE,
-    CONST_STORAGE_AUTH_METHOD,
-    CONST_STORAGE_ACCESS_TYPE
+    CONST_STORAGE_AUTH_METHOD
 )
 from mountainash_settings.auth.storage.exceptions import (
     StorageValidationError,
-    StorageConfigError,
-    StorageSecurityError
+    StorageConfigError
 )
-from mountainash_settings.auth.storage.utils.validation import StorageValidator
 
 class S3StorageAuthSettings(StorageAuthBase):
     """
@@ -27,12 +25,12 @@ class S3StorageAuthSettings(StorageAuthBase):
     PROVIDER_TYPE: str = Field(default=CONST_STORAGE_PROVIDER_TYPE.get('S3'))
     
     # AWS Settings
-    REGION: str = Field(...)  # Required
-    BUCKET: str = Field(...)  # Required
+    REGION: Optional[str] = Field(...)  # Required
+    BUCKET: Optional[str] = Field(...)  # Required
     ENDPOINT_URL: Optional[str] = Field(default=None)
     
     # Authentication Settings
-    AUTH_METHOD: str = Field(default=CONST_STORAGE_AUTH_METHOD.KEY.value)
+    AUTH_METHOD: Optional[str] = Field(default=CONST_STORAGE_AUTH_METHOD.KEY.value)
     ACCESS_KEY_ID: Optional[str] = Field(default=None)
     SECRET_ACCESS_KEY: Optional[SecretStr] = Field(default=None)
     SESSION_TOKEN: Optional[SecretStr] = Field(default=None)
@@ -46,92 +44,92 @@ class S3StorageAuthSettings(StorageAuthBase):
     DUALSTACK_ENDPOINT: bool = Field(default=False)
     
     # Security Settings
-    USE_SSL: bool = Field(default=False)
-    VERIFY_SSL: bool = Field(default=False)
-    CA_BUNDLE: Optional[str] = Field(default=None)
+    # USE_SSL: bool = Field(default=False)
+    # VERIFY_SSL: bool = Field(default=False)
+    # CA_BUNDLE: Optional[str] = Field(default=None)
     
-    # Transfer Settings
-    MAX_POOL_CONNECTIONS: int = Field(default=10)
-    MULTIPART_THRESHOLD: int = Field(default=8 * 1024 * 1024)  # 8 MB
-    MULTIPART_CHUNKSIZE: int = Field(default=8 * 1024 * 1024)  # 8 MB
-    MAX_CONCURRENCY: int = Field(default=10)
+    # # Transfer Settings
+    # MAX_POOL_CONNECTIONS: int = Field(default=10)
+    # MULTIPART_THRESHOLD: int = Field(default=8 * 1024 * 1024)  # 8 MB
+    # MULTIPART_CHUNKSIZE: int = Field(default=8 * 1024 * 1024)  # 8 MB
+    # MAX_CONCURRENCY: int = Field(default=10)
     
-    # Timeout Settings
-    CONNECT_TIMEOUT: float = Field(default=30.0)
-    READ_TIMEOUT: float = Field(default=60.0)
+    # # Timeout Settings
+    # CONNECT_TIMEOUT: float = Field(default=30.0)
+    # READ_TIMEOUT: float = Field(default=60.0)
     
 
     def __init__(self, 
-                 _dummy:bool    =   False,
-                 **kwargs) -> None:
+                 config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 _dummy: Optional[bool] = False,
+                 **kwargs) -> None:  
+        super().__init__(config_files=config_files, _dummy=_dummy, **kwargs)    
 
-        super().__init__(_dummy=_dummy,
-                         **kwargs)
 
     def post_init(self, reinitialise: bool = False):
         super().post_init(reinitialise=reinitialise)
 
 
-    ## Field Validators ##
-    @field_validator("REGION")
-    def validate_region(cls, v: str) -> str:
-        """Validate AWS region format"""
-        if not v:
-            raise StorageValidationError(
-                "Region is required",
-                validation_type="region"
-            )
+    # ## Field Validators ##
+    # @field_validator("REGION")
+    # def validate_region(cls, v: str) -> str:
+    #     """Validate AWS region format"""
+    #     if not v:
+    #         raise StorageValidationError(
+    #             "Region is required",
+    #             validation_type="region"
+    #         )
             
-        # AWS region format validation
-        if not re.match(r'^[a-z]{2}-[a-z]+-\d{1}$', v):
-            raise StorageValidationError(
-                "Invalid AWS region format (e.g., us-east-1)",
-                validation_type="region"
-            )
+    #     # AWS region format validation
+    #     if not re.match(r'^[a-z]{2}-[a-z]+-\d{1}$', v):
+    #         raise StorageValidationError(
+    #             "Invalid AWS region format (e.g., us-east-1)",
+    #             validation_type="region"
+    #         )
             
-        return v
+    #     return v
 
-    @field_validator("BUCKET")
-    def validate_bucket(cls, v: str) -> str:
-        """Validate S3 bucket name"""
-        if not v:
-            raise StorageValidationError(
-                "Bucket name is required",
-                validation_type="bucket"
-            )
+    # @field_validator("BUCKET")
+    # def validate_bucket(cls, v: str) -> str:
+    #     """Validate S3 bucket name"""
+    #     if not v:
+    #         raise StorageValidationError(
+    #             "Bucket name is required",
+    #             validation_type="bucket"
+    #         )
             
-        # S3 bucket naming rules
-        if not (3 <= len(v) <= 63):
-            raise StorageValidationError(
-                "Bucket name must be between 3 and 63 characters",
-                validation_type="bucket"
-            )
+    #     # S3 bucket naming rules
+    #     if not (3 <= len(v) <= 63):
+    #         raise StorageValidationError(
+    #             "Bucket name must be between 3 and 63 characters",
+    #             validation_type="bucket"
+    #         )
             
-        if not v[0].isalnum():
-            raise StorageValidationError(
-                "Bucket name must start with a letter or number",
-                validation_type="bucket"
-            )
+    #     if not v[0].isalnum():
+    #         raise StorageValidationError(
+    #             "Bucket name must start with a letter or number",
+    #             validation_type="bucket"
+    #         )
             
-        if not all(c.isalnum() or c in '.-' for c in v):
-            raise StorageValidationError(
-                "Bucket name can only contain letters, numbers, periods, and hyphens",
-                validation_type="bucket"
-            )
+    #     if not all(c.isalnum() or c in '.-' for c in v):
+    #         raise StorageValidationError(
+    #             "Bucket name can only contain letters, numbers, periods, and hyphens",
+    #             validation_type="bucket"
+    #         )
             
-        if '..' in v:
-            raise StorageValidationError(
-                "Bucket name cannot contain consecutive periods",
-                validation_type="bucket"
-            )
+    #     if '..' in v:
+    #         raise StorageValidationError(
+    #             "Bucket name cannot contain consecutive periods",
+    #             validation_type="bucket"
+    #         )
             
-        if re.match(r'\d+\.\d+\.\d+\.\d+$', v):
-            raise StorageValidationError(
-                "Bucket name cannot be formatted as an IP address",
-                validation_type="bucket"
-            )
+    #     if re.match(r'\d+\.\d+\.\d+\.\d+$', v):
+    #         raise StorageValidationError(
+    #             "Bucket name cannot be formatted as an IP address",
+    #             validation_type="bucket"
+    #         )
             
-        return v
+    #     return v
 
     @field_validator("ROLE_ARN")
     def validate_role_arn(cls, v: Optional[str]) -> Optional[str]:
@@ -178,10 +176,10 @@ class S3StorageAuthSettings(StorageAuthBase):
                 provider=self.PROVIDER_TYPE
             )
             
-        # Validate SSL configuration
-        if self.USE_SSL and self.VERIFY_SSL and not self.CA_BUNDLE:
-            # This is just a warning condition, not an error
-            pass
+        # # Validate SSL configuration
+        # if self.USE_SSL and self.VERIFY_SSL and not self.CA_BUNDLE:
+        #     # This is just a warning condition, not an error
+        #     pass
 
     def get_connection_url(self) -> str:
         """Generate S3 connection URL"""
@@ -207,15 +205,16 @@ class S3StorageAuthSettings(StorageAuthBase):
         # Add AWS-specific arguments
         args.update({
             "region_name": self.REGION,
-            "use_ssl": self.USE_SSL,
-            "verify": self.CA_BUNDLE if self.VERIFY_SSL and self.CA_BUNDLE else self.VERIFY_SSL,
+            "bucket": self.BUCKET,
+            # "use_ssl": self.USE_SSL,
+            # "verify": self.CA_BUNDLE if self.VERIFY_SSL and self.CA_BUNDLE else self.VERIFY_SSL,
             "endpoint_url": self.ENDPOINT_URL,
             "config": {
                 "s3": {
                     "addressing_style": self.ADDRESSING_STYLE,
                     "use_accelerate_endpoint": self.ACCELERATE_ENDPOINT,
                     "use_dualstack_endpoint": self.DUALSTACK_ENDPOINT,
-                    "max_pool_connections": self.MAX_POOL_CONNECTIONS
+                    # "max_pool_connections": self.MAX_POOL_CONNECTIONS
                 }
             }
         })
@@ -228,36 +227,36 @@ class S3StorageAuthSettings(StorageAuthBase):
                 "aws_session_token": self.SESSION_TOKEN.get_secret_value() if self.SESSION_TOKEN else None
             })
             
-        # Add transfer configuration
-        args["config"]["s3"]["multipart_threshold"] = self.MULTIPART_THRESHOLD
-        args["config"]["s3"]["multipart_chunksize"] = self.MULTIPART_CHUNKSIZE
-        args["config"]["s3"]["max_concurrency"] = self.MAX_CONCURRENCY
+        # # Add transfer configuration
+        # args["config"]["s3"]["multipart_threshold"] = self.MULTIPART_THRESHOLD
+        # args["config"]["s3"]["multipart_chunksize"] = self.MULTIPART_CHUNKSIZE
+        # args["config"]["s3"]["max_concurrency"] = self.MAX_CONCURRENCY
         
         return {k: v for k, v in args.items() if v is not None}
 
-    def _validate_permissions(self) -> None:
-        """Validate storage permissions configuration"""
-        # Define required permissions based on access type
-        if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
-            required_perms = {"s3:GetObject", "s3:ListBucket"}
-        elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
-            required_perms = {"s3:PutObject", "s3:DeleteObject"}
-        elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
-            required_perms = {
-                "s3:GetObject", "s3:ListBucket",
-                "s3:PutObject", "s3:DeleteObject"
-            }
-        else:  # ADMIN
-            required_perms = {
-                "s3:*"
-            }
+    # def _validate_permissions(self) -> None:
+    #     """Validate storage permissions configuration"""
+    #     # Define required permissions based on access type
+    #     if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
+    #         required_perms = {"s3:GetObject", "s3:ListBucket"}
+    #     elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
+    #         required_perms = {"s3:PutObject", "s3:DeleteObject"}
+    #     elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
+    #         required_perms = {
+    #             "s3:GetObject", "s3:ListBucket",
+    #             "s3:PutObject", "s3:DeleteObject"
+    #         }
+    #     else:  # ADMIN
+    #         required_perms = {
+    #             "s3:*"
+    #         }
             
-        # Validate against required permissions
-        if not required_perms.issubset(self.REQUIRED_PERMISSIONS):
-            raise StorageValidationError(
-                f"Missing required permissions for access type {self.ACCESS_TYPE}",
-                validation_type="permissions"
-            )
+        # # Validate against required permissions
+        # if not required_perms.issubset(self.REQUIRED_PERMISSIONS):
+        #     raise StorageValidationError(
+        #         f"Missing required permissions for access type {self.ACCESS_TYPE}",
+        #         validation_type="permissions"
+        #     )
 
     # def _test_connection(self) -> bool:
     #     """

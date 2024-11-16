@@ -1,4 +1,5 @@
-from typing import Optional, Dict, Any, Set, List, Union
+from typing import Optional, List, Any, Dict, Tuple
+from upath import UPath
 from pydantic import Field, SecretStr, field_validator
 import re
 from enum import Enum
@@ -7,15 +8,12 @@ import ipaddress
 from mountainash_settings.auth.storage.base import StorageAuthBase
 from mountainash_settings.auth.storage.constants import (
     CONST_STORAGE_PROVIDER_TYPE,
-    CONST_STORAGE_AUTH_METHOD,
-    CONST_STORAGE_ACCESS_TYPE
+    CONST_STORAGE_AUTH_METHOD
 )
 from mountainash_settings.auth.storage.exceptions import (
     StorageValidationError,
-    StorageConfigError,
-    StorageSecurityError
+    StorageConfigError
 )
-from mountainash_settings.auth.storage.utils.validation import StorageValidator
 
 class SMBVersion(str, Enum):
     """SMB protocol versions"""
@@ -71,36 +69,43 @@ class SMBStorageAuthSettings(StorageAuthBase):
     PREFERRED_DIALECT: Optional[str] = Field(default=None)
     FALLBACK_VERSIONS: List[str] = Field(default_factory=list)
     
-    # Security Settings
-    ENCRYPTION: bool = Field(default=True)
-    SIGN_OPTIONS: str = Field(default=SMBSignOptions.WHEN_REQUIRED)
-    REQUIRE_SECURE_NEGOTIATE: bool = Field(default=True)
-    USE_NTLM: bool = Field(default=True)
-    USE_NTLMv2: bool = Field(default=True)
+    # # Security Settings
+    # ENCRYPTION: bool = Field(default=True)
+    # SIGN_OPTIONS: str = Field(default=SMBSignOptions.WHEN_REQUIRED)
+    # REQUIRE_SECURE_NEGOTIATE: bool = Field(default=True)
+    # USE_NTLM: bool = Field(default=True)
+    # USE_NTLMv2: bool = Field(default=True)
     
-    # Connection Settings
-    TIMEOUT: float = Field(default=60.0)
-    KEEPALIVE: bool = Field(default=True)
-    KEEPALIVE_INTERVAL: int = Field(default=30)
-    MAX_CHANNELS: int = Field(default=4)
+    # # Connection Settings
+    # TIMEOUT: float = Field(default=60.0)
+    # KEEPALIVE: bool = Field(default=True)
+    # KEEPALIVE_INTERVAL: int = Field(default=30)
+    # MAX_CHANNELS: int = Field(default=4)
     
-    # Performance Settings
-    BUFFER_SIZE: int = Field(default=16384)  # 16KB
-    MAX_WRITE_SIZE: int = Field(default=1048576)  # 1MB
-    MAX_READ_SIZE: int = Field(default=1048576)  # 1MB
-    USE_OPLOCKS: bool = Field(default=True)
-    USE_LEASES: bool = Field(default=True)
+    # # Performance Settings
+    # BUFFER_SIZE: int = Field(default=16384)  # 16KB
+    # MAX_WRITE_SIZE: int = Field(default=1048576)  # 1MB
+    # MAX_READ_SIZE: int = Field(default=1048576)  # 1MB
+    # USE_OPLOCKS: bool = Field(default=True)
+    # USE_LEASES: bool = Field(default=True)
     
-    # Caching Settings
-    CACHE_ENABLED: bool = Field(default=True)
-    CACHE_TTL: int = Field(default=60)  # seconds
-    DIR_CACHE_TTL: int = Field(default=300)  # seconds
+    # # Caching Settings
+    # CACHE_ENABLED: bool = Field(default=True)
+    # CACHE_TTL: int = Field(default=60)  # seconds
+    # DIR_CACHE_TTL: int = Field(default=300)  # seconds
     
-    # DFS Settings
-    USE_DFS: bool = Field(default=True)
-    DFS_DOMAIN_CONTROLLER: Optional[str] = Field(default=None)
-    DFS_ROOT: Optional[str] = Field(default=None)
+    # # DFS Settings
+    # USE_DFS: bool = Field(default=True)
+    # DFS_DOMAIN_CONTROLLER: Optional[str] = Field(default=None)
+    # DFS_ROOT: Optional[str] = Field(default=None)
     
+    def __init__(self, 
+                 config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 _dummy: Optional[bool] = False,
+                 **kwargs) -> None:  
+        super().__init__(config_files=config_files, _dummy=_dummy, **kwargs)
+
+
     ## Field Validators ##
     @field_validator("SERVER")
     def validate_server(cls, v: str) -> str:
@@ -181,16 +186,16 @@ class SMBStorageAuthSettings(StorageAuthBase):
                 )
         return v
 
-    @field_validator("SIGN_OPTIONS")
-    def validate_sign_options(cls, v: str) -> str:
-        """Validate signing options"""
-        try:
-            return SMBSignOptions(v.lower())
-        except ValueError:
-            raise StorageValidationError(
-                f"Invalid signing options. Must be one of: {[opt.value for opt in SMBSignOptions]}",
-                validation_type="sign_options"
-            )
+    # @field_validator("SIGN_OPTIONS")
+    # def validate_sign_options(cls, v: str) -> str:
+    #     """Validate signing options"""
+    #     try:
+    #         return SMBSignOptions(v.lower())
+    #     except ValueError:
+    #         raise StorageValidationError(
+    #             f"Invalid signing options. Must be one of: {[opt.value for opt in SMBSignOptions]}",
+    #             validation_type="sign_options"
+    #         )
 
     @field_validator("DOMAIN")
     def validate_domain(cls, v: Optional[str]) -> Optional[str]:
@@ -236,16 +241,16 @@ class SMBStorageAuthSettings(StorageAuthBase):
                     provider=self.PROVIDER_TYPE
                 )
                 
-        # Validate DFS settings
-        if self.USE_DFS and not (self.DFS_DOMAIN_CONTROLLER or self.DOMAIN):
-            raise StorageConfigError(
-                "Either DFS domain controller or domain required when DFS is enabled",
-                provider=self.PROVIDER_TYPE
-            )
+        # # Validate DFS settings
+        # if self.USE_DFS and not (self.DFS_DOMAIN_CONTROLLER or self.DOMAIN):
+        #     raise StorageConfigError(
+        #         "Either DFS domain controller or domain required when DFS is enabled",
+        #         provider=self.PROVIDER_TYPE
+        #     )
 
     def get_connection_url(self) -> str:
         """Generate SMB connection URL"""
-        url = f"smb://"
+        url = "smb://"
         
         # Add domain if specified
         if self.DOMAIN:
@@ -280,14 +285,14 @@ class SMBStorageAuthSettings(StorageAuthBase):
             "fallback_versions": self.FALLBACK_VERSIONS
         })
         
-        # Add security settings
-        args.update({
-            "encrypt": self.ENCRYPTION,
-            "sign_options": self.SIGN_OPTIONS,
-            "require_secure_negotiate": self.REQUIRE_SECURE_NEGOTIATE,
-            "use_ntlm": self.USE_NTLM,
-            "use_ntlmv2": self.USE_NTLMv2
-        })
+        # # Add security settings
+        # args.update({
+        #     "encrypt": self.ENCRYPTION,
+        #     "sign_options": self.SIGN_OPTIONS,
+        #     "require_secure_negotiate": self.REQUIRE_SECURE_NEGOTIATE,
+        #     "use_ntlm": self.USE_NTLM,
+        #     "use_ntlmv2": self.USE_NTLMv2
+        # })
         
         # Add Kerberos settings if enabled
         if self.USE_KERBEROS:
@@ -297,61 +302,61 @@ class SMBStorageAuthSettings(StorageAuthBase):
             })
             
         # Add performance settings
-        args.update({
-            "buffer_size": self.BUFFER_SIZE,
-            "max_write_size": self.MAX_WRITE_SIZE,
-            "max_read_size": self.MAX_READ_SIZE,
-            "use_oplocks": self.USE_OPLOCKS,
-            "use_leases": self.USE_LEASES,
-            "max_channels": self.MAX_CHANNELS
-        })
+        # args.update({
+        #     "buffer_size": self.BUFFER_SIZE,
+        #     "max_write_size": self.MAX_WRITE_SIZE,
+        #     "max_read_size": self.MAX_READ_SIZE,
+        #     "use_oplocks": self.USE_OPLOCKS,
+        #     "use_leases": self.USE_LEASES,
+        #     "max_channels": self.MAX_CHANNELS
+        # })
         
-        # Add caching settings
-        if self.CACHE_ENABLED:
-            args.update({
-                "cache_enabled": True,
-                "cache_ttl": self.CACHE_TTL,
-                "dir_cache_ttl": self.DIR_CACHE_TTL
-            })
+        # # Add caching settings
+        # if self.CACHE_ENABLED:
+        #     args.update({
+        #         "cache_enabled": True,
+        #         "cache_ttl": self.CACHE_TTL,
+        #         "dir_cache_ttl": self.DIR_CACHE_TTL
+        #     })
             
-        # Add DFS settings if enabled
-        if self.USE_DFS:
-            args.update({
-                "use_dfs": True,
-                "dfs_domain_controller": self.DFS_DOMAIN_CONTROLLER,
-                "dfs_root": self.DFS_ROOT
-            })
+        # # Add DFS settings if enabled
+        # if self.USE_DFS:
+        #     args.update({
+        #         "use_dfs": True,
+        #         "dfs_domain_controller": self.DFS_DOMAIN_CONTROLLER,
+        #         "dfs_root": self.DFS_ROOT
+        #     })
             
         return {k: v for k, v in args.items() if v is not None}
 
-    def _validate_permissions(self) -> None:
-        """Validate storage permissions configuration"""
-        # Define required permissions based on access type
-        if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
-            required_perms = {"FILE_READ_DATA", "FILE_READ_EA", "FILE_READ_ATTRIBUTES"}
-        elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
-            required_perms = {"FILE_WRITE_DATA", "FILE_WRITE_EA", "FILE_WRITE_ATTRIBUTES"}
-        elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
-            required_perms = {
-                "FILE_READ_DATA", "FILE_WRITE_DATA",
-                "FILE_READ_EA", "FILE_WRITE_EA",
-                "FILE_READ_ATTRIBUTES", "FILE_WRITE_ATTRIBUTES"
-            }
-        else:  # ADMIN
-            required_perms = {
-                "FILE_ALL_ACCESS",
-                "FILE_DELETE",
-                "FILE_WRITE_ATTRIBUTES",
-                "FILE_WRITE_EA",
-                "FILE_WRITE_DATA",
-                "FILE_READ_ATTRIBUTES",
-                "FILE_READ_EA",
-                "FILE_READ_DATA"
-            }
+    # def _validate_permissions(self) -> None:
+    #     """Validate storage permissions configuration"""
+    #     # Define required permissions based on access type
+    #     if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
+    #         required_perms = {"FILE_READ_DATA", "FILE_READ_EA", "FILE_READ_ATTRIBUTES"}
+    #     elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
+    #         required_perms = {"FILE_WRITE_DATA", "FILE_WRITE_EA", "FILE_WRITE_ATTRIBUTES"}
+    #     elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
+    #         required_perms = {
+    #             "FILE_READ_DATA", "FILE_WRITE_DATA",
+    #             "FILE_READ_EA", "FILE_WRITE_EA",
+    #             "FILE_READ_ATTRIBUTES", "FILE_WRITE_ATTRIBUTES"
+    #         }
+    #     else:  # ADMIN
+    #         required_perms = {
+    #             "FILE_ALL_ACCESS",
+    #             "FILE_DELETE",
+    #             "FILE_WRITE_ATTRIBUTES",
+    #             "FILE_WRITE_EA",
+    #             "FILE_WRITE_DATA",
+    #             "FILE_READ_ATTRIBUTES",
+    #             "FILE_READ_EA",
+    #             "FILE_READ_DATA"
+    #         }
             
-        # Validate against required permissions
-        if not required_perms.issubset(self.REQUIRED_PERMISSIONS):
-            raise StorageValidationError(
-                f"Missing required permissions for access type {self.ACCESS_TYPE}",
-                validation_type="permissions"
-            )
+    #     # Validate against required permissions
+    #     if not required_perms.issubset(self.REQUIRED_PERMISSIONS):
+    #         raise StorageValidationError(
+    #             f"Missing required permissions for access type {self.ACCESS_TYPE}",
+    #             validation_type="permissions"
+    #         )

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from threading import Lock
 import asyncio
 from contextlib import asynccontextmanager
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 
 from mountainash_settings.auth.storage.exceptions import (
     StorageConnectionError,

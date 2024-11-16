@@ -1,22 +1,20 @@
-from typing import Optional, Dict, Any, Set, List, Union
+from typing import Optional, List, Any, Dict, Tuple
+from upath import UPath
 from pydantic import Field, SecretStr, field_validator
 import re
-from pathlib import Path
 import os
 import ipaddress
 
 from mountainash_settings.auth.storage.base import StorageAuthBase
 from mountainash_settings.auth.storage.constants import (
     CONST_STORAGE_PROVIDER_TYPE,
-    CONST_STORAGE_AUTH_METHOD,
-    CONST_STORAGE_ACCESS_TYPE
+    CONST_STORAGE_AUTH_METHOD
 )
 from mountainash_settings.auth.storage.exceptions import (
     StorageValidationError,
     StorageConfigError,
     StorageSecurityError
 )
-from mountainash_settings.auth.storage.utils.validation import StorageValidator
 
 class SFTPStorageAuthSettings(StorageAuthBase):
     """
@@ -47,28 +45,35 @@ class SFTPStorageAuthSettings(StorageAuthBase):
     COMPRESSION: bool = Field(default=True)
     COMPRESSION_LEVEL: int = Field(default=6)  # 0-9
     
-    # Path Settings
-    ROOT_PATH: Optional[str] = Field(default=None)
-    DEFAULT_PATH: Optional[str] = Field(default=None)
+    # # Path Settings
+    # ROOT_PATH: Optional[str] = Field(default=None)
+    # DEFAULT_PATH: Optional[str] = Field(default=None)
     
-    # Security Settings
-    CIPHERS: Optional[List[str]] = Field(default=None)
-    KEX_ALGORITHMS: Optional[List[str]] = Field(default=None)
-    HOSTKEY_ALGORITHMS: Optional[List[str]] = Field(default=None)
-    ALLOW_AGENT: bool = Field(default=True)
-    LOOK_FOR_KEYS: bool = Field(default=True)
+    # # Security Settings
+    # CIPHERS: Optional[List[str]] = Field(default=None)
+    # KEX_ALGORITHMS: Optional[List[str]] = Field(default=None)
+    # HOSTKEY_ALGORITHMS: Optional[List[str]] = Field(default=None)
+    # ALLOW_AGENT: bool = Field(default=True)
+    # LOOK_FOR_KEYS: bool = Field(default=True)
     
-    # Transfer Settings
-    BUFFER_SIZE: int = Field(default=32768)  # 32KB
-    MAX_PACKET_SIZE: int = Field(default=32768)
-    WINDOW_SIZE: int = Field(default=2097152)  # 2MB
+    # # Transfer Settings
+    # BUFFER_SIZE: int = Field(default=32768)  # 32KB
+    # MAX_PACKET_SIZE: int = Field(default=32768)
+    # WINDOW_SIZE: int = Field(default=2097152)  # 2MB
     
-    # Timeout Settings
-    TIMEOUT: float = Field(default=30.0)
-    BANNER_TIMEOUT: float = Field(default=60.0)
-    AUTH_TIMEOUT: float = Field(default=30.0)
-    KEEPALIVE_INTERVAL: int = Field(default=30)
+    # # Timeout Settings
+    # TIMEOUT: float = Field(default=30.0)
+    # BANNER_TIMEOUT: float = Field(default=60.0)
+    # AUTH_TIMEOUT: float = Field(default=30.0)
+    # KEEPALIVE_INTERVAL: int = Field(default=30)
     
+    def __init__(self, 
+                 config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 _dummy: Optional[bool] = False,
+                 **kwargs) -> None:  
+        super().__init__(config_files=config_files, _dummy=_dummy, **kwargs)
+
+
     ## Field Validators ##
     @field_validator("HOST")
     def validate_host(cls, v: str) -> str:
@@ -138,7 +143,7 @@ class SFTPStorageAuthSettings(StorageAuthBase):
         """Validate private key path"""
         if v is not None:
             try:
-                path = Path(v).resolve()
+                path = UPath(v).resolve()
                 if not path.exists():
                     raise StorageValidationError(
                         f"Private key file not found: {v}",
@@ -168,7 +173,7 @@ class SFTPStorageAuthSettings(StorageAuthBase):
         """Validate known hosts file path"""
         if v is not None:
             try:
-                path = Path(v).resolve()
+                path = UPath(v).resolve()
                 if not path.exists():
                     # Create empty file if it doesn't exist
                     path.touch(mode=0o600)
@@ -228,13 +233,13 @@ class SFTPStorageAuthSettings(StorageAuthBase):
                     provider=self.PROVIDER_TYPE
                 )
                 
-        # Validate path settings
-        if self.ROOT_PATH and self.DEFAULT_PATH:
-            if not self.DEFAULT_PATH.startswith(self.ROOT_PATH):
-                raise StorageConfigError(
-                    "Default path must be within root path",
-                    provider=self.PROVIDER_TYPE
-                )
+        # # Validate path settings
+        # if self.ROOT_PATH and self.DEFAULT_PATH:
+        #     if not self.DEFAULT_PATH.startswith(self.ROOT_PATH):
+        #         raise StorageConfigError(
+        #             "Default path must be within root path",
+        #             provider=self.PROVIDER_TYPE
+        #         )
 
         # Validate security settings
         if self.HOST_KEY_POLICY == "reject" and not self.KNOWN_HOSTS_FILE:
@@ -264,10 +269,10 @@ class SFTPStorageAuthSettings(StorageAuthBase):
             "compress": self.COMPRESSION,
             "compression_level": self.COMPRESSION_LEVEL if self.COMPRESSION else None,
             "timeout": self.TIMEOUT,
-            "banner_timeout": self.BANNER_TIMEOUT,
-            "auth_timeout": self.AUTH_TIMEOUT,
-            "allow_agent": self.ALLOW_AGENT,
-            "look_for_keys": self.LOOK_FOR_KEYS
+            # "banner_timeout": self.BANNER_TIMEOUT,
+            # "auth_timeout": self.AUTH_TIMEOUT,
+            # "allow_agent": self.ALLOW_AGENT,
+            # "look_for_keys": self.LOOK_FOR_KEYS
         })
         
         # Add authentication credentials based on method
@@ -286,41 +291,41 @@ class SFTPStorageAuthSettings(StorageAuthBase):
         if self.KNOWN_HOSTS_FILE:
             args["host_keys_filename"] = self.KNOWN_HOSTS_FILE
             
-        if self.CIPHERS:
-            args["ciphers"] = self.CIPHERS
+        # if self.CIPHERS:
+        #     args["ciphers"] = self.CIPHERS
             
-        if self.KEX_ALGORITHMS:
-            args["kex_algorithms"] = self.KEX_ALGORITHMS
+        # if self.KEX_ALGORITHMS:
+        #     args["kex_algorithms"] = self.KEX_ALGORITHMS
             
-        if self.HOSTKEY_ALGORITHMS:
-            args["hostkey_algorithms"] = self.HOSTKEY_ALGORITHMS
+        # if self.HOSTKEY_ALGORITHMS:
+        #     args["hostkey_algorithms"] = self.HOSTKEY_ALGORITHMS
             
-        # Add transfer settings
-        args.update({
-            "buffer_size": self.BUFFER_SIZE,
-            "max_packet_size": self.MAX_PACKET_SIZE,
-            "window_size": self.WINDOW_SIZE,
-            "keepalive_interval": self.KEEPALIVE_INTERVAL
-        })
+        # # Add transfer settings
+        # args.update({
+        #     "buffer_size": self.BUFFER_SIZE,
+        #     "max_packet_size": self.MAX_PACKET_SIZE,
+        #     "window_size": self.WINDOW_SIZE,
+        #     "keepalive_interval": self.KEEPALIVE_INTERVAL
+        # })
             
         return {k: v for k, v in args.items() if v is not None}
 
-    def _validate_permissions(self) -> None:
-        """Validate storage permissions configuration"""
-        # Define required permissions based on access type
-        if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
-            required_perms = {"read", "list"}
-        elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
-            required_perms = {"write", "mkdir"}
-        elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
-            required_perms = {"read", "write", "list", "mkdir"}
-        else:  # ADMIN
-            required_perms = {"read", "write", "list", "mkdir", "delete", "chmod"}
+    # def _validate_permissions(self) -> None:
+    #     """Validate storage permissions configuration"""
+    #     # Define required permissions based on access type
+    #     if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
+    #         required_perms = {"read", "list"}
+    #     elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
+    #         required_perms = {"write", "mkdir"}
+    #     elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
+    #         required_perms = {"read", "write", "list", "mkdir"}
+    #     else:  # ADMIN
+    #         required_perms = {"read", "write", "list", "mkdir", "delete", "chmod"}
             
-        # Validate against required permissions
-        if not required_perms.issubset(self.REQUIRED_PERMISSIONS):
-            raise StorageValidationError(
-                f"Missing required permissions for access type {self.ACCESS_TYPE}",
-                validation_type="permissions"
-            )
+    #     # Validate against required permissions
+    #     if not required_perms.issubset(self.REQUIRED_PERMISSIONS):
+    #         raise StorageValidationError(
+    #             f"Missing required permissions for access type {self.ACCESS_TYPE}",
+    #             validation_type="permissions"
+    #         )
  

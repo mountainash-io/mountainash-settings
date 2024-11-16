@@ -1,6 +1,7 @@
 from datetime import datetime
-
+from typing import Optional, List, Tuple
 from pydantic import Field
+from upath import UPath
 
 from mountainash_utils_os import get_platform_slash
 from mountainash_settings import MountainAshBaseSettings
@@ -21,11 +22,10 @@ Parameters:
 class AppSettings(MountainAshBaseSettings):
 
     def __init__(self, 
-                 _dummy:bool    =   False,
-                 **kwargs) -> None:
-
-        super().__init__(_dummy=_dummy,
-                         **kwargs)
+                 config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 _dummy: Optional[bool] = False,
+                 **kwargs) -> None:  
+        super().__init__(config_files=config_files, _dummy=_dummy, **kwargs)
 
     # General App Settings
     PLATFORM_SLASH: str =                    Field(default=get_platform_slash())
@@ -38,6 +38,8 @@ class AppSettings(MountainAshBaseSettings):
 
 
     PANDERA_DATAFRAME_FRAMEWORK: str =              Field(default='pandas')
+
+
 
     def post_init(self, reinitialise: bool = False):
         """Initializes dynamic settings from template strings.

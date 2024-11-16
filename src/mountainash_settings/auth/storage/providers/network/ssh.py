@@ -1,23 +1,21 @@
-from typing import Optional, Dict, Any, Set, List, Union
+from typing import Optional, List, Any, Dict, Tuple
+from upath import UPath
 from pydantic import Field, SecretStr, field_validator
 import re
 from enum import Enum
-from pathlib import Path
 import os
 import ipaddress
 
 from mountainash_settings.auth.storage.base import StorageAuthBase
 from mountainash_settings.auth.storage.constants import (
     CONST_STORAGE_PROVIDER_TYPE,
-    CONST_STORAGE_AUTH_METHOD,
-    CONST_STORAGE_ACCESS_TYPE
+    CONST_STORAGE_AUTH_METHOD
 )
 from mountainash_settings.auth.storage.exceptions import (
     StorageValidationError,
     StorageConfigError,
     StorageSecurityError
 )
-from mountainash_settings.auth.storage.utils.validation import StorageValidator
 
 class SSHKeyType(str, Enum):
     """SSH key types"""
@@ -65,31 +63,38 @@ class SSHStorageAuthSettings(StorageAuthBase):
     MAC_ALGORITHMS: Optional[List[str]] = Field(default=None)
     STRICT_HOST_KEY_CHECKING: bool = Field(default=True)
     
-    # Authentication Options
-    ALLOW_AGENT: bool = Field(default=True)
-    LOOK_FOR_KEYS: bool = Field(default=True)
-    PREFERRED_AUTH_METHODS: List[str] = Field(
-        default=["publickey", "keyboard-interactive", "password"]
-    )
+    # # Authentication Options
+    # ALLOW_AGENT: bool = Field(default=True)
+    # LOOK_FOR_KEYS: bool = Field(default=True)
+    # PREFERRED_AUTH_METHODS: List[str] = Field(
+    #     default=["publickey", "keyboard-interactive", "password"]
+    # )
     
-    # Connection Settings
-    TIMEOUT: float = Field(default=30.0)
-    TCP_KEEPALIVE: bool = Field(default=True)
-    KEEPALIVE_INTERVAL: int = Field(default=30)
-    COMPRESSION: bool = Field(default=True)
-    COMPRESSION_LEVEL: int = Field(default=6)  # 0-9
+    # # Connection Settings
+    # TIMEOUT: float = Field(default=30.0)
+    # TCP_KEEPALIVE: bool = Field(default=True)
+    # KEEPALIVE_INTERVAL: int = Field(default=30)
+    # COMPRESSION: bool = Field(default=True)
+    # COMPRESSION_LEVEL: int = Field(default=6)  # 0-9
     
-    # Channel Settings
-    CHANNEL_TIMEOUT: float = Field(default=30.0)
-    WINDOW_SIZE: int = Field(default=2097152)  # 2MB
-    MAX_PACKET_SIZE: int = Field(default=32768)  # 32KB
+    # # Channel Settings
+    # CHANNEL_TIMEOUT: float = Field(default=30.0)
+    # WINDOW_SIZE: int = Field(default=2097152)  # 2MB
+    # MAX_PACKET_SIZE: int = Field(default=32768)  # 32KB
     
-    # Advanced Settings
-    BANNER_TIMEOUT: float = Field(default=60.0)
-    AUTH_TIMEOUT: float = Field(default=30.0)
-    SOCK_CONNECT_TIMEOUT: Optional[float] = Field(default=None)
-    DISABLED_ALGORITHMS: Optional[Dict[str, List[str]]] = Field(default=None)
+    # # Advanced Settings
+    # BANNER_TIMEOUT: float = Field(default=60.0)
+    # AUTH_TIMEOUT: float = Field(default=30.0)
+    # SOCK_CONNECT_TIMEOUT: Optional[float] = Field(default=None)
+    # DISABLED_ALGORITHMS: Optional[Dict[str, List[str]]] = Field(default=None)
     
+
+    def __init__(self, 
+                 config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 _dummy: Optional[bool] = False,
+                 **kwargs) -> None:  
+        super().__init__(config_files=config_files, _dummy=_dummy, **kwargs)
+
     ## Field Validators ##
     @field_validator("HOST")
     def validate_host(cls, v: str) -> str:
@@ -183,7 +188,7 @@ class SSHStorageAuthSettings(StorageAuthBase):
         """Validate private key file path"""
         if v is not None:
             try:
-                path = Path(v).resolve()
+                path = UPath(v).resolve()
                 if not path.exists():
                     raise StorageValidationError(
                         f"Private key file not found: {v}",
@@ -214,7 +219,7 @@ class SSHStorageAuthSettings(StorageAuthBase):
         """Validate known hosts file path"""
         if v is not None:
             try:
-                path = Path(v).resolve()
+                path = UPath(v).resolve()
                 if not path.exists():
                     path.touch(mode=0o600)  # Create with secure permissions
                     
@@ -237,15 +242,15 @@ class SSHStorageAuthSettings(StorageAuthBase):
                 
         return v
 
-    @field_validator("COMPRESSION_LEVEL")
-    def validate_compression_level(cls, v: int) -> int:
-        """Validate compression level"""
-        if not (0 <= v <= 9):
-            raise StorageValidationError(
-                "Compression level must be between 0 and 9",
-                validation_type="compression_level"
-            )
-        return v
+    # @field_validator("COMPRESSION_LEVEL")
+    # def validate_compression_level(cls, v: int) -> int:
+    #     """Validate compression level"""
+    #     if not (0 <= v <= 9):
+    #         raise StorageValidationError(
+    #             "Compression level must be between 0 and 9",
+    #             validation_type="compression_level"
+    #         )
+    #     return v
 
     def _init_provider_specific(self, reinitialise: bool) -> None:
         """Initialize provider-specific settings"""
@@ -271,15 +276,15 @@ class SSHStorageAuthSettings(StorageAuthBase):
                     security_check="host_key_verification"
                 )
 
-        # Validate disabled algorithms
-        if self.DISABLED_ALGORITHMS:
-            valid_categories = {"kex", "cipher", "mac", "key", "hostkey"}
-            invalid_categories = set(self.DISABLED_ALGORITHMS.keys()) - valid_categories
-            if invalid_categories:
-                raise StorageConfigError(
-                    f"Invalid algorithm categories: {invalid_categories}",
-                    provider=self.PROVIDER_TYPE
-                )
+        # # Validate disabled algorithms
+        # if self.DISABLED_ALGORITHMS:
+        #     valid_categories = {"kex", "cipher", "mac", "key", "hostkey"}
+        #     invalid_categories = set(self.DISABLED_ALGORITHMS.keys()) - valid_categories
+        #     if invalid_categories:
+        #         raise StorageConfigError(
+        #             f"Invalid algorithm categories: {invalid_categories}",
+        #             provider=self.PROVIDER_TYPE
+        #         )
 
     def get_connection_url(self) -> str:
         """Generate SSH connection URL"""
@@ -295,14 +300,14 @@ class SSHStorageAuthSettings(StorageAuthBase):
             "port": self.PORT,
             "username": self.USERNAME,
             "timeout": self.TIMEOUT,
-            "banner_timeout": self.BANNER_TIMEOUT,
-            "auth_timeout": self.AUTH_TIMEOUT,
-            "sock_connect_timeout": self.SOCK_CONNECT_TIMEOUT,
-            "allow_agent": self.ALLOW_AGENT,
-            "look_for_keys": self.LOOK_FOR_KEYS,
-            "compress": self.COMPRESSION,
-            "compression_level": self.COMPRESSION_LEVEL if self.COMPRESSION else None,
-            "keepalive_interval": self.KEEPALIVE_INTERVAL if self.TCP_KEEPALIVE else None
+            # "banner_timeout": self.BANNER_TIMEOUT,
+            # "auth_timeout": self.AUTH_TIMEOUT,
+            # "sock_connect_timeout": self.SOCK_CONNECT_TIMEOUT,
+            # "allow_agent": self.ALLOW_AGENT,
+            # "look_for_keys": self.LOOK_FOR_KEYS,
+            # "compress": self.COMPRESSION,
+            # "compression_level": self.COMPRESSION_LEVEL if self.COMPRESSION else None,
+            # "keepalive_interval": self.KEEPALIVE_INTERVAL if self.TCP_KEEPALIVE else None
         })
         
         # Add authentication credentials based on method
@@ -330,36 +335,36 @@ class SSHStorageAuthSettings(StorageAuthBase):
         if self.MAC_ALGORITHMS:
             args["mac_algorithms"] = self.MAC_ALGORITHMS
             
-        if self.DISABLED_ALGORITHMS:
-            args["disabled_algorithms"] = self.DISABLED_ALGORITHMS
+        # if self.DISABLED_ALGORITHMS:
+        #     args["disabled_algorithms"] = self.DISABLED_ALGORITHMS
             
-        # Add channel settings
-        args.update({
-            "channel_timeout": self.CHANNEL_TIMEOUT,
-            "window_size": self.WINDOW_SIZE,
-            "max_packet_size": self.MAX_PACKET_SIZE
-        })
+        # # Add channel settings
+        # args.update({
+        #     "channel_timeout": self.CHANNEL_TIMEOUT,
+        #     "window_size": self.WINDOW_SIZE,
+        #     "max_packet_size": self.MAX_PACKET_SIZE
+        # })
             
         return {k: v for k, v in args.items() if v is not None}
 
-    def _validate_permissions(self) -> None:
-        """Validate storage permissions configuration"""
-        # Define required permissions based on access type
-        if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
-            required_perms = {"read", "execute"}
-        elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
-            required_perms = {"write", "execute"}
-        elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
-            required_perms = {"read", "write", "execute"}
-        else:  # ADMIN
-            required_perms = {"read", "write", "execute", "delete", "sudo"}
+    # def _validate_permissions(self) -> None:
+    #     """Validate storage permissions configuration"""
+    #     # Define required permissions based on access type
+    #     if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
+    #         required_perms = {"read", "execute"}
+    #     elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
+    #         required_perms = {"write", "execute"}
+    #     elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
+    #         required_perms = {"read", "write", "execute"}
+    #     else:  # ADMIN
+    #         required_perms = {"read", "write", "execute", "delete", "sudo"}
             
-        # Validate against required permissions
-        if not required_perms.issubset(self.REQUIRED_PERMISSIONS):
-            raise StorageValidationError(
-                f"Missing required permissions for access type {self.ACCESS_TYPE}",
-                validation_type="permissions"
-            )
+    #     # Validate against required permissions
+    #     if not required_perms.issubset(self.REQUIRED_PERMISSIONS):
+    #         raise StorageValidationError(
+    #             f"Missing required permissions for access type {self.ACCESS_TYPE}",
+    #             validation_type="permissions"
+    #         )
 
     # def _test_connection(self) -> bool:
     #     """

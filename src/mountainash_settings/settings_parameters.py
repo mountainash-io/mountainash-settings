@@ -1,7 +1,9 @@
 
 from typing import Optional, Union, Any, Tuple, Type, List, Dict
 from dataclasses import dataclass
-from mountainash_settings.base import MountainAshBaseSettings
+# from mountainash_settings.base import MountainAshBaseSettings
+from pydantic_settings import BaseSettings
+
 from upath import UPath
 
 @dataclass(frozen=True)
@@ -20,7 +22,7 @@ class SettingsParameters():
     namespace:      Optional[str] = "DEFAULT"
     config_files:   Optional[Union[Any, str, Tuple[Any|str]]] = None
     kwargs:         Optional[Tuple[str,Any]] = None
-    settings_class: Optional[Type[MountainAshBaseSettings]] = MountainAshBaseSettings
+    settings_class: Optional[Type[BaseSettings]] = BaseSettings
     env_prefix:     Optional[str] = None
     secrets_dir:    Optional[str] = None    
 
@@ -33,7 +35,7 @@ class SettingsParameters():
                namespace: Optional[str] = None,
                config_files: Optional[Union[UPath, str, List[Union[UPath, str]]]] = None,
                kwargs: Optional[Dict[str, Any]] = None,
-               settings_class: Type[MountainAshBaseSettings] = MountainAshBaseSettings,
+               settings_class: Type[BaseSettings] = BaseSettings,
                env_prefix: Optional[str] = None,
                secrets_dir: Optional[str] = None) -> 'SettingsParameters':
         

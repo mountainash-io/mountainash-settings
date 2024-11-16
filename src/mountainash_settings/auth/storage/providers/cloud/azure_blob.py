@@ -1,17 +1,17 @@
-from typing import Optional, Dict, Any, Set
+
+from typing import Optional, List, Any, Dict, Tuple
+from upath import UPath
 from pydantic import Field, SecretStr, field_validator
 import re
 
 from mountainash_settings.auth.storage.base import StorageAuthBase
 from mountainash_settings.auth.storage.constants import (
     CONST_STORAGE_PROVIDER_TYPE,
-    CONST_STORAGE_AUTH_METHOD,
-    CONST_STORAGE_ACCESS_TYPE
+    CONST_STORAGE_AUTH_METHOD
 )
 from mountainash_settings.auth.storage.exceptions import (
     StorageValidationError,
-    StorageConfigError,
-    StorageSecurityError
+    StorageConfigError
 )
 from mountainash_settings.auth.storage.utils.validation import StorageValidator
 
@@ -44,20 +44,26 @@ class AzureBlobStorageAuthSettings(StorageAuthBase):
     ENDPOINT_SUFFIX: str = Field(default="core.windows.net")
     CUSTOM_DOMAIN: Optional[str] = Field(default=None)
     
-    # Performance Settings
-    MAX_CHUNK_SIZE: int = Field(default=4 * 1024 * 1024)  # 4 MB
-    MAX_SINGLE_PUT_SIZE: int = Field(default=64 * 1024 * 1024)  # 64 MB
-    MIN_LARGE_BLOCK_UPLOAD_THRESHOLD: int = Field(default=128 * 1024 * 1024)  # 128 MB
+    # # Performance Settings
+    # MAX_CHUNK_SIZE: int = Field(default=4 * 1024 * 1024)  # 4 MB
+    # MAX_SINGLE_PUT_SIZE: int = Field(default=64 * 1024 * 1024)  # 64 MB
+    # MIN_LARGE_BLOCK_UPLOAD_THRESHOLD: int = Field(default=128 * 1024 * 1024)  # 128 MB
     
-    # Retry Settings
-    MAX_RETRIES: int = Field(default=3)
-    RETRY_WAIT: int = Field(default=1)
-    MAX_RETRY_WAIT: int = Field(default=60)
+    # # Retry Settings
+    # MAX_RETRIES: int = Field(default=3)
+    # RETRY_WAIT: int = Field(default=1)
+    # MAX_RETRY_WAIT: int = Field(default=60)
     
-    # Security Settings
-    REQUIRE_ENCRYPTION: bool = Field(default=True)
-    KEY_ENCRYPTION_KEY: Optional[SecretStr] = Field(default=None)
-    KEY_RESOLVER_FUNCTION: Optional[str] = Field(default=None)
+    # # Security Settings
+    # REQUIRE_ENCRYPTION: bool = Field(default=True)
+    # KEY_ENCRYPTION_KEY: Optional[SecretStr] = Field(default=None)
+    # KEY_RESOLVER_FUNCTION: Optional[str] = Field(default=None)
+
+    def __init__(self, 
+                 config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 _dummy: Optional[bool] = False,
+                 **kwargs) -> None:  
+        super().__init__(config_files=config_files, _dummy=_dummy, **kwargs)
 
     ## Field Validators ##
     @field_validator("ACCOUNT_NAME")
@@ -150,6 +156,8 @@ class AzureBlobStorageAuthSettings(StorageAuthBase):
                 )
         return v
 
+
+
     def _init_provider_specific(self, reinitialise: bool) -> None:
         """Initialize provider-specific settings"""
         # Validate authentication method configuration
@@ -172,12 +180,12 @@ class AzureBlobStorageAuthSettings(StorageAuthBase):
                     provider=self.PROVIDER_TYPE
                 )
 
-        # Validate encryption settings
-        if self.REQUIRE_ENCRYPTION and not (self.KEY_ENCRYPTION_KEY or self.KEY_RESOLVER_FUNCTION):
-            raise StorageSecurityError(
-                "Encryption key or key resolver required when encryption is enabled",
-                security_check="encryption_config"
-            )
+        # # Validate encryption settings
+        # if self.REQUIRE_ENCRYPTION and not (self.KEY_ENCRYPTION_KEY or self.KEY_RESOLVER_FUNCTION):
+        #     raise StorageSecurityError(
+        #         "Encryption key or key resolver required when encryption is enabled",
+        #         security_check="encryption_config"
+        #     )
 
     def get_connection_url(self) -> str:
         """Generate Azure Blob Storage connection URL"""
@@ -202,10 +210,10 @@ class AzureBlobStorageAuthSettings(StorageAuthBase):
             "container_name": self.CONTAINER_NAME,
             "endpoint_suffix": self.ENDPOINT_SUFFIX,
             "custom_domain": self.CUSTOM_DOMAIN,
-            "require_encryption": self.REQUIRE_ENCRYPTION,
-            "max_chunk_size": self.MAX_CHUNK_SIZE,
-            "max_single_put_size": self.MAX_SINGLE_PUT_SIZE,
-            "min_large_block_upload_threshold": self.MIN_LARGE_BLOCK_UPLOAD_THRESHOLD
+            # "require_encryption": self.REQUIRE_ENCRYPTION,
+            # "max_chunk_size": self.MAX_CHUNK_SIZE,
+            # "max_single_put_size": self.MAX_SINGLE_PUT_SIZE,
+            # "min_large_block_upload_threshold": self.MIN_LARGE_BLOCK_UPLOAD_THRESHOLD
         })
         
         # Add authentication credentials based on method
@@ -223,44 +231,44 @@ class AzureBlobStorageAuthSettings(StorageAuthBase):
                 "client_secret": self.CLIENT_SECRET.get_secret_value()
             })
             
-        # Add encryption settings if required
-        if self.REQUIRE_ENCRYPTION:
-            if self.KEY_ENCRYPTION_KEY:
-                args["key_encryption_key"] = self.KEY_ENCRYPTION_KEY.get_secret_value()
-            if self.KEY_RESOLVER_FUNCTION:
-                args["key_resolver_function"] = self.KEY_RESOLVER_FUNCTION
+        # # Add encryption settings if required
+        # if self.REQUIRE_ENCRYPTION:
+        #     if self.KEY_ENCRYPTION_KEY:
+        #         args["key_encryption_key"] = self.KEY_ENCRYPTION_KEY.get_secret_value()
+        #     if self.KEY_RESOLVER_FUNCTION:
+        #         args["key_resolver_function"] = self.KEY_RESOLVER_FUNCTION
                 
-        # Add retry settings
-        args.update({
-            "max_retries": self.MAX_RETRIES,
-            "retry_wait": self.RETRY_WAIT,
-            "max_retry_wait": self.MAX_RETRY_WAIT
-        })
+        # # Add retry settings
+        # args.update({
+        #     "max_retries": self.MAX_RETRIES,
+        #     "retry_wait": self.RETRY_WAIT,
+        #     "max_retry_wait": self.MAX_RETRY_WAIT
+        # })
             
         return {k: v for k, v in args.items() if v is not None}
 
-    def _validate_permissions(self) -> None:
-        """Validate storage permissions configuration"""
-        # Define required permissions based on access type
-        if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
-            required_perms = {"Storage.Blobs.Read"}
-        elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
-            required_perms = {"Storage.Blobs.Create", "Storage.Blobs.Delete"}
-        elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
-            required_perms = {
-                "Storage.Blobs.Read",
-                "Storage.Blobs.Create",
-                "Storage.Blobs.Delete"
-            }
-        else:  # ADMIN
-            required_perms = {"Storage.Blobs.FullControl"}
+    # def _validate_permissions(self) -> None:
+    #     """Validate storage permissions configuration"""
+    #     # Define required permissions based on access type
+    #     if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
+    #         required_perms = {"Storage.Blobs.Read"}
+    #     elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
+    #         required_perms = {"Storage.Blobs.Create", "Storage.Blobs.Delete"}
+    #     elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
+    #         required_perms = {
+    #             "Storage.Blobs.Read",
+    #             "Storage.Blobs.Create",
+    #             "Storage.Blobs.Delete"
+    #         }
+    #     else:  # ADMIN
+    #         required_perms = {"Storage.Blobs.FullControl"}
             
-        # Validate against required permissions
-        if not required_perms.issubset(self.REQUIRED_PERMISSIONS):
-            raise StorageValidationError(
-                f"Missing required permissions for access type {self.ACCESS_TYPE}",
-                validation_type="permissions"
-            )
+    #     # Validate against required permissions
+    #     if not required_perms.issubset(self.REQUIRED_PERMISSIONS):
+    #         raise StorageValidationError(
+    #             f"Missing required permissions for access type {self.ACCESS_TYPE}",
+    #             validation_type="permissions"
+    #         )
 
     # def _test_connection(self) -> bool:
     #     """

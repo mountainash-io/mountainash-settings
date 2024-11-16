@@ -1,19 +1,18 @@
-from typing import Optional, Dict, Any, Set
+from typing import Optional, List, Any, Dict, Tuple
+from upath import UPath
+
 from pydantic import Field, SecretStr, field_validator
 import re
 
 from mountainash_settings.auth.storage.base import StorageAuthBase
 from mountainash_settings.auth.storage.constants import (
     CONST_STORAGE_PROVIDER_TYPE,
-    CONST_STORAGE_AUTH_METHOD,
-    CONST_STORAGE_ACCESS_TYPE
+    CONST_STORAGE_AUTH_METHOD
 )
 from mountainash_settings.auth.storage.exceptions import (
     StorageValidationError,
-    StorageConfigError,
-    StorageSecurityError
+    StorageConfigError
 )
-from mountainash_settings.auth.storage.utils.validation import StorageValidator
 
 class AzureFilesStorageAuthSettings(StorageAuthBase):
     """
@@ -44,29 +43,35 @@ class AzureFilesStorageAuthSettings(StorageAuthBase):
     ENDPOINT_SUFFIX: str = Field(default="core.windows.net")
     CUSTOM_DOMAIN: Optional[str] = Field(default=None)
     
-    # SMB Settings
-    SMB_VERSION: Optional[str] = Field(default="3.0")  # 2.1, 3.0, 3.1.1
-    SMB_ENCRYPTION: bool = Field(default=True)
-    SMB_CONTINUOUS_AVAILABILITY: bool = Field(default=True)
-    SMB_MULTICHANNEL: bool = Field(default=True)
+    # # SMB Settings
+    # SMB_VERSION: Optional[str] = Field(default="3.0")  # 2.1, 3.0, 3.1.1
+    # SMB_ENCRYPTION: bool = Field(default=True)
+    # SMB_CONTINUOUS_AVAILABILITY: bool = Field(default=True)
+    # SMB_MULTICHANNEL: bool = Field(default=True)
     
-    # Performance Settings
-    MAX_RANGE_SIZE: int = Field(default=4 * 1024 * 1024)  # 4 MB
-    MAX_SINGLE_GET_SIZE: int = Field(default=32 * 1024 * 1024)  # 32 MB
-    ENABLE_WRITE_BUFFERING: bool = Field(default=True)
-    WRITE_BUFFER_SIZE: int = Field(default=4 * 1024 * 1024)  # 4 MB
+    # # Performance Settings
+    # MAX_RANGE_SIZE: int = Field(default=4 * 1024 * 1024)  # 4 MB
+    # MAX_SINGLE_GET_SIZE: int = Field(default=32 * 1024 * 1024)  # 32 MB
+    # ENABLE_WRITE_BUFFERING: bool = Field(default=True)
+    # WRITE_BUFFER_SIZE: int = Field(default=4 * 1024 * 1024)  # 4 MB
     
-    # Security Settings
-    REQUIRE_ENCRYPTION: bool = Field(default=True)
-    HTTPS_ONLY: bool = Field(default=True)
-    ENABLE_KERBEROS: bool = Field(default=False)
-    KERBEROS_TICKET_PATH: Optional[str] = Field(default=None)
+    # # Security Settings
+    # REQUIRE_ENCRYPTION: bool = Field(default=True)
+    # HTTPS_ONLY: bool = Field(default=True)
+    # ENABLE_KERBEROS: bool = Field(default=False)
+    # KERBEROS_TICKET_PATH: Optional[str] = Field(default=None)
     
-    # Retry Settings
-    MAX_RETRIES: int = Field(default=3)
-    RETRY_WAIT: int = Field(default=1)
-    MAX_RETRY_WAIT: int = Field(default=60)
+    # # Retry Settings
+    # MAX_RETRIES: int = Field(default=3)
+    # RETRY_WAIT: int = Field(default=1)
+    # MAX_RETRY_WAIT: int = Field(default=60)
     
+    def __init__(self, 
+                 config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 _dummy: Optional[bool] = False,
+                 **kwargs) -> None:  
+        super().__init__(config_files=config_files, _dummy=_dummy, **kwargs)
+
     ## Field Validators ##
     @field_validator("ACCOUNT_NAME")
     def validate_account_name(cls, v: str) -> str:
@@ -126,33 +131,33 @@ class AzureFilesStorageAuthSettings(StorageAuthBase):
             
         return v
         
-    @field_validator("SMB_VERSION")
-    def validate_smb_version(cls, v: Optional[str]) -> Optional[str]:
-        """Validate SMB version"""
-        if v is not None:
-            valid_versions = {"2.1", "3.0", "3.1.1"}
-            if v not in valid_versions:
-                raise StorageValidationError(
-                    f"Invalid SMB version. Must be one of: {valid_versions}",
-                    validation_type="smb_version"
-                )
-        return v
+    # @field_validator("SMB_VERSION")
+    # def validate_smb_version(cls, v: Optional[str]) -> Optional[str]:
+    #     """Validate SMB version"""
+    #     if v is not None:
+    #         valid_versions = {"2.1", "3.0", "3.1.1"}
+    #         if v not in valid_versions:
+    #             raise StorageValidationError(
+    #                 f"Invalid SMB version. Must be one of: {valid_versions}",
+    #                 validation_type="smb_version"
+    #             )
+    #     return v
         
-    @field_validator("KERBEROS_TICKET_PATH")
-    def validate_kerberos_ticket_path(cls, v: Optional[str]) -> Optional[str]:
-        """Validate Kerberos ticket path if Kerberos is enabled"""
-        if v is not None:
-            if not StorageValidator.validate_path(
-                v,
-                must_exist=True,
-                writable=False,
-                allowed_types={"file"}
-            ):
-                raise StorageValidationError(
-                    "Invalid Kerberos ticket path",
-                    validation_type="kerberos_ticket_path"
-                )
-        return v
+    # @field_validator("KERBEROS_TICKET_PATH")
+    # def validate_kerberos_ticket_path(cls, v: Optional[str]) -> Optional[str]:
+    #     """Validate Kerberos ticket path if Kerberos is enabled"""
+    #     if v is not None:
+    #         if not StorageValidator.validate_path(
+    #             v,
+    #             must_exist=True,
+    #             writable=False,
+    #             allowed_types={"file"}
+    #         ):
+    #             raise StorageValidationError(
+    #                 "Invalid Kerberos ticket path",
+    #                 validation_type="kerberos_ticket_path"
+    #             )
+    #     return v
 
     def _init_provider_specific(self, reinitialise: bool) -> None:
         """Initialize provider-specific settings"""
@@ -176,19 +181,19 @@ class AzureFilesStorageAuthSettings(StorageAuthBase):
                     provider=self.PROVIDER_TYPE
                 )
 
-        # Validate Kerberos configuration
-        if self.ENABLE_KERBEROS and not self.KERBEROS_TICKET_PATH:
-            raise StorageConfigError(
-                "Kerberos ticket path required when Kerberos is enabled",
-                provider=self.PROVIDER_TYPE
-            )
+        # # Validate Kerberos configuration
+        # if self.ENABLE_KERBEROS and not self.KERBEROS_TICKET_PATH:
+        #     raise StorageConfigError(
+        #         "Kerberos ticket path required when Kerberos is enabled",
+        #         provider=self.PROVIDER_TYPE
+        #     )
             
-        # Validate SMB security settings
-        if self.SMB_VERSION == "2.1" and self.SMB_ENCRYPTION:
-            raise StorageConfigError(
-                "SMB encryption is not supported with SMB 2.1",
-                provider=self.PROVIDER_TYPE
-            )
+        # # Validate SMB security settings
+        # if self.SMB_VERSION == "2.1" and self.SMB_ENCRYPTION:
+        #     raise StorageConfigError(
+        #         "SMB encryption is not supported with SMB 2.1",
+        #         provider=self.PROVIDER_TYPE
+        #     )
 
     def get_connection_url(self) -> str:
         """Generate Azure Files connection URL"""
@@ -213,8 +218,8 @@ class AzureFilesStorageAuthSettings(StorageAuthBase):
             "share_name": self.SHARE_NAME,
             "endpoint_suffix": self.ENDPOINT_SUFFIX,
             "custom_domain": self.CUSTOM_DOMAIN,
-            "require_encryption": self.REQUIRE_ENCRYPTION,
-            "https_only": self.HTTPS_ONLY
+            # "require_encryption": self.REQUIRE_ENCRYPTION,
+            # "https_only": self.HTTPS_ONLY
         })
         
         # Add authentication credentials based on method
@@ -232,61 +237,61 @@ class AzureFilesStorageAuthSettings(StorageAuthBase):
                 "client_secret": self.CLIENT_SECRET.get_secret_value()
             })
             
-        # Add SMB settings
-        args.update({
-            "smb_version": self.SMB_VERSION,
-            "smb_encryption": self.SMB_ENCRYPTION,
-            "smb_continuous_availability": self.SMB_CONTINUOUS_AVAILABILITY,
-            "smb_multichannel": self.SMB_MULTICHANNEL
-        })
+        # # Add SMB settings
+        # args.update({
+        #     "smb_version": self.SMB_VERSION,
+        #     "smb_encryption": self.SMB_ENCRYPTION,
+        #     "smb_continuous_availability": self.SMB_CONTINUOUS_AVAILABILITY,
+        #     "smb_multichannel": self.SMB_MULTICHANNEL
+        # })
         
-        # Add performance settings
-        args.update({
-            "max_range_size": self.MAX_RANGE_SIZE,
-            "max_single_get_size": self.MAX_SINGLE_GET_SIZE,
-            "enable_write_buffering": self.ENABLE_WRITE_BUFFERING,
-            "write_buffer_size": self.WRITE_BUFFER_SIZE
-        })
+        # # Add performance settings
+        # args.update({
+        #     "max_range_size": self.MAX_RANGE_SIZE,
+        #     "max_single_get_size": self.MAX_SINGLE_GET_SIZE,
+        #     "enable_write_buffering": self.ENABLE_WRITE_BUFFERING,
+        #     "write_buffer_size": self.WRITE_BUFFER_SIZE
+        # })
         
-        # Add Kerberos settings if enabled
-        if self.ENABLE_KERBEROS:
-            args.update({
-                "enable_kerberos": True,
-                "kerberos_ticket_path": self.KERBEROS_TICKET_PATH
-            })
+        # # Add Kerberos settings if enabled
+        # if self.ENABLE_KERBEROS:
+        #     args.update({
+        #         "enable_kerberos": True,
+        #         "kerberos_ticket_path": self.KERBEROS_TICKET_PATH
+        #     })
             
-        # Add retry settings
-        args.update({
-            "max_retries": self.MAX_RETRIES,
-            "retry_wait": self.RETRY_WAIT,
-            "max_retry_wait": self.MAX_RETRY_WAIT
-        })
+        # # Add retry settings
+        # args.update({
+        #     "max_retries": self.MAX_RETRIES,
+        #     "retry_wait": self.RETRY_WAIT,
+        #     "max_retry_wait": self.MAX_RETRY_WAIT
+        # })
             
         return {k: v for k, v in args.items() if v is not None}
 
-    def _validate_permissions(self) -> None:
-        """Validate storage permissions configuration"""
-        # Define required permissions based on access type
-        if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
-            required_perms = {"Storage.Files.Read", "Storage.Files.List"}
-        elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
-            required_perms = {"Storage.Files.Create", "Storage.Files.Delete"}
-        elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
-            required_perms = {
-                "Storage.Files.Read",
-                "Storage.Files.List",
-                "Storage.Files.Create",
-                "Storage.Files.Delete"
-            }
-        else:  # ADMIN
-            required_perms = {"Storage.Files.FullControl"}
+    # def _validate_permissions(self) -> None:
+    #     """Validate storage permissions configuration"""
+    #     # Define required permissions based on access type
+    #     if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
+    #         required_perms = {"Storage.Files.Read", "Storage.Files.List"}
+    #     elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
+    #         required_perms = {"Storage.Files.Create", "Storage.Files.Delete"}
+    #     elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
+    #         required_perms = {
+    #             "Storage.Files.Read",
+    #             "Storage.Files.List",
+    #             "Storage.Files.Create",
+    #             "Storage.Files.Delete"
+    #         }
+    #     else:  # ADMIN
+    #         required_perms = {"Storage.Files.FullControl"}
             
-        # Validate against required permissions
-        if not required_perms.issubset(self.REQUIRED_PERMISSIONS):
-            raise StorageValidationError(
-                f"Missing required permissions for access type {self.ACCESS_TYPE}",
-                validation_type="permissions"
-            )
+    #     # Validate against required permissions
+    #     if not required_perms.issubset(self.REQUIRED_PERMISSIONS):
+    #         raise StorageValidationError(
+    #             f"Missing required permissions for access type {self.ACCESS_TYPE}",
+    #             validation_type="permissions"
+    #         )
 
     # def _test_connection(self) -> bool:
     #     """

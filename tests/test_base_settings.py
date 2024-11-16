@@ -1,7 +1,7 @@
 from typing import Any, List, Optional, Type, Union
 
 import pytest
-from pydantic_settings import SettingsConfigDict
+from pydantic_settings import SettingsConfigDict, BaseSettings
 from pydantic import Field
 from pytest_check import check
 from upath import UPath

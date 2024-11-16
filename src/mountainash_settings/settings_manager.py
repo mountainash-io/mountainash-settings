@@ -34,40 +34,6 @@ class SettingsManager:
         self.auth_parameters = auth_parameters
 
 
-    # # @classmethod
-    def validate_config_files_exist(self, 
-                                    config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]] = None
-                                    ) -> None:
-        """
-        Validates that the configuration files exist.
-        
-        Args:
-            config_files (Union[UPath, List[UPath]]): The configuration file or list of configuration files.
-
-        Raises:
-            FileNotFoundError: If the configuration file does not exist.
-        """
-
-
-        config_files_list = SettingsUtils.format_config_file_list(config_files=config_files)
-
-        if config_files_list:
-
-            for config_file_temp in config_files_list:
-                
-
-                if not isinstance(config_file_temp, UPath):
-                    config_file_temp = UPath(config_file_temp)
-
-                #Only works for local files
-                if not config_file_temp.exists():
-                # if not os.path.exists(path=config_file_temp):
-                    raise FileNotFoundError(f"Config file {config_file_temp} not found.")
-                    
-                print(f"Config file found: {config_file_temp}")
-
-
-
     # @classmethod
     def validate_kwargs_keys(self, 
                              settings_class:    Type[MountainAshBaseSettings],                             
@@ -117,10 +83,8 @@ class SettingsManager:
             settings_namespace (str): The namespace for the configuration.
             config_files (Union[UPath, List[UPath]]): The configuration file or list of configuration files.
             kwargs (Dict[str, Any]): The keyword arguments to be combined.
-
         Raises:
             ValueError: If the namespace is already initialised and the parameters have changed.
-
         """
 
         
@@ -158,7 +122,6 @@ class SettingsManager:
             kwargs (Dict[str, Any]): The keyword arguments to be combined.
         """
 
-
         if not settings_namespace:
             raise ValueError("settings_namespace cannot be empty.")
 
@@ -183,13 +146,10 @@ class SettingsManager:
             config_files_sorted = SettingsFileHandler.separate_config_files(config_files)
             
             # Validate config files exist
-            self.validate_config_files_exist(config_files_sorted.env_files)
-            self.validate_config_files_exist(config_files_sorted.yaml_files)
-            self.validate_config_files_exist(config_files_sorted.toml_files)
-
-            config_files_list: Optional[List[UPath | str]] = SettingsUtils.format_config_file_list(config_files=config_files)
-            self.validate_config_files_exist(config_files=config_files_list)            
-            
+            SettingsFileHandler.validate_config_files_exist(config_files_sorted.env_files)
+            SettingsFileHandler.validate_config_files_exist(config_files_sorted.yaml_files)
+            SettingsFileHandler.validate_config_files_exist(config_files_sorted.toml_files)
+           
             ### HANDLE KWARGS ###
             self.validate_kwargs_keys(settings_class=settings_class, kwargs=kwargs)
 
@@ -211,19 +171,14 @@ class SettingsManager:
  
     # @classmethod
     def is_namespace_initialised(self, settings_namespace: str) -> bool:
-
         """
         Checks if the namespace is already initialised.
-
         Args:
             settings_namespace (str): The namespace for the configuration.
-
         Returns:
             bool: True if the namespace is already initialised, False otherwise.
-
         Raises:
             ValueError: If the namespace is not found in the app_settings_objects dictionary.
-        
         """
 
         #check if the namespace is already initialised by looking at the keys in the app_settings_objects dict
@@ -232,16 +187,12 @@ class SettingsManager:
 
     # @classmethod
     def get_config_object(self,settings_namespace: str) -> MountainAshBaseSettings:
-
         """
         Gets the configuration object for a given namespace.
-
         Args:
             settings_namespace (str): The namespace for the configuration.
-
         Returns:
             MountainAshBaseSettings: The configuration object for the given namespace.
-
         Raises:
             ValueError: If the configuration object is is not an MountainAshBaseSettings object.
         """
@@ -259,19 +210,14 @@ class SettingsManager:
                 settings_namespace: str,
                 #config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
                 **kwargs) -> MountainAshBaseSettings:
-
         """
         Gets the existing configuration object for a given namespace.
-
         Args:
             settings_namespace (str): The namespace for the configuration.
             kwargs (Dict[str, Any]): The keyword arguments to be combined.
-
         Returns:
             MountainAshBaseSettings: The configuration object for the given namespace.
-
         """
-
 
         print(f"Getting existing config via get_existing_config(): {settings_namespace}")
 

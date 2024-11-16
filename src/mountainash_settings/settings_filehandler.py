@@ -1,7 +1,8 @@
 from typing import Optional, Union, List, Tuple, Dict, NamedTuple
 from upath import UPath
 import os
-from pathlib import Path
+from .settings_utils import SettingsUtils
+
 
 class ConfigFiles(NamedTuple):
     """Container for different types of configuration files"""
@@ -50,10 +51,8 @@ class SettingsFileHandler:
         # Create ConfigFiles with deduplicated lists
         return ConfigFiles(
             env_files=SettingsFileHandler._deduplicate_files(file_groups.get(FileType.ENV, [])),
-            yaml_files=SettingsFileHandler._deduplicate_files(
-                file_groups.get(FileType.YAML[0], []) + file_groups.get(FileType.YAML[1], [])
-            ),
-            toml_files=SettingsFileHandler._deduplicate_files(file_groups.get(FileType.TOML, []))
+            yaml_files=SettingsFileHandler._deduplicate_files(file_groups.get(FileType.YAML[0], []) + file_groups.get(FileType.YAML[1], [])),
+            toml_files=SettingsFileHandler._deduplicate_files(file_groups.get(FileType.TOML,[]))
         )
 
     @staticmethod
@@ -90,6 +89,40 @@ class SettingsFileHandler:
             )
 
     @staticmethod
+    def validate_config_files_exist(
+                                    config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]] = None
+                                    ) -> None:
+        """
+        Validates that the configuration files exist.
+        
+        Args:
+            config_files (Union[UPath, List[UPath]]): The configuration file or list of configuration files.
+
+        Raises:
+            FileNotFoundError: If the configuration file does not exist.
+        """
+
+
+        config_files_list = SettingsUtils.format_config_file_list(config_files=config_files)
+
+        if config_files_list:
+
+            for config_file_temp in config_files_list:
+                
+
+                if not isinstance(config_file_temp, UPath):
+                    config_file_temp = UPath(config_file_temp)
+
+                #Only works for local files
+                if not config_file_temp.exists():
+                # if not os.path.exists(path=config_file_temp):
+                    raise FileNotFoundError(f"Config file {config_file_temp} not found.")
+                    
+                print(f"Config file found: {config_file_temp}")
+
+
+
+    @staticmethod
     def _group_files_by_type(
         files: List[Union[UPath, str]]
     ) -> Dict[str, List[Union[UPath, str]]]:
@@ -115,7 +148,7 @@ class SettingsFileHandler:
     @staticmethod
     def _deduplicate_files(
         files: List[Union[UPath, str]]
-    ) -> Optional[List[Union[UPath, str]]]:
+    ) -> Optional[UPath|str|List[Union[UPath, str]]]:
         """
         Removes duplicate files while preserving order.
         
@@ -127,6 +160,10 @@ class SettingsFileHandler:
         """
         if not files:
             return None
+        if len(files) == 0:
+            return None
+        if len(files) == 1:
+            return files[0]
             
         # Use dict to preserve order while removing duplicates
         unique_files = list(dict.fromkeys(str(f) for f in files))

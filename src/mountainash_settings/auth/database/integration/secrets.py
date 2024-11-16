@@ -1,7 +1,6 @@
 #path: mountainash_settings/auth/database/integration/secrets.py
 
-from typing import Optional, Dict, Any
-from functools import lru_cache
+from typing import Dict, Any
 from pydantic import SecretStr
 
 from mountainash_settings.auth.database.base import BaseDBAuthSettings

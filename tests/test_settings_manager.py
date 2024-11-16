@@ -1,5 +1,5 @@
 import pytest
-from mountainash_settings import SettingsManager, get_settings_manager
+from mountainash_settings import SettingsManager, get_settings_manager, SettingsFileHandler
 
 # Fixture to create an instance of SettingsManager before each test
 @pytest.fixture
@@ -11,7 +11,7 @@ def settings_manager() -> SettingsManager:
 def test_validate_config_files_exist(settings_manager):
     with pytest.raises(FileNotFoundError):
         # Assuming a non-existing file path
-        settings_manager.validate_config_files_exist(config_files=["non_existing_file.yaml"])
+        SettingsFileHandler.validate_config_files_exist(config_files=["non_existing_file.yaml"])
 
 # Test case for validating kwargs keys
 def test_validate_kwargs_keys(settings_manager):

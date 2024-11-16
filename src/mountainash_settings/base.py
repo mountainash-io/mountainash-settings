@@ -1,8 +1,10 @@
-from typing import Optional, Union, List, Any, Dict, Type
+from typing import Optional, Union, List, Any, Dict, Type, Tuple
+from upath import UPath
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource, TomlConfigSettingsSource, YamlConfigSettingsSource
 from string import Formatter
+from .settings_filehandler import SettingsFileHandler
 
 
 class MountainAshBaseSettings(BaseSettings):
@@ -15,31 +17,48 @@ class MountainAshBaseSettings(BaseSettings):
         )
 
     def __init__(self, 
-                 _dummy:bool = False,
+                 config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 _dummy: Optional[bool] = False,
                  **kwargs) -> None:  
 
+        if config_files is not None:
+
+            config_files_sorted = SettingsFileHandler.separate_config_files(config_files)
+            
+            # # Validate config files exist
+            SettingsFileHandler.validate_config_files_exist(config_files_sorted.env_files)
+            SettingsFileHandler.validate_config_files_exist(config_files_sorted.yaml_files)
+            SettingsFileHandler.validate_config_files_exist(config_files_sorted.toml_files)
+
+            # Check for conflicting kwargs
+            if config_files_sorted.env_files is not None and "SETTINGS_SOURCE_ENV_FILES" in kwargs:
+                raise ValueError("Cannot specify both env files in config_files and SETTINGS_SOURCE_ENV_FILES in kwargs")
+
+            if config_files_sorted.yaml_files is not None and "SETTINGS_SOURCE_YAML_FILES" in kwargs:
+                raise ValueError("Cannot specify both yaml files in config_files and SETTINGS_SOURCE_YAML_FILES in kwargs")
+
+            if config_files_sorted.toml_files is not None and "SETTINGS_SOURCE_TOML_FILES" in kwargs:
+                raise ValueError("Cannot specify both toml files in config_files and SETTINGS_SOURCE_TOML_FILES in kwargs")
+
+            #Add to the kwargs
+            if config_files_sorted.env_files is not None:
+                kwargs["SETTINGS_SOURCE_ENV_FILES"] = config_files_sorted.env_files
+            if config_files_sorted.yaml_files is not None:
+                kwargs["SETTINGS_SOURCE_YAML_FILES"] = config_files_sorted.yaml_files
+            if config_files_sorted.toml_files is not None:
+                kwargs["SETTINGS_SOURCE_TOML_FILES"] = config_files_sorted.toml_files
 
         if not _dummy:
-            config_updates = {}
 
             if kwargs.get("SETTINGS_SOURCE_YAML_FILES", None) is not None:
-                config_updates["yaml_file"]=kwargs.get("SETTINGS_SOURCE_YAML_FILES", None),
-                config_updates["yaml_file_encoding"]='utf-8'
-                
+                self.model_config["yaml_file"] = kwargs.get("SETTINGS_SOURCE_YAML_FILES", None)
             if kwargs.get("SETTINGS_SOURCE_TOML_FILES", None) is not None:
-                config_updates["toml_file"]=kwargs.get("SETTINGS_SOURCE_TOML_FILES", None),
-                config_updates["toml_file_encoding"]='utf-8'
-
-            if config_updates:
-                # Update model_config with the file configurations
-                self.model_config.update(config_updates)
-
+                self.model_config["toml_file"] = kwargs.get("SETTINGS_SOURCE_TOML_FILES", None)
 
         super().__init__(_case_sensitive=True, 
                             _env_prefix=            kwargs.get("SETTINGS_SOURCE_ENV_PREFIX", None),
                             _env_file=              kwargs.get("SETTINGS_SOURCE_ENV_FILES", None), 
                             _env_file_encoding =    'utf-8',
-                            _env_igore_empty =      True,
                             _env_ignore_empty =     True,
                             _env_parse_none_str =   "None",
                             _secrets_dir=           kwargs.get("SETTINGS_SOURCE_SECRETS_DIR", None),
@@ -53,7 +72,16 @@ class MountainAshBaseSettings(BaseSettings):
             # Handle kwargs via Initialisation
             if kwargs:
                 #Remove special flags from the stored kwargs
-                kwargs_to_remove = set(["SETTINGS_CLASS", "SETTINGS_CLASS_NAME", "SETTINGS_NAMESPACE", "SETTINGS_SOURCE_ENV_FILES",  "SETTINGS_SOURCE_ENV_PREFIX", "SETTINGS_SOURCE_YAML_FILES", "SETTINGS_SOURCE_TOML_FILES", "SETTINGS_SOURCE_KWARGS", "SETTINGS_SOURCE_SECRETS_DIR"])
+                kwargs_to_remove = set(["SETTINGS_CLASS", 
+                                        "SETTINGS_CLASS_NAME", 
+                                        "SETTINGS_NAMESPACE", 
+                                        "SETTINGS_SOURCE_ENV_FILES", 
+                                        "SETTINGS_SOURCE_ENV_PREFIX",
+                                        "SETTINGS_SOURCE_YAML_FILES", 
+                                        "SETTINGS_SOURCE_TOML_FILES", 
+                                        "SETTINGS_SOURCE_KWARGS", 
+                                        "SETTINGS_SOURCE_SECRETS_DIR"])
+                
                 config_kwargs = {k: v for k, v in kwargs.items() if k not in kwargs_to_remove}
 
                 #Update all vals from valid kwargs                
@@ -90,6 +118,24 @@ class MountainAshBaseSettings(BaseSettings):
     SETTINGS_SOURCE_KWARGS: Optional[Dict[str,Any]] =                           Field(default=None)
     SETTINGS_SOURCE_SECRETS_DIR: Optional[Dict[str,Any]] =                      Field(default=None)
 
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: Type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        return ( init_settings, 
+                env_settings, 
+                dotenv_settings, 
+                TomlConfigSettingsSource(settings_cls), 
+                YamlConfigSettingsSource(settings_cls),
+                # JsonConfigSettingsSource(settings_cls),
+                file_secret_settings
+        )
 
     
     def __hash__(self) -> int:

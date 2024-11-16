@@ -1,9 +1,6 @@
-<###FILE_START###>
 #path: mountainash_settings/auth/database/integration/security.py
 
 from typing import Dict, Any
-import os
-from pathlib import Path
 
 from mountainash_settings.auth.database.base import BaseDBAuthSettings
 from mountainash_settings.auth.database.exceptions import DBAuthSecurityError
@@ -110,5 +107,3 @@ class DBSecurityValidator:
             k: '***' if any(s in k.lower() for s in sensitive_keys) else v
             for k, v in args.items()
         }
-
-<###FILE_END###>

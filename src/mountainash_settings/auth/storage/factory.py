@@ -11,8 +11,7 @@ from mountainash_settings.auth.storage.constants import (
 )
 from mountainash_settings.auth.storage.exceptions import (
     StorageConfigError,
-    StorageValidationError,
-    StorageAuthError
+    StorageValidationError
 )
 
 class StorageAuthFactory:

@@ -1,25 +1,23 @@
 #path: mountainash_settings/auth/database/providers/file/duckdb.py
 
-from typing import Optional, Dict, Any, List
-from pathlib import Path
+from typing import Optional, List, Any, Dict, Tuple
+from upath import UPath
+
 import os
-from pydantic import Field, field_validator
+from pydantic import Field
 
 from mountainash_settings.auth.database.base import BaseDBAuthSettings
 from mountainash_settings.auth.database.constants import (
-    CONST_DB_PROVIDER_TYPE,
-    CONST_DB_AUTH_METHOD
+    CONST_DB_PROVIDER_TYPE
 )
 from mountainash_settings.auth.database.exceptions import (
-    DBAuthValidationError,
-    DBAuthConnectionError,
     DBAuthConfigError
 )
 
 class DuckDBAuthSettings(BaseDBAuthSettings):
     """DuckDB authentication settings"""
     
-    PROVIDER_TYPE: str = Field(default=CONST_DB_PROVIDER_TYPE.DUCKDB)
+    PROVIDER_TYPE: str = Field(default=CONST_DB_PROVIDER_TYPE.DUCKDB.value)
     AUTH_METHOD: str = Field(default="none")  # DuckDB uses file-based authentication
     
     # File Settings
@@ -27,67 +25,42 @@ class DuckDBAuthSettings(BaseDBAuthSettings):
     READ_ONLY: bool = Field(default=False)
     MEMORY: bool = Field(default=False)
     
-    # Configuration Settings
-    THREADS: Optional[int] = Field(default=None)
-    MEMORY_LIMIT: Optional[str] = Field(default=None)  # e.g., "4GB"
-    TEMP_DIRECTORY: Optional[str] = Field(default=None)
+    # # Configuration Settings
+    # THREADS: Optional[int] = Field(default=None)
+    # MEMORY_LIMIT: Optional[str] = Field(default=None)  # e.g., "4GB"
+    # TEMP_DIRECTORY: Optional[str] = Field(default=None)
     
-    # Extension Settings
-    EXTENSIONS: List[str] = Field(default_factory=list)
-    ALLOW_UNSIGNED_EXTENSIONS: bool = Field(default=False)
+    # # Extension Settings
+    # EXTENSIONS: List[str] = Field(default_factory=list)
+    # ALLOW_UNSIGNED_EXTENSIONS: bool = Field(default=False)
     
-    # Performance Settings
-    PAGE_SIZE: Optional[int] = Field(default=None)  # in bytes
-    COMPRESSION: Optional[str] = Field(default="auto")
-    ACCESS_MODE: Optional[str] = Field(default=None)  # "AUTOMATIC", "DIRECT_IO"
+    # # Performance Settings
+    # PAGE_SIZE: Optional[int] = Field(default=None)  # in bytes
+    # COMPRESSION: Optional[str] = Field(default="auto")
+    # ACCESS_MODE: Optional[str] = Field(default=None)  # "AUTOMATIC", "DIRECT_IO"
     
-    ## Field Validators ##
-    @field_validator("MEMORY_LIMIT")
-    def validate_memory_limit(cls, v: Optional[str]) -> Optional[str]:
-        """Validate memory limit format"""
-        if v is not None:
-            # Check format: number + unit (KB, MB, GB)
-            import re
-            if not re.match(r'^\d+[KMG]B$', v):
-                raise DBAuthValidationError(
-                    "Invalid memory limit format. Must be like: 4GB, 512MB, etc.",
-                    provider=CONST_DB_PROVIDER_TYPE.DUCKDB,
-                    validation_type="memory_limit"
-                )
-        return v
+    def __init__(self, 
+                 config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 _dummy: Optional[bool] = False,
+                 **kwargs) -> None:  
+        super().__init__(config_files=config_files, _dummy=_dummy, **kwargs)
 
-    @field_validator("DATABASE_PATH")
-    def validate_database_path(cls, v: Optional[str]) -> Optional[str]:
-        """Validate database path if provided"""
-        if v is None or v == ":memory:":
-            return v
-            
-        try:
-            path = Path(v)
-            parent = path.parent
-            
-            # Check if parent directory exists
-            if not parent.exists() and str(parent) != ".":
-                raise DBAuthValidationError(
-                    f"Parent directory does not exist: {parent}",
-                    provider=CONST_DB_PROVIDER_TYPE.DUCKDB,
-                    validation_type="database_path"
-                )
-            
-            # Check if path is absolute
-            if not path.is_absolute():
-                return str(path.resolve())
-                
-            return v
-            
-        except Exception as e:
-            if isinstance(e, DBAuthValidationError):
-                raise
-            raise DBAuthValidationError(
-                f"Invalid database path: {str(e)}",
-                provider=CONST_DB_PROVIDER_TYPE.DUCKDB,
-                validation_type="database_path"
-            )
+    ## Field Validators ##
+    # @field_validator("MEMORY_LIMIT")
+    # def validate_memory_limit(cls, v: Optional[str]) -> Optional[str]:
+    #     """Validate memory limit format"""
+    #     if v is not None:
+    #         # Check format: number + unit (KB, MB, GB)
+    #         import re
+    #         if not re.match(r'^\d+[KMG]B$', v):
+    #             raise DBAuthValidationError(
+    #                 "Invalid memory limit format. Must be like: 4GB, 512MB, etc.",
+    #                 provider=CONST_DB_PROVIDER_TYPE.DUCKDB,
+    #                 validation_type="memory_limit"
+    #             )
+    #     return v
+
+
 
     def _init_provider_specific(self, reinitialise: bool) -> None:
         """Initialize provider-specific settings"""
@@ -106,12 +79,12 @@ class DuckDBAuthSettings(BaseDBAuthSettings):
                     provider=self.PROVIDER_TYPE
                 )
                 
-        # Validate temp directory
-        if self.TEMP_DIRECTORY and not os.path.exists(self.TEMP_DIRECTORY):
-            raise DBAuthConfigError(
-                f"Temporary directory does not exist: {self.TEMP_DIRECTORY}",
-                provider=self.PROVIDER_TYPE
-            )
+        # # Validate temp directory
+        # if self.TEMP_DIRECTORY and not os.path.exists(self.TEMP_DIRECTORY):
+        #     raise DBAuthConfigError(
+        #         f"Temporary directory does not exist: {self.TEMP_DIRECTORY}",
+        #         provider=self.PROVIDER_TYPE
+        #     )
 
     def get_connection_string(self) -> str:
         """Generate DuckDB connection string"""
@@ -138,18 +111,18 @@ class DuckDBAuthSettings(BaseDBAuthSettings):
             
         config = {}
         
-        if self.THREADS:
-            config["threads"] = self.THREADS
-        if self.MEMORY_LIMIT:
-            config["memory_limit"] = self.MEMORY_LIMIT
-        if self.TEMP_DIRECTORY:
-            config["temp_directory"] = self.TEMP_DIRECTORY
-        if self.PAGE_SIZE:
-            config["page_size"] = self.PAGE_SIZE
-        if self.COMPRESSION:
-            config["compression"] = self.COMPRESSION
-        if self.ACCESS_MODE:
-            config["access_mode"] = self.ACCESS_MODE
+        # if self.THREADS:
+        #     config["threads"] = self.THREADS
+        # if self.MEMORY_LIMIT:
+        #     config["memory_limit"] = self.MEMORY_LIMIT
+        # if self.TEMP_DIRECTORY:
+        #     config["temp_directory"] = self.TEMP_DIRECTORY
+        # if self.PAGE_SIZE:
+        #     config["page_size"] = self.PAGE_SIZE
+        # if self.COMPRESSION:
+        #     config["compression"] = self.COMPRESSION
+        # if self.ACCESS_MODE:
+        #     config["access_mode"] = self.ACCESS_MODE
             
         if config:
             args["config"] = config

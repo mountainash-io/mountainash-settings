@@ -1,86 +1,79 @@
 #base.py
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, List, Set
+from typing import Optional, Dict, Any, List, Set, Tuple
 from pydantic import Field, SecretStr, field_validator
-from pathlib import Path
-import os
+from upath import UPath
 
 from mountainash_settings import MountainAshBaseSettings
 from .constants import (
     CONST_STORAGE_PROVIDER_TYPE,
     CONST_STORAGE_AUTH_METHOD,
-    CONST_STORAGE_ACCESS_TYPE,
-    CONST_STORAGE_ENCRYPTION_TYPE
+    CONST_STORAGE_ACCESS_TYPE
 )
 from .exceptions import (
-    StorageAuthError,
     StorageConfigError,
-    StorageConnectionError,
-    StorageValidationError,
-    StorageSecurityError
+    StorageValidationError
 )
 
 class StorageAuthBase(MountainAshBaseSettings, ABC):
     """Base class for storage authentication settings"""
     
     # Provider Configuration
-    PROVIDER_TYPE: str = Field(...)
-    AUTH_METHOD: str = Field(default=CONST_STORAGE_AUTH_METHOD.KEY)
+    PROVIDER_TYPE:  str = Field(...)
+    AUTH_METHOD:    str = Field(default=CONST_STORAGE_AUTH_METHOD.KEY)
     
     # Connection Settings
-    ENDPOINT: Optional[str] = Field(default=None)
-    PORT: Optional[int] = Field(default=None)
-    TIMEOUT: float = Field(default=30.0)
+    ENDPOINT:       Optional[str] = Field(default=None)
+    PORT:           Optional[int] = Field(default=None)
+    TIMEOUT:        float = Field(default=30.0)
     
     # Path Settings
-    ROOT_PATH: Optional[str] = Field(default=None)
-    CREATE_PATH: bool = Field(default=False)
+    ROOT_PATH:      Optional[str] = Field(default=None)
+    CREATE_PATH:    bool = Field(default=False)
     
     # Authentication
-    USERNAME: Optional[str] = Field(default=None)
-    PASSWORD: Optional[SecretStr] = Field(default=None)
-    ACCESS_KEY_ID: Optional[str] = Field(default=None)
-    SECRET_KEY: Optional[SecretStr] = Field(default=None)
-    TOKEN: Optional[SecretStr] = Field(default=None)
+    USERNAME:       Optional[str] = Field(default=None)
+    PASSWORD:       Optional[SecretStr] = Field(default=None)
+    ACCESS_KEY_ID:  Optional[str] = Field(default=None)
+    SECRET_KEY:     Optional[SecretStr] = Field(default=None)
+    TOKEN:          Optional[SecretStr] = Field(default=None)
     
-    # Security
-    ENCRYPTION_ENABLED: bool = Field(default=False)
-    ENCRYPTION_TYPE: str = Field(default=CONST_STORAGE_ENCRYPTION_TYPE.AES256)
-    ENCRYPTION_KEY: Optional[SecretStr] = Field(default=None)
-    ENCRYPTION_KEY_FILE: Optional[str] = Field(default=None)
+    # # Security
+    # ENCRYPTION_ENABLED: bool = Field(default=False)
+    # ENCRYPTION_TYPE: str = Field(default=CONST_STORAGE_ENCRYPTION_TYPE.AES256)
+    # ENCRYPTION_KEY: Optional[SecretStr] = Field(default=None)
+    # ENCRYPTION_KEY_FILE: Optional[str] = Field(default=None)
     
-    # Connection Pool
-    POOL_SIZE: int = Field(default=5)
-    POOL_TIMEOUT: float = Field(default=30.0)
-    MAX_OVERFLOW: int = Field(default=10)
+    # # Connection Pool
+    # POOL_SIZE: int = Field(default=5)
+    # POOL_TIMEOUT: float = Field(default=30.0)
+    # MAX_OVERFLOW: int = Field(default=10)
     
-    # Access Control
+    # # Access Control
     REQUIRED_PERMISSIONS: Set[str] = Field(default_factory=lambda: {"read", "write"})
     ACCESS_TYPE: str = Field(default=CONST_STORAGE_ACCESS_TYPE.READ_WRITE)
     
-    # Integration
-    SECRETS_NAMESPACE: Optional[str] = Field(default=None)
-    USE_SSL: bool = Field(default=False)
-    VERIFY_SSL: bool = Field(default=False)
-    CA_CERT: Optional[str] = Field(default=None)
+    # # Integration
+    # SECRETS_NAMESPACE: Optional[str] = Field(default=None)
+    # USE_SSL: bool = Field(default=False)
+    # VERIFY_SSL: bool = Field(default=False)
+    # CA_CERT: Optional[str] = Field(default=None)
     
     # State tracking
-    _connection_tested: bool = False
-    _connection_valid: bool = False
-    _permissions_validated: bool = False
+    # _connection_tested: bool = False
+    # _connection_valid: bool = False
+    # _permissions_validated: bool = False
 
 
     def __init__(self, 
-                 _dummy:bool    =   False,
-                 **kwargs) -> None:
+                 config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 _dummy: Optional[bool] = False,
+                 **kwargs) -> None:  
 
-        super().__init__(_dummy=_dummy,
+        super().__init__(config_files=config_files,
+                         _dummy=_dummy,
                          **kwargs)
-
-    def post_init(self, reinitialise: bool = False):
-        super().post_init(reinitialise=reinitialise)
-
 
 
     @field_validator("PROVIDER_TYPE")
@@ -126,29 +119,29 @@ class StorageAuthBase(MountainAshBaseSettings, ABC):
     def post_init(self, reinitialise: bool = False) -> None:
         """Post-initialization validation and setup"""
         super().post_init(reinitialise)
-        self._validate_security_config()
+        # self._validate_security_config()
         self._init_provider_specific(reinitialise)
 
-    def _validate_security_config(self) -> None:
-        """Validate security configuration"""
-        if self.ENCRYPTION_ENABLED:
-            if not (self.ENCRYPTION_KEY or self.ENCRYPTION_KEY_FILE):
-                raise StorageSecurityError(
-                    "Encryption enabled but no encryption key provided",
-                    security_check="encryption_config"
-                )
+    # def _validate_security_config(self) -> None:
+    #     """Validate security configuration"""
+    #     if self.ENCRYPTION_ENABLED:
+    #         if not (self.ENCRYPTION_KEY or self.ENCRYPTION_KEY_FILE):
+    #             raise StorageSecurityError(
+    #                 "Encryption enabled but no encryption key provided",
+    #                 security_check="encryption_config"
+    #             )
             
-            if self.ENCRYPTION_KEY_FILE and not os.path.exists(self.ENCRYPTION_KEY_FILE):
-                raise StorageSecurityError(
-                    f"Encryption key file not found: {self.ENCRYPTION_KEY_FILE}",
-                    security_check="encryption_key_file"
-                )
+    #         if self.ENCRYPTION_KEY_FILE and not os.path.exists(self.ENCRYPTION_KEY_FILE):
+    #             raise StorageSecurityError(
+    #                 f"Encryption key file not found: {self.ENCRYPTION_KEY_FILE}",
+    #                 security_check="encryption_key_file"
+    #             )
 
-        if self.USE_SSL and self.VERIFY_SSL and not self.CA_CERT:
-            raise StorageSecurityError(
-                "SSL verification enabled but no CA certificate provided",
-                security_check="ssl_config"
-            )
+    #     if self.USE_SSL and self.VERIFY_SSL and not self.CA_CERT:
+    #         raise StorageSecurityError(
+    #             "SSL verification enabled but no CA certificate provided",
+    #             security_check="ssl_config"
+    #         )
 
     @abstractmethod
     def _init_provider_specific(self, reinitialise: bool) -> None:
@@ -168,56 +161,56 @@ class StorageAuthBase(MountainAshBaseSettings, ABC):
             "timeout": self.TIMEOUT,
             "username": self.USERNAME,
             "password": self.PASSWORD.get_secret_value() if self.PASSWORD else None,
-            "access_key": self.ACCESS_KEY,
+            "access_key": self.ACCESS_KEY_ID,
             "secret_key": self.SECRET_KEY.get_secret_value() if self.SECRET_KEY else None,
             "token": self.TOKEN.get_secret_value() if self.TOKEN else None
         }
         
-        # Add SSL configuration if enabled
-        if self.USE_SSL:
-            args.update({
-                "use_ssl": True,
-                "verify_ssl": self.VERIFY_SSL,
-                "ca_cert": self.CA_CERT
-            })
+        # # Add SSL configuration if enabled
+        # if self.USE_SSL:
+        #     args.update({
+        #         "use_ssl": True,
+        #         "verify_ssl": self.VERIFY_SSL,
+        #         "ca_cert": self.CA_CERT
+        #     })
             
-        # Add encryption configuration if enabled
-        if self.ENCRYPTION_ENABLED:
-            args["encryption"] = {
-                "type": self.ENCRYPTION_TYPE,
-                "key": (
-                    self.ENCRYPTION_KEY.get_secret_value() if self.ENCRYPTION_KEY 
-                    else self._load_encryption_key()
-                )
-            }
+        # # Add encryption configuration if enabled
+        # if self.ENCRYPTION_ENABLED:
+        #     args["encryption"] = {
+        #         "type": self.ENCRYPTION_TYPE,
+        #         "key": (
+        #             self.ENCRYPTION_KEY.get_secret_value() if self.ENCRYPTION_KEY 
+        #             else self._load_encryption_key()
+        #         )
+        #     }
             
         return {k: v for k, v in args.items() if v is not None}
 
-    def get_pool_config(self) -> Dict[str, Any]:
-        """Get connection pool configuration"""
-        return {
-            "pool_size": self.POOL_SIZE,
-            "pool_timeout": self.POOL_TIMEOUT,
-            "max_overflow": self.MAX_OVERFLOW
-        }
+    # def get_pool_config(self) -> Dict[str, Any]:
+    #     """Get connection pool configuration"""
+    #     return {
+    #         "pool_size": self.POOL_SIZE,
+    #         "pool_timeout": self.POOL_TIMEOUT,
+    #         "max_overflow": self.MAX_OVERFLOW
+    #     }
 
-    def _load_encryption_key(self) -> str:
-        """Load encryption key from file"""
-        try:
-            if not self.ENCRYPTION_KEY_FILE:
-                raise StorageSecurityError(
-                    "No encryption key file specified",
-                    security_check="encryption_key_load"
-                )
+    # def _load_encryption_key(self) -> str:
+    #     """Load encryption key from file"""
+    #     try:
+    #         if not self.ENCRYPTION_KEY_FILE:
+    #             raise StorageSecurityError(
+    #                 "No encryption key file specified",
+    #                 security_check="encryption_key_load"
+    #             )
                 
-            with open(self.ENCRYPTION_KEY_FILE, 'rb') as f:
-                return f.read().strip().decode('utf-8')
+    #         with open(self.ENCRYPTION_KEY_FILE, 'rb') as f:
+    #             return f.read().strip().decode('utf-8')
                 
-        except Exception as e:
-            raise StorageSecurityError(
-                f"Failed to load encryption key: {str(e)}",
-                security_check="encryption_key_load"
-            )
+    #     except Exception as e:
+    #         raise StorageSecurityError(
+    #             f"Failed to load encryption key: {str(e)}",
+    #             security_check="encryption_key_load"
+    #         )
 
     # def validate_connection(self) -> bool:
     #     """Validate connection parameters"""
@@ -232,28 +225,28 @@ class StorageAuthBase(MountainAshBaseSettings, ABC):
     #             provider=self.PROVIDER_TYPE
     #         )
 
-    def validate_permissions(self) -> bool:
-        """Validate storage permissions"""
-        try:
-            if not self._permissions_validated:
-                self._validate_permissions()
-                self._permissions_validated = True
-            return True
-        except Exception as e:
-            raise StorageValidationError(
-                f"Permission validation failed: {str(e)}",
-                validation_type="permissions"
-            )
+    # def validate_permissions(self) -> bool:
+    #     """Validate storage permissions"""
+    #     try:
+    #         if not self._permissions_validated:
+    #             self._validate_permissions()
+    #             self._permissions_validated = True
+    #         return True
+    #     except Exception as e:
+    #         raise StorageValidationError(
+    #             f"Permission validation failed: {str(e)}",
+    #             validation_type="permissions"
+    #         )
 
     # @abstractmethod
     # def _test_connection(self) -> bool:
     #     """Test storage connection"""
     #     pass
 
-    @abstractmethod
-    def _validate_permissions(self) -> None:
-        """Validate storage permissions"""
-        pass
+    # @abstractmethod
+    # def _validate_permissions(self) -> None:
+    #     """Validate storage permissions"""
+    #     pass
 
     def format_connection_url(self, template: str) -> str:
         """Format connection URL using template"""

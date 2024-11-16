@@ -1,22 +1,20 @@
-from typing import Optional, Dict, Any, Set, List, Union
-from pydantic import Field, SecretStr, field_validator
+from typing import Optional, List, Any, Dict, Tuple
+from upath import UPath
+from pydantic import Field, field_validator
 import re
 from enum import Enum
-from pathlib import Path
 import ipaddress
+import os
 
 from mountainash_settings.auth.storage.base import StorageAuthBase
 from mountainash_settings.auth.storage.constants import (
-    CONST_STORAGE_PROVIDER_TYPE,
-    CONST_STORAGE_AUTH_METHOD,
-    CONST_STORAGE_ACCESS_TYPE
+    CONST_STORAGE_PROVIDER_TYPE
 )
 from mountainash_settings.auth.storage.exceptions import (
     StorageValidationError,
     StorageConfigError,
     StorageSecurityError
 )
-from mountainash_settings.auth.storage.utils.validation import StorageValidator
 
 class NFSVersion(str, Enum):
     """NFS protocol versions"""
@@ -82,18 +80,25 @@ class NFSStorageAuthSettings(StorageAuthBase):
     ACDIRMIN: int = Field(default=30)
     ACDIRMAX: int = Field(default=60)
     
-    # Performance Settings
-    RW_SIZE: int = Field(default=1048576)  # 1MB
-    READ_AHEAD: int = Field(default=1)  # In blocks
-    WRITE_BACK_CACHE: bool = Field(default=False)
-    ASYNC: bool = Field(default=False)
+    # # Performance Settings
+    # RW_SIZE: int = Field(default=1048576)  # 1MB
+    # READ_AHEAD: int = Field(default=1)  # In blocks
+    # WRITE_BACK_CACHE: bool = Field(default=False)
+    # ASYNC: bool = Field(default=False)
     
-    # Advanced Settings
+    # # Advanced Settings
     MOUNT_POINT: Optional[str] = Field(default=None)
-    NO_DEV: bool = Field(default=True)
-    NO_SUID: bool = Field(default=True)
-    NO_EXEC: bool = Field(default=False)
+    # NO_DEV: bool = Field(default=True)
+    # NO_SUID: bool = Field(default=True)
+    # NO_EXEC: bool = Field(default=False)
     
+    def __init__(self, 
+                 config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 _dummy: Optional[bool] = False,
+                 **kwargs) -> None:  
+        super().__init__(config_files=config_files, _dummy=_dummy, **kwargs)
+
+
     ## Field Validators ##
     @field_validator("SERVER")
     def validate_server(cls, v: str) -> str:
@@ -198,7 +203,7 @@ class NFSStorageAuthSettings(StorageAuthBase):
         """Validate Kerberos keytab file"""
         if v is not None:
             try:
-                path = Path(v).resolve()
+                path = UPath(v).resolve()
                 if not path.exists():
                     raise StorageValidationError(
                         f"Keytab file not found: {v}",
@@ -257,7 +262,7 @@ class NFSStorageAuthSettings(StorageAuthBase):
         # Validate mount point if provided
         if self.MOUNT_POINT:
             try:
-                path = Path(self.MOUNT_POINT)
+                path = UPath(self.MOUNT_POINT)
                 if path.exists() and not path.is_dir():
                     raise StorageConfigError(
                         "Mount point exists but is not a directory",
@@ -332,50 +337,50 @@ class NFSStorageAuthSettings(StorageAuthBase):
         if self.GID_MAPPING:
             args["gid_mapping"] = self.GID_MAPPING
             
-        # Add performance settings
-        mount_opts.extend([
-            f"rsize={self.RW_SIZE}",
-            f"wsize={self.RW_SIZE}",
-            f"readahead={self.READ_AHEAD}"
-        ])
+        # # Add performance settings
+        # mount_opts.extend([
+        #     f"rsize={self.RW_SIZE}",
+        #     f"wsize={self.RW_SIZE}",
+        #     f"readahead={self.READ_AHEAD}"
+        # ])
         
-        if self.WRITE_BACK_CACHE:
-            mount_opts.append("wback")
+        # if self.WRITE_BACK_CACHE:
+        #     mount_opts.append("wback")
             
-        if self.ASYNC:
-            mount_opts.append("async")
-        else:
-            mount_opts.append("sync")
+        # if self.ASYNC:
+        #     mount_opts.append("async")
+        # else:
+        #     mount_opts.append("sync")
             
-        # Add security mount options
-        if self.NO_DEV:
-            mount_opts.append("nodev")
+        # # Add security mount options
+        # if self.NO_DEV:
+        #     mount_opts.append("nodev")
             
-        if self.NO_SUID:
-            mount_opts.append("nosuid")
+        # if self.NO_SUID:
+        #     mount_opts.append("nosuid")
             
-        if self.NO_EXEC:
-            mount_opts.append("noexec")
+        # if self.NO_EXEC:
+        #     mount_opts.append("noexec")
             
-        args["mount_options"] = ",".join(mount_opts)
+        # args["mount_options"] = ",".join(mount_opts)
             
         return {k: v for k, v in args.items() if v is not None}
 
-    def _validate_permissions(self) -> None:
-        """Validate storage permissions configuration"""
-        # Define required permissions based on access type
-        if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
-            required_perms = {"read", "execute"}
-        elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
-            required_perms = {"write", "execute"}
-        elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
-            required_perms = {"read", "write", "execute"}
-        else:  # ADMIN
-            required_perms = {"read", "write", "execute", "root_squash", "no_squash"}
+    # def _validate_permissions(self) -> None:
+    #     """Validate storage permissions configuration"""
+    #     # Define required permissions based on access type
+    #     if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
+    #         required_perms = {"read", "execute"}
+    #     elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
+    #         required_perms = {"write", "execute"}
+    #     elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
+    #         required_perms = {"read", "write", "execute"}
+    #     else:  # ADMIN
+    #         required_perms = {"read", "write", "execute", "root_squash", "no_squash"}
             
-        # Validate against required permissions
-        if not required_perms.issubset(self.REQUIRED_PERMISSIONS):
-            raise StorageValidationError(
-                f"Missing required permissions for access type {self.ACCESS_TYPE}",
-                validation_type="permissions"
-            )
+    #     # Validate against required permissions
+    #     if not required_perms.issubset(self.REQUIRED_PERMISSIONS):
+    #         raise StorageValidationError(
+    #             f"Missing required permissions for access type {self.ACCESS_TYPE}",
+    #             validation_type="permissions"
+    #         )

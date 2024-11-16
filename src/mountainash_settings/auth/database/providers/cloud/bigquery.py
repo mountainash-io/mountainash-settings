@@ -1,14 +1,15 @@
 #path: mountainash_settings/auth/database/providers/cloud/bigquery.py
 
-from typing import Optional, Dict, Any, List
-from pydantic import Field, SecretStr, field_validator
+from typing import Optional, List, Any, Dict, Tuple
+from upath import UPath
+
+from pydantic import Field, field_validator
 import json
 
 from mountainash_settings.auth.database.base import BaseDBAuthSettings
 from mountainash_settings.auth.database.constants import CONST_DB_PROVIDER_TYPE
 from mountainash_settings.auth.database.exceptions import (
     DBAuthValidationError,
-    DBAuthConnectionError,
     DBAuthConfigError
 )
 
@@ -22,19 +23,25 @@ class BigQueryAuthSettings(BaseDBAuthSettings):
     DATASET_ID: Optional[str] = Field(default=None)
     LOCATION: Optional[str] = Field(default=None)
     
-    # Authentication Settings
+    # # Authentication Settings
     SERVICE_ACCOUNT_INFO: Optional[Dict[str, Any]] = Field(default=None)
     SERVICE_ACCOUNT_FILE: Optional[str] = Field(default=None)
     
-    # Client Settings
-    DEFAULT_QUERY_JOB_CONFIG: Optional[Dict[str, Any]] = Field(default=None)
-    MAXIMUM_BYTES_BILLED: Optional[int] = Field(default=None)
-    API_ENDPOINT: Optional[str] = Field(default=None)
+    # # Client Settings
+    # DEFAULT_QUERY_JOB_CONFIG: Optional[Dict[str, Any]] = Field(default=None)
+    # MAXIMUM_BYTES_BILLED: Optional[int] = Field(default=None)
+    # API_ENDPOINT: Optional[str] = Field(default=None)
     
-    # Performance Settings
-    NUM_RETRIES: int = Field(default=3)
-    RETRIES_WITH_LOGGING: Optional[List[int]] = Field(default=[1, 5, 10])
+    # # Performance Settings
+    # NUM_RETRIES: int = Field(default=3)
+    # RETRIES_WITH_LOGGING: Optional[List[int]] = Field(default=[1, 5, 10])
     
+    def __init__(self, 
+                 config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 _dummy: Optional[bool] = False,
+                 **kwargs) -> None:  
+        super().__init__(config_files=config_files, _dummy=_dummy, **kwargs)
+
     ## Field Validators ##
     @field_validator("PROJECT_ID")
     def validate_project_id(cls, v: str) -> str:
@@ -56,6 +63,7 @@ class BigQueryAuthSettings(BaseDBAuthSettings):
         return v
 
     def _init_provider_specific(self, reinitialise: bool) -> None:
+
         """Initialize provider-specific settings"""
         if self.SERVICE_ACCOUNT_INFO:
             try:
@@ -88,22 +96,22 @@ class BigQueryAuthSettings(BaseDBAuthSettings):
             "project": self.PROJECT_ID,
             "dataset_id": self.DATASET_ID,
             "location": self.LOCATION,
-            "num_retries": self.NUM_RETRIES
+            # "num_retries": self.NUM_RETRIES
         }
         
         # Add authentication args
         if self.SERVICE_ACCOUNT_INFO:
             args["credentials_info"] = self.SERVICE_ACCOUNT_INFO
-        elif self.SERVICE_ACCOUNT_FILE:
-            args["credentials_path"] = self.SERVICE_ACCOUNT_FILE
+        # elif self.SERVICE_ACCOUNT_FILE:
+        #     args["credentials_path"] = self.SERVICE_ACCOUNT_FILE
             
-        # Add client configuration
-        if self.DEFAULT_QUERY_JOB_CONFIG:
-            args["default_query_job_config"] = self.DEFAULT_QUERY_JOB_CONFIG
-        if self.MAXIMUM_BYTES_BILLED:
-            args["maximum_bytes_billed"] = self.MAXIMUM_BYTES_BILLED
-        if self.API_ENDPOINT:
-            args["api_endpoint"] = self.API_ENDPOINT
+        # # Add client configuration
+        # if self.DEFAULT_QUERY_JOB_CONFIG:
+        #     args["default_query_job_config"] = self.DEFAULT_QUERY_JOB_CONFIG
+        # if self.MAXIMUM_BYTES_BILLED:
+        #     args["maximum_bytes_billed"] = self.MAXIMUM_BYTES_BILLED
+        # if self.API_ENDPOINT:
+        #     args["api_endpoint"] = self.API_ENDPOINT
             
         return {k: v for k, v in args.items() if v is not None}
 

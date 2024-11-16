@@ -1,10 +1,10 @@
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings
 from functools import lru_cache
 
-
 class SecretsSettingsTemplates(BaseSettings):
+
     """Templates for secret-related settings"""
     
     # Connection Templates
@@ -32,3 +32,8 @@ class SecretsSettingsTemplates(BaseSettings):
     AWS_CREDENTIALS_TEMPLATE: str = Field(
         default='{"aws_access_key_id": "{ACCESS_KEY}", "aws_secret_access_key": "{SECRET_KEY}", "region": "{REGION}"}'
     )
+
+@lru_cache(maxsize=None)
+def get_secrets_templates() -> SecretsSettingsTemplates:
+
+    return SecretsSettingsTemplates()    

@@ -1,21 +1,18 @@
-from typing import Optional, Dict, Any, Set, Union
+from typing import Optional, List, Any, Dict, Tuple
+from upath import UPath
+
 from pydantic import Field, SecretStr, field_validator
 import re
-import json
-from pathlib import Path
 
 from mountainash_settings.auth.storage.base import StorageAuthBase
 from mountainash_settings.auth.storage.constants import (
     CONST_STORAGE_PROVIDER_TYPE,
-    CONST_STORAGE_AUTH_METHOD,
-    CONST_STORAGE_ACCESS_TYPE
+    CONST_STORAGE_AUTH_METHOD
 )
 from mountainash_settings.auth.storage.exceptions import (
     StorageValidationError,
-    StorageConfigError,
-    StorageSecurityError
+    StorageConfigError
 )
-from mountainash_settings.auth.storage.utils.validation import StorageValidator
 
 class GCSStorageAuthSettings(StorageAuthBase):
     """
@@ -41,27 +38,33 @@ class GCSStorageAuthSettings(StorageAuthBase):
     OAUTH_TOKEN: Optional[SecretStr] = Field(default=None)
     
     # Security Settings
-    USE_ENCRYPTION: bool = Field(default=True)
-    ENCRYPTION_KEY: Optional[SecretStr] = Field(default=None)
-    KMS_KEY_NAME: Optional[str] = Field(default=None)
+    # USE_ENCRYPTION: bool = Field(default=True)
+    # ENCRYPTION_KEY: Optional[SecretStr] = Field(default=None)
+    # KMS_KEY_NAME: Optional[str] = Field(default=None)
     
-    # Performance Settings
-    CHUNK_SIZE: int = Field(default=256 * 1024)  # 256 KB
-    RETRY_TIMEOUT: float = Field(default=120.0)
-    MAX_RETRY_DELAY: float = Field(default=60.0)
-    EXPONENTIAL_BACKOFF: bool = Field(default=True)
+    # # Performance Settings
+    # CHUNK_SIZE: int = Field(default=256 * 1024)  # 256 KB
+    # RETRY_TIMEOUT: float = Field(default=120.0)
+    # MAX_RETRY_DELAY: float = Field(default=60.0)
+    # EXPONENTIAL_BACKOFF: bool = Field(default=True)
     
-    # Request Settings
-    READ_TIMEOUT: Optional[float] = Field(default=None)
-    CONNECT_TIMEOUT: Optional[float] = Field(default=None)
-    MAX_POOL_SIZE: int = Field(default=10)
+    # # Request Settings
+    # READ_TIMEOUT: Optional[float] = Field(default=None)
+    # CONNECT_TIMEOUT: Optional[float] = Field(default=None)
+    # MAX_POOL_SIZE: int = Field(default=10)
     
-    # Advanced Settings
-    API_VERSION: str = Field(default="v1")
-    USE_RESUMABLE_UPLOAD: bool = Field(default=True)
-    RESUMABLE_THRESHOLD: int = Field(default=8 * 1024 * 1024)  # 8 MB
-    USER_PROJECT: Optional[str] = Field(default=None)
+    # # Advanced Settings
+    # API_VERSION: str = Field(default="v1")
+    # USE_RESUMABLE_UPLOAD: bool = Field(default=True)
+    # RESUMABLE_THRESHOLD: int = Field(default=8 * 1024 * 1024)  # 8 MB
+    # USER_PROJECT: Optional[str] = Field(default=None)
     
+    def __init__(self, 
+                 config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 _dummy: Optional[bool] = False,
+                 **kwargs) -> None:  
+        super().__init__(config_files=config_files, _dummy=_dummy, **kwargs)
+
     @field_validator("PROJECT_ID")
     def validate_project_id(cls, v: str) -> str:
         """Validate GCP project ID"""
@@ -152,76 +155,76 @@ class GCSStorageAuthSettings(StorageAuthBase):
                 
         return v
 
-    @field_validator("KMS_KEY_NAME")
-    def validate_kms_key_name(cls, v: Optional[str]) -> Optional[str]:
-        """Validate KMS key name if provided"""
-        if v is not None:
-            # KMS key name format: projects/{project}/locations/{location}/keyRings/{keyring}/cryptoKeys/{key}
-            pattern = r'^projects/[^/]+/locations/[^/]+/keyRings/[^/]+/cryptoKeys/[^/]+$'
-            if not re.match(pattern, v):
-                raise StorageValidationError(
-                    "Invalid KMS key name format",
-                    validation_type="kms_key_name"
-                )
+    # @field_validator("KMS_KEY_NAME")
+    # def validate_kms_key_name(cls, v: Optional[str]) -> Optional[str]:
+    #     """Validate KMS key name if provided"""
+    #     if v is not None:
+    #         # KMS key name format: projects/{project}/locations/{location}/keyRings/{keyring}/cryptoKeys/{key}
+    #         pattern = r'^projects/[^/]+/locations/[^/]+/keyRings/[^/]+/cryptoKeys/[^/]+$'
+    #         if not re.match(pattern, v):
+    #             raise StorageValidationError(
+    #                 "Invalid KMS key name format",
+    #                 validation_type="kms_key_name"
+    #             )
                 
-        return v
+    #     return v
 
-    @field_validator("SERVICE_ACCOUNT_INFO")
-    def validate_service_account_info(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-        """Validate service account info if provided"""
-        if v is not None:
-            required_fields = {
-                'type', 'project_id', 'private_key_id', 'private_key',
-                'client_email', 'client_id', 'auth_uri', 'token_uri'
-            }
+    # @field_validator("SERVICE_ACCOUNT_INFO")
+    # def validate_service_account_info(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    #     """Validate service account info if provided"""
+    #     if v is not None:
+    #         required_fields = {
+    #             'type', 'project_id', 'private_key_id', 'private_key',
+    #             'client_email', 'client_id', 'auth_uri', 'token_uri'
+    #         }
             
-            missing_fields = required_fields - v.keys()
-            if missing_fields:
-                raise StorageValidationError(
-                    f"Missing required service account fields: {missing_fields}",
-                    validation_type="service_account_info"
-                )
+    #         missing_fields = required_fields - v.keys()
+    #         if missing_fields:
+    #             raise StorageValidationError(
+    #                 f"Missing required service account fields: {missing_fields}",
+    #                 validation_type="service_account_info"
+    #             )
                 
-            # Validate service account type
-            if v.get('type') != 'service_account':
-                raise StorageValidationError(
-                    "Invalid service account type",
-                    validation_type="service_account_info"
-                )
+    #         # Validate service account type
+    #         if v.get('type') != 'service_account':
+    #             raise StorageValidationError(
+    #                 "Invalid service account type",
+    #                 validation_type="service_account_info"
+    #             )
                 
-        return v
+    #     return v
 
-    @field_validator("SERVICE_ACCOUNT_FILE")
-    def validate_service_account_file(cls, v: Optional[str]) -> Optional[str]:
-        """Validate service account file path if provided"""
-        if v is not None:
-            try:
-                path = Path(v)
-                if not path.exists():
-                    raise StorageValidationError(
-                        f"Service account file not found: {v}",
-                        validation_type="service_account_file"
-                    )
+    # @field_validator("SERVICE_ACCOUNT_FILE")
+    # def validate_service_account_file(cls, v: Optional[str]) -> Optional[str]:
+    #     """Validate service account file path if provided"""
+    #     if v is not None:
+    #         try:
+    #             path = UPath(v)
+    #             if not path.exists():
+    #                 raise StorageValidationError(
+    #                     f"Service account file not found: {v}",
+    #                     validation_type="service_account_file"
+    #                 )
                     
-                # Try to load and validate JSON content
-                with open(path) as f:
-                    content = json.load(f)
+    #             # Try to load and validate JSON content
+    #             with open(path) as f:
+    #                 content = json.load(f)
                     
-                if content.get('type') != 'service_account':
-                    raise StorageValidationError(
-                        "Invalid service account file content",
-                        validation_type="service_account_file"
-                    )
+    #             if content.get('type') != 'service_account':
+    #                 raise StorageValidationError(
+    #                     "Invalid service account file content",
+    #                     validation_type="service_account_file"
+    #                 )
                     
-            except Exception as e:
-                if isinstance(e, StorageValidationError):
-                    raise
-                raise StorageValidationError(
-                    f"Invalid service account file: {str(e)}",
-                    validation_type="service_account_file"
-                )
+    #         except Exception as e:
+    #             if isinstance(e, StorageValidationError):
+    #                 raise
+    #             raise StorageValidationError(
+    #                 f"Invalid service account file: {str(e)}",
+    #                 validation_type="service_account_file"
+    #             )
                 
-        return v
+    #     return v
 
     def _init_provider_specific(self, reinitialise: bool) -> None:
         """Initialize provider-specific settings"""
@@ -239,26 +242,26 @@ class GCSStorageAuthSettings(StorageAuthBase):
                     provider=self.PROVIDER_TYPE
                 )
                 
-        # Validate encryption configuration
-        if self.USE_ENCRYPTION:
-            if not (self.ENCRYPTION_KEY or self.KMS_KEY_NAME):
-                raise StorageSecurityError(
-                    "Either encryption key or KMS key name required when encryption is enabled",
-                    security_check="encryption_config"
-                )
+        # # Validate encryption configuration
+        # if self.USE_ENCRYPTION:
+        #     if not (self.ENCRYPTION_KEY or self.KMS_KEY_NAME):
+        #         raise StorageSecurityError(
+        #             "Either encryption key or KMS key name required when encryption is enabled",
+        #             security_check="encryption_config"
+        #         )
                 
-        # Validate performance settings
-        if self.CHUNK_SIZE < 256 * 1024:  # Min 256 KB
-            raise StorageConfigError(
-                "Chunk size must be at least 256 KB",
-                provider=self.PROVIDER_TYPE
-            )
+        # # Validate performance settings
+        # if self.CHUNK_SIZE < 256 * 1024:  # Min 256 KB
+        #     raise StorageConfigError(
+        #         "Chunk size must be at least 256 KB",
+        #         provider=self.PROVIDER_TYPE
+        #     )
             
-        if self.RESUMABLE_THRESHOLD < 8 * 1024 * 1024:  # Min 8 MB
-            raise StorageConfigError(
-                "Resumable upload threshold must be at least 8 MB",
-                provider=self.PROVIDER_TYPE
-            )
+        # if self.RESUMABLE_THRESHOLD < 8 * 1024 * 1024:  # Min 8 MB
+        #     raise StorageConfigError(
+        #         "Resumable upload threshold must be at least 8 MB",
+        #         provider=self.PROVIDER_TYPE
+        #     )
 
     def get_connection_url(self) -> str:
         """Generate GCS connection URL"""
@@ -270,13 +273,13 @@ class GCSStorageAuthSettings(StorageAuthBase):
         # Add bucket and project
         url = f"{base_url}/{self.BUCKET_NAME}"
         
-        # Add query parameters
-        params = []
-        if self.USER_PROJECT:
-            params.append(f"userProject={self.USER_PROJECT}")
+        # # Add query parameters
+        # params = []
+        # if self.USER_PROJECT:
+        #     params.append(f"userProject={self.USER_PROJECT}")
             
-        if params:
-            url += "?" + "&".join(params)
+        # if params:
+        #     url += "?" + "&".join(params)
             
         return url
 
@@ -304,90 +307,53 @@ class GCSStorageAuthSettings(StorageAuthBase):
                 "token": self.OAUTH_TOKEN.get_secret_value()
             }
             
-        # Add encryption settings if enabled
-        if self.USE_ENCRYPTION:
-            if self.ENCRYPTION_KEY:
-                args["encryption_key"] = self.ENCRYPTION_KEY.get_secret_value()
-            if self.KMS_KEY_NAME:
-                args["kms_key_name"] = self.KMS_KEY_NAME
+        # # Add encryption settings if enabled
+        # if self.USE_ENCRYPTION:
+        #     if self.ENCRYPTION_KEY:
+        #         args["encryption_key"] = self.ENCRYPTION_KEY.get_secret_value()
+        #     if self.KMS_KEY_NAME:
+        #         args["kms_key_name"] = self.KMS_KEY_NAME
                 
-        # Add performance settings
-        args.update({
-            "chunk_size": self.CHUNK_SIZE,
-            "retry_timeout": self.RETRY_TIMEOUT,
-            "max_retry_delay": self.MAX_RETRY_DELAY,
-            "retry_exponential_backoff": self.EXPONENTIAL_BACKOFF,
-            "read_timeout": self.READ_TIMEOUT,
-            "connect_timeout": self.CONNECT_TIMEOUT,
-            "max_pool_size": self.MAX_POOL_SIZE
-        })
+        # # Add performance settings
+        # args.update({
+        #     "chunk_size": self.CHUNK_SIZE,
+        #     "retry_timeout": self.RETRY_TIMEOUT,
+        #     "max_retry_delay": self.MAX_RETRY_DELAY,
+        #     "retry_exponential_backoff": self.EXPONENTIAL_BACKOFF,
+        #     "read_timeout": self.READ_TIMEOUT,
+        #     "connect_timeout": self.CONNECT_TIMEOUT,
+        #     "max_pool_size": self.MAX_POOL_SIZE
+        # })
         
-        # Add upload settings
-        if self.USE_RESUMABLE_UPLOAD:
-            args.update({
-                "resumable_upload": True,
-                "resumable_threshold": self.RESUMABLE_THRESHOLD
-            })
+        # # Add upload settings
+        # if self.USE_RESUMABLE_UPLOAD:
+        #     args.update({
+        #         "resumable_upload": True,
+        #         "resumable_threshold": self.RESUMABLE_THRESHOLD
+        #     })
             
         return {k: v for k, v in args.items() if v is not None}
 
-    def _validate_permissions(self) -> None:
-        """Validate storage permissions configuration"""
-        # Define required permissions based on access type
-        if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
-            required_perms = {"storage.objects.get", "storage.objects.list"}
-        elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
-            required_perms = {"storage.objects.create", "storage.objects.delete"}
-        elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
-            required_perms = {
-                "storage.objects.get",
-                "storage.objects.list",
-                "storage.objects.create",
-                "storage.objects.delete"
-            }
-        else:  # ADMIN
-            required_perms = {"storage.objects.*"}
+    # def _validate_permissions(self) -> None:
+    #     """Validate storage permissions configuration"""
+    #     # Define required permissions based on access type
+    #     if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
+    #         required_perms = {"storage.objects.get", "storage.objects.list"}
+    #     elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
+    #         required_perms = {"storage.objects.create", "storage.objects.delete"}
+    #     elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
+    #         required_perms = {
+    #             "storage.objects.get",
+    #             "storage.objects.list",
+    #             "storage.objects.create",
+    #             "storage.objects.delete"
+    #         }
+    #     else:  # ADMIN
+    #         required_perms = {"storage.objects.*"}
             
-        # Validate against required permissions
-        if not required_perms.issubset(self.REQUIRED_PERMISSIONS):
-            raise StorageValidationError(
-                f"Missing required permissions for access type {self.ACCESS_TYPE}",
-                validation_type="permissions"
-            )
-
-    # def _test_connection(self) -> bool:
-    #     """
-    #     Validate connection parameters without making actual connection
-        
-    #     Returns:
-    #         bool: True if configuration is valid
-    #     """
-    #     try:
-    #         # Validate endpoint URL
-    #         if not StorageValidator.validate_url(
-    #             self.get_connection_url(),
-    #             allowed_schemes={'https'},
-    #             required_parts={'netloc'}
-    #         ):
-    #             return False
-                
-    #         # Validate timeout settings
-    #         if not StorageValidator.validate_timeout_settings(
-    #             connect_timeout=self.CONNECT_TIMEOUT,
-    #             read_timeout=self.READ_TIMEOUT
-    #         ):
-    #             return False
-                
-    #         # Validate retry settings
-    #         if not StorageValidator.validate_retry_settings(
-    #             max_retries=3,  # Default from google-cloud-storage
-    #             retry_delay=1,
-    #             max_delay=self.MAX_RETRY_DELAY
-    #         ):
-    #             return False
-                
-    #         return True
-            
-    #     except Exception as e:
-    #         if isinstance(e, StorageValidationError):
-    #             return False
+    #     # Validate against required permissions
+    #     if not required_perms.issubset(self.REQUIRED_PERMISSIONS):
+    #         raise StorageValidationError(
+    #             f"Missing required permissions for access type {self.ACCESS_TYPE}",
+    #             validation_type="permissions"
+    #         )

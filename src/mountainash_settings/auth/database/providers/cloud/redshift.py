@@ -1,9 +1,10 @@
 #path: mountainash_settings/auth/database/providers/cloud/redshift.py
 
-from typing import Optional, Dict, Any
+from typing import Optional, List, Any, Dict,  Tuple
+from upath import UPath
+
 from pydantic import Field, SecretStr, field_validator
 import re
-import boto3
 
 from mountainash_settings.auth.database.base import BaseDBAuthSettings
 from mountainash_settings.auth.database.constants import (
@@ -12,7 +13,6 @@ from mountainash_settings.auth.database.constants import (
 )
 from mountainash_settings.auth.database.exceptions import (
     DBAuthValidationError,
-    DBAuthConnectionError,
     DBAuthConfigError
 )
 
@@ -37,18 +37,24 @@ class RedshiftAuthSettings(BaseDBAuthSettings):
     SECRET_ACCESS_KEY: Optional[SecretStr] = Field(default=None)
     SESSION_TOKEN: Optional[SecretStr] = Field(default=None)
     
-    # Connection Settings
+    # # Connection Settings
     SSL: bool = Field(default=True)
     SERVERLESS: bool = Field(default=False)
     WORKGROUP_NAME: Optional[str] = Field(default=None)
     AUTO_CREATE: bool = Field(default=False)
     
-    # Additional Settings
+    # # Additional Settings
     ENDPOINT_URL: Optional[str] = Field(default=None)
     FORCE_IAM: bool = Field(default=False)
     CLUSTER_READ_ONLY: bool = Field(default=False)
     PROFILE_NAME: Optional[str] = Field(default=None)
     
+    def __init__(self, 
+                 config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 _dummy: Optional[bool] = False,
+                 **kwargs) -> None:  
+        super().__init__(config_files=config_files, _dummy=_dummy, **kwargs)
+
     ## Field Validators ##
     @field_validator("REGION")
     def validate_region(cls, v: str) -> str:
@@ -109,10 +115,10 @@ class RedshiftAuthSettings(BaseDBAuthSettings):
     def get_connection_string(self) -> str:
         """Generate Redshift connection string"""
         try:
-            if self.SERVERLESS:
-                host = self._get_serverless_endpoint()
-            else:
-                host = self._get_cluster_endpoint()
+            # if self.SERVERLESS:
+            #     host = self._get_serverless_endpoint()
+            # else:][p9]
+            #     host = self._get_cluster_endpoint()
             
             # Base connection string
             template = "redshift://{username}@{host}:{port}/{database}"
@@ -159,11 +165,11 @@ class RedshiftAuthSettings(BaseDBAuthSettings):
                     args["aws_session_token"] = self.SESSION_TOKEN.get_secret_value()
                     
         # Add Redshift-specific arguments
-        args.update({
-            "database": self.DATABASE,
-            "port": self.PORT,
-            "ssl": self.SSL
-        })
+        # args.update({
+        #     "database": self.DATABASE,
+        #     "port": self.PORT,
+        #     "ssl": self.SSL
+        # })
         
         if self.SCHEMA:
             args["schema"] = self.SCHEMA
@@ -171,84 +177,84 @@ class RedshiftAuthSettings(BaseDBAuthSettings):
         if self.IAM_ROLE_ARN:
             args["iam_role_arn"] = self.IAM_ROLE_ARN
             
-        if self.CLUSTER_READ_ONLY:
-            args["readonly"] = True
+        # if self.CLUSTER_READ_ONLY:
+        #     args["readonly"] = True
             
         return {k: v for k, v in args.items() if v is not None}
 
-    def _get_cluster_endpoint(self) -> str:
-        """Get Redshift cluster endpoint"""
-        try:
-            session_kwargs = {}
-            if self.ACCESS_KEY_ID and self.SECRET_ACCESS_KEY:
-                session_kwargs.update({
-                    "aws_access_key_id": self.ACCESS_KEY_ID,
-                    "aws_secret_access_key": self.SECRET_ACCESS_KEY.get_secret_value(),
-                })
-                if self.SESSION_TOKEN:
-                    session_kwargs["aws_session_token"] = self.SESSION_TOKEN.get_secret_value()
+    # def _get_cluster_endpoint(self) -> str:
+    #     """Get Redshift cluster endpoint"""
+    #     try:
+    #         session_kwargs = {}
+    #         if self.ACCESS_KEY_ID and self.SECRET_ACCESS_KEY:
+    #             session_kwargs.update({
+    #                 "aws_access_key_id": self.ACCESS_KEY_ID,
+    #                 "aws_secret_access_key": self.SECRET_ACCESS_KEY.get_secret_value(),
+    #             })
+    #             if self.SESSION_TOKEN:
+    #                 session_kwargs["aws_session_token"] = self.SESSION_TOKEN.get_secret_value()
                     
-            if self.PROFILE_NAME:
-                session_kwargs["profile_name"] = self.PROFILE_NAME
+    #         # if self.PROFILE_NAME:
+    #         #     session_kwargs["profile_name"] = self.PROFILE_NAME
                 
-            session = boto3.Session(**session_kwargs)
-            client = session.client(
-                'redshift',
-                region_name=self.REGION,
-                endpoint_url=self.ENDPOINT_URL
-            )
+    #         session = boto3.Session(**session_kwargs)
+    #         client = session.client(
+    #             'redshift',
+    #             region_name=self.REGION,
+    #             endpoint_url=self.ENDPOINT_URL
+    #         )
             
-            response = client.describe_clusters(
-                ClusterIdentifier=self.CLUSTER_IDENTIFIER
-            )
+    #         response = client.describe_clusters(
+    #             ClusterIdentifier=self.CLUSTER_IDENTIFIER
+    #         )
             
-            if not response['Clusters']:
-                raise DBAuthConfigError(
-                    f"Cluster not found: {self.CLUSTER_IDENTIFIER}",
-                    provider=self.PROVIDER_TYPE
-                )
+    #         if not response['Clusters']:
+    #             raise DBAuthConfigError(
+    #                 f"Cluster not found: {self.CLUSTER_IDENTIFIER}",
+    #                 provider=self.PROVIDER_TYPE
+    #             )
                 
-            return response['Clusters'][0]['Endpoint']['Address']
+    #         return response['Clusters'][0]['Endpoint']['Address']
             
-        except Exception as e:
-            raise DBAuthConfigError(
-                f"Failed to get cluster endpoint: {str(e)}",
-                provider=self.PROVIDER_TYPE
-            )
+    #     except Exception as e:
+    #         raise DBAuthConfigError(
+    #             f"Failed to get cluster endpoint: {str(e)}",
+    #             provider=self.PROVIDER_TYPE
+    #         )
 
-    def _get_serverless_endpoint(self) -> str:
-        """Get Redshift serverless endpoint"""
-        try:
-            session_kwargs = {}
-            if self.ACCESS_KEY_ID and self.SECRET_ACCESS_KEY:
-                session_kwargs.update({
-                    "aws_access_key_id": self.ACCESS_KEY_ID,
-                    "aws_secret_access_key": self.SECRET_ACCESS_KEY.get_secret_value(),
-                })
-                if self.SESSION_TOKEN:
-                    session_kwargs["aws_session_token"] = self.SESSION_TOKEN.get_secret_value()
+    # def _get_serverless_endpoint(self) -> str:
+    #     """Get Redshift serverless endpoint"""
+    #     try:
+    #         session_kwargs = {}
+    #         if self.ACCESS_KEY_ID and self.SECRET_ACCESS_KEY:
+    #             session_kwargs.update({
+    #                 "aws_access_key_id": self.ACCESS_KEY_ID,
+    #                 "aws_secret_access_key": self.SECRET_ACCESS_KEY.get_secret_value(),
+    #             })
+    #             if self.SESSION_TOKEN:
+    #                 session_kwargs["aws_session_token"] = self.SESSION_TOKEN.get_secret_value()
                     
-            if self.PROFILE_NAME:
-                session_kwargs["profile_name"] = self.PROFILE_NAME
+    #         if self.PROFILE_NAME:
+    #             session_kwargs["profile_name"] = self.PROFILE_NAME
                 
-            session = boto3.Session(**session_kwargs)
-            client = session.client(
-                'redshift-serverless',
-                region_name=self.REGION,
-                endpoint_url=self.ENDPOINT_URL
-            )
+    #         # session = boto3.Session(**session_kwargs)
+    #         # # client = session.client(
+    #         # #     'redshift-serverless',
+    #         # #     region_name=self.REGION,
+    #         # #     endpoint_url=self.ENDPOINT_URL
+    #         # # )
             
-            response = client.get_workgroup(
-                workgroupName=self.WORKGROUP_NAME
-            )
+    #         response = client.get_workgroup(
+    #             workgroupName=self.WORKGROUP_NAME
+    #         )
             
-            return response['workgroup']['endpoint']['address']
+    #         return response['workgroup']['endpoint']['address']
             
-        except Exception as e:
-            raise DBAuthConfigError(
-                f"Failed to get serverless endpoint: {str(e)}",
-                provider=self.PROVIDER_TYPE
-            )
+        # except Exception as e:
+        #     raise DBAuthConfigError(
+        #         f"Failed to get serverless endpoint: {str(e)}",
+        #         provider=self.PROVIDER_TYPE
+        #     )
 
     # def _test_connection(self) -> bool:
     #     """Test Redshift connection"""

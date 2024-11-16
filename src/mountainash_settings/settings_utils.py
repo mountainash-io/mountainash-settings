@@ -4,9 +4,8 @@ from upath import UPath
 from importlib import import_module
 import platform
 
-from mountainash_settings.settings_parameters import SettingsParameters
-from mountainash_settings.base import MountainAshBaseSettings
-
+from .settings_parameters import SettingsParameters
+from pydantic_settings import BaseSettings
 
 class SettingsUtils:
 
@@ -17,12 +16,11 @@ class SettingsUtils:
     #Hashable format for settings parameters
     default_namespace: str = "DEFAULT"
 
-
     @classmethod
     def prepare_settings_parameters(
             cls,
             settings_namespace: str,
-            settings_class:     Type[MountainAshBaseSettings],
+            settings_class:     Type[BaseSettings],
             config_files:       Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
             p_kwargs:           Optional[Dict[Any,Any]] = None,
             **kwargs
@@ -32,7 +30,7 @@ class SettingsUtils:
 
         Args:
             settings_namespace (str): The namespace for the configuration.
-            settings_class (Type[MountainAshBaseSettings]): The settings class.
+            settings_class (Type[BaseSettings]): The settings class.
             config_files (Union[UPath, List[UPath]]): The configuration file or list of configuration files.
             p_kwargs (dict): The keyword arguments to set the configuration attributes.
             **kwargs: Keyword arguments to set the configuration attributes.
@@ -75,14 +73,14 @@ class SettingsUtils:
 
     @classmethod
     def get_valid_setting_kwargs(cls, 
-                                 settings_class:    Type[MountainAshBaseSettings],
+                                 settings_class:    Type[BaseSettings],
                                  p_kwargs:          Optional[Dict[str, Any]]
                                  ) -> Optional[Dict[Any, Any]]:
         """
         Returns a dictionary of valid kwargs for AppSettings.
 
         Args:
-            settings_class (Type[MountainAshBaseSettings]): The settings class.
+            settings_class (Type[BaseSettings]): The settings class.
             p_kwargs (dict): The kwargs to validate.
 
         Returns:
@@ -93,8 +91,8 @@ class SettingsUtils:
             return None
         
         try:
-            settings_class_mod: Type[MountainAshBaseSettings] = getattr(import_module(name=settings_class.__module__), settings_class.__name__)       
-            obj_dummy_settings: MountainAshBaseSettings = settings_class_mod(_dummy=True)
+            settings_class_mod: Type[BaseSettings] = getattr(import_module(name=settings_class.__module__), settings_class.__name__)       
+            obj_dummy_settings: BaseSettings = settings_class_mod(_dummy=True)
 
             #specified kwargs should be in the model fields
             specified_kwargs = {"_env_file", "_env_file_encoding", "_env_prefix", "_dummy"}
@@ -117,12 +115,12 @@ class SettingsUtils:
     
 
     @classmethod
-    def get_settings_parameters(cls, objSettings: MountainAshBaseSettings) -> SettingsParameters:
+    def get_settings_parameters(cls, objSettings: BaseSettings) -> SettingsParameters:
         """
-        Returns a SettingsParameters object reconstructed from a MountainAshBaseSettings object.
+        Returns a SettingsParameters object reconstructed from a BaseSettings object.
 
         Args:
-            objSettings (MountainAshBaseSettings): The settings object.
+            objSettings (BaseSettings): The settings object.
 
         Returns:
             SettingsParameters: The settings parameters object
@@ -168,7 +166,7 @@ class SettingsUtils:
 
         if prep_new_config_files is not None and prep_original_config_files is not None:
             combined_config_files = list(sorted(set(prep_original_config_files + prep_new_config_files)))
-            final_config_files = SettingsUtils.format_config_file_list(config_files=combined_config_files)
+            final_config_files = cls.format_config_file_list(config_files=combined_config_files)
 
         elif prep_new_config_files is not None:
             final_config_files = prep_new_config_files

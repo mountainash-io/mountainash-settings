@@ -8,7 +8,7 @@ from .constants import CONST_SECRET_PROVIDER_TYPE
 from .providers.azure_keyvault import AzureKeyVaultSettings
 from .providers.aws_secrets import AWSSecretsSettings
 from .providers.gcp_secrets import GCPSecretsSettings
-from .providers.hashicorp import HashiCorpVaultSettings
+# from .providers.hashicorp import HashiCorpVaultSettings
 from .providers.local_secrets import LocalSecretsSettings
 
 
@@ -25,7 +25,7 @@ def create_secrets_settings(
         CONST_SECRET_PROVIDER_TYPE.AZURE_KEYVAULT: AzureKeyVaultSettings,
         CONST_SECRET_PROVIDER_TYPE.AWS_SECRETS: AWSSecretsSettings,
         CONST_SECRET_PROVIDER_TYPE.GCP_SECRETS: GCPSecretsSettings,
-        CONST_SECRET_PROVIDER_TYPE.HASHICORP: HashiCorpVaultSettings,
+        # CONST_SECRET_PROVIDER_TYPE.HASHICORP: HashiCorpVaultSettings,
         CONST_SECRET_PROVIDER_TYPE.LOCAL: LocalSecretsSettings,
     }
     

@@ -2,7 +2,7 @@
 PROVIDER_TYPE: "s3"
 # AWS Settings
 REGION: "us-west-2"
-BUCKET: "my-bucket"
+BUCKET: "my-bucket2"
 # ENDPOINT_URL: "https://custom-endpoint"
 
 # Authentication Settings

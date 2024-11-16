@@ -1,14 +1,12 @@
 #utils/security.py
 
 from typing import Optional, Dict, Any, Union
-from pathlib import Path
+from upath import UPath
 import os
 import base64
 from datetime import datetime
 from cryptography.fernet import Fernet, InvalidToken
-import hashlib
 import json
-import secrets
 
 from mountainash_settings.auth.storage.exceptions import StorageSecurityError
 
@@ -55,7 +53,7 @@ class CredentialProtection:
     def _load_key_file(self, key_file: str) -> bytes:
         """Load protection key from file"""
         try:
-            path = Path(key_file).resolve()
+            path = UPath(key_file).resolve()
             if not path.exists():
                 raise StorageSecurityError(
                     f"Key file not found: {key_file}",
@@ -63,7 +61,7 @@ class CredentialProtection:
                 )
             
             # Validate path is within user space
-            if not str(path).startswith(str(Path.home())):
+            if not str(path).startswith(str(UPath.home())):
                 raise StorageSecurityError(
                     "Key file must be in user directory",
                     security_check="key_file"
@@ -275,15 +273,15 @@ class ConfigurationProtection:
     @staticmethod
     def safe_save_config(
         config: Dict[str, Any],
-        file_path: Union[str, Path],
+        file_path: Union[str, UPath],
         sensitive_keys: Optional[set] = None
     ) -> None:
         """Safely save configuration to file"""
         try:
-            path = Path(file_path).resolve()
+            path = UPath(file_path).resolve()
             
             # Ensure directory is secure
-            if not str(path).startswith(str(Path.home())):
+            if not str(path).startswith(str(UPath.home())):
                 raise StorageSecurityError(
                     "Configuration file must be in user directory",
                     security_check="config_save"

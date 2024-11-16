@@ -1,5 +1,4 @@
-from typing import Optional, Any
-from pydantic import SecretStr
+from typing import Optional
 
 class SecretsError(Exception):
     """Base exception for all secrets-related errors"""
@@ -12,6 +11,13 @@ class SecretConfigurationError(SecretsError):
     def __init__(self, message: str, provider: Optional[str] = None, setting: Optional[str] = None):
         self.setting = setting
         super().__init__(f"Configuration error - {message}" + (f" (setting: {setting})" if setting else ""), provider)
+
+class SecretEncryptionError(SecretsError):
+    """Raised when there is an error in the secret provider encryption"""
+    def __init__(self, message: str, provider: Optional[str] = None, setting: Optional[str] = None):
+        self.setting = setting
+        super().__init__(f"Encryption error - {message}" + (f" (setting: {setting})" if setting else ""), provider)
+
 
 class SecretAuthenticationError(SecretsError):
     """Raised when authentication to the secret provider fails"""
