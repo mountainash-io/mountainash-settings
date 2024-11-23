@@ -5,6 +5,7 @@ from typing import Optional, List, Tuple
 from upath import UPath
 from pydantic import Field, field_validator
 
+from mountainash_settings import SettingsParameters
 from ..constants import CONST_LOCAL_SECRETS_STORAGE, CONST_SECRET_PROVIDER_TYPE
 from ..base import SecretsAuthBase
 from ..exceptions import SecretValidationError
@@ -21,9 +22,17 @@ class LocalSecretsSettings(SecretsAuthBase):
     
     def __init__(self, 
                  config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 settings_parameters:   Optional[SettingsParameters] = None,
                  _dummy: Optional[bool] = False,
                  **kwargs) -> None:  
-        super().__init__(config_files=config_files, _dummy=_dummy, **kwargs)
+        
+
+        super().__init__(config_files=config_files, 
+                         settings_parameters=settings_parameters,
+                         _dummy=_dummy, 
+                         **kwargs)
+
+
 
     ## Field Validators ##
     @field_validator("STORAGE_TYPE")

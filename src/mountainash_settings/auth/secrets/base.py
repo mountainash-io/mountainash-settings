@@ -6,7 +6,7 @@ from typing import List
 
 from .constants import CONST_SECRET_VERSION_HANDLING, CONST_SECRET_ROTATION_POLICY
 from mountainash_settings import MountainAshBaseSettings
-
+from mountainash_settings import SettingsParameters
 
 
 class SecretsAuthBase(MountainAshBaseSettings):
@@ -53,9 +53,17 @@ class SecretsAuthBase(MountainAshBaseSettings):
 
     def __init__(self, 
                  config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 settings_parameters:   Optional[SettingsParameters] = None,
                  _dummy: Optional[bool] = False,
                  **kwargs) -> None:  
-        super().__init__(config_files=config_files, _dummy=_dummy, **kwargs)
+        
+
+        super().__init__(config_files=config_files, 
+                         settings_parameters=settings_parameters,
+                         _dummy=_dummy, 
+                         **kwargs)
+
+
 
 
     def post_init(self, reinitialise: bool = False):

@@ -4,6 +4,7 @@ from upath import UPath
 from pydantic import Field, SecretStr, field_validator
 import re
 
+from mountainash_settings import SettingsParameters
 from mountainash_settings.auth.storage.base import StorageAuthBase
 from mountainash_settings.auth.storage.constants import (
     CONST_STORAGE_PROVIDER_TYPE,
@@ -25,23 +26,23 @@ class S3StorageAuthSettings(StorageAuthBase):
     PROVIDER_TYPE: str = Field(default=CONST_STORAGE_PROVIDER_TYPE.get('S3'))
     
     # AWS Settings
-    REGION: Optional[str] = Field(...)  # Required
-    BUCKET: Optional[str] = Field(...)  # Required
-    ENDPOINT_URL: Optional[str] = Field(default=None)
+    REGION: str =                   Field(...)  # Required
+    BUCKET: str =                   Field(...)  # Required
+    ENDPOINT_URL: Optional[str] =   Field(default=None)
     
     # Authentication Settings
-    AUTH_METHOD: Optional[str] = Field(default=CONST_STORAGE_AUTH_METHOD.KEY.value)
-    ACCESS_KEY_ID: Optional[str] = Field(default=None)
+    AUTH_METHOD: Optional[str] =            Field(default=CONST_STORAGE_AUTH_METHOD.KEY.value)
+    ACCESS_KEY_ID: Optional[str] =          Field(default=None)
     SECRET_ACCESS_KEY: Optional[SecretStr] = Field(default=None)
-    SESSION_TOKEN: Optional[SecretStr] = Field(default=None)
-    ROLE_ARN: Optional[str] = Field(default=None)
-    EXTERNAL_ID: Optional[str] = Field(default=None)
+    SESSION_TOKEN: Optional[SecretStr] =    Field(default=None)
+    ROLE_ARN: Optional[str] =               Field(default=None)
+    EXTERNAL_ID: Optional[str] =            Field(default=None)
     
     # S3 Specific Settings
-    ADDRESSING_STYLE: str = Field(default="auto")  # auto, path, virtual
-    PATH_STYLE: bool = Field(default=False)
-    ACCELERATE_ENDPOINT: bool = Field(default=False)
-    DUALSTACK_ENDPOINT: bool = Field(default=False)
+    ADDRESSING_STYLE: str =         Field(default="auto")  # auto, path, virtual
+    PATH_STYLE: bool =              Field(default=False)
+    ACCELERATE_ENDPOINT: bool =     Field(default=False)
+    DUALSTACK_ENDPOINT: bool =      Field(default=False)
     
     # Security Settings
     # USE_SSL: bool = Field(default=False)
@@ -61,9 +62,17 @@ class S3StorageAuthSettings(StorageAuthBase):
 
     def __init__(self, 
                  config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 settings_parameters:   Optional[SettingsParameters] = None,
                  _dummy: Optional[bool] = False,
                  **kwargs) -> None:  
-        super().__init__(config_files=config_files, _dummy=_dummy, **kwargs)    
+        
+
+        super().__init__(config_files=config_files, 
+                         settings_parameters=settings_parameters,
+                         _dummy=_dummy, 
+                         **kwargs)
+
+
 
 
     def post_init(self, reinitialise: bool = False):

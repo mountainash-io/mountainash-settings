@@ -4,6 +4,7 @@ from upath import UPath
 from pydantic import Field, SecretStr, field_validator
 from urllib.parse import urlparse
 
+from mountainash_settings import SettingsParameters
 from mountainash_settings.auth.storage.base import StorageAuthBase
 from mountainash_settings.auth.storage.constants import (
     CONST_STORAGE_PROVIDER_TYPE,
@@ -54,9 +55,16 @@ class MinIOStorageAuthSettings(StorageAuthBase):
     
     def __init__(self, 
                  config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 settings_parameters:   Optional[SettingsParameters] = None,
                  _dummy: Optional[bool] = False,
                  **kwargs) -> None:  
-        super().__init__(config_files=config_files, _dummy=_dummy, **kwargs)
+        
+
+        super().__init__(config_files=config_files, 
+                         settings_parameters=settings_parameters,
+                         _dummy=_dummy, 
+                         **kwargs)
+
 
 
     ## Field Validators ##

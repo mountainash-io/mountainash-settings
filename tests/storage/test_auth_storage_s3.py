@@ -73,10 +73,13 @@ class TestS3StorageAuth(BaseStorageAuthTests):
     @pytest.fixture
     def settings_parameters(self, provider_class, config_file_path, settings_namespace) -> SettingsParameters:
         
-        config_files: List[Any] = str(config_file_path)
+        # config_files: List[Any] = str(config_file_path)
         kwargs = {}
         
-        settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=settings_namespace, settings_class=provider_class, config_files=config_files, p_kwargs=kwargs)
+        settings_parameters = SettingsParameters.create(namespace=settings_namespace, 
+                                                        settings_class=provider_class, 
+                                                        config_files=config_file_path, 
+                                                        kwargs=kwargs)
         print(f"settings_parameters: {settings_parameters}")
 
         return settings_parameters
@@ -84,15 +87,14 @@ class TestS3StorageAuth(BaseStorageAuthTests):
 
 
     @pytest.fixture
-    def storage_auth(self, settings_parameters, provider_class, settings_namespace) -> S3StorageAuthSettings:
+    def storage_auth(self, settings_parameters, provider_class, settings_namespace, config_file_path) -> S3StorageAuthSettings:
         """Create instance of storage auth class with config file settings"""
 
         settings_namespace  = f"{settings_namespace}.{time.time_ns()}"
 
         storage_auth: Any = get_settings(settings_parameters=settings_parameters, 
-                                                          settings_class=provider_class, 
-                                                          settings_namespace=settings_namespace
-                                                          )
+                                        settings_namespace=settings_namespace
+                                        )
         
         print(storage_auth)
         return storage_auth

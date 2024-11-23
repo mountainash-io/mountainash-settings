@@ -1,8 +1,14 @@
 
+from ast import Set
+from pydoc import resolve
 from typing import Optional, Union, Any, Tuple, Type, List, Dict
 from dataclasses import dataclass
 # from mountainash_settings.base import MountainAshBaseSettings
 from pydantic_settings import BaseSettings
+# from .settings_utils import SettingsUtils
+from .settings_filehandler import SettingsFileHandler
+from .settings_kwargshandler import SettingsKwargsHandler
+from importlib import import_module
 
 from upath import UPath
 
@@ -19,33 +25,37 @@ class SettingsParameters():
         settings_class: The class/type that will be used to create the settings object.
 
     """
-    namespace:      Optional[str] = "DEFAULT"
+    namespace:      Optional[str] = None
     config_files:   Optional[Union[Any, str, Tuple[Any|str]]] = None
     kwargs:         Optional[Tuple[str,Any]] = None
-    settings_class: Optional[Type[BaseSettings]] = BaseSettings
+    settings_class: Optional[Type[BaseSettings]] = None
     env_prefix:     Optional[str] = None
     secrets_dir:    Optional[str] = None    
 
+    _reserved_kwargs = ["_env_file", "_env_file_encoding", "_env_prefix", "_dummy"]
 
     def __hash__(self):
         return hash((self.namespace, self.config_files, self.kwargs, self.settings_class, self.env_prefix, self.secrets_dir))
 
+
+    # Creation methods
     @classmethod
     def create(cls, 
                namespace: Optional[str] = None,
                config_files: Optional[Union[UPath, str, List[Union[UPath, str]]]] = None,
                kwargs: Optional[Dict[str, Any]] = None,
-               settings_class: Type[BaseSettings] = BaseSettings,
+               settings_class: Optional[Type[BaseSettings]] = None,
                env_prefix: Optional[str] = None,
                secrets_dir: Optional[str] = None) -> 'SettingsParameters':
         
-        
-        resolved_namespace = cls._resolve_namespace(namespace)
-        resolved_config_files = cls._format_config_files(config_files)
-        resolved_kwargs = cls._format_kwargs(kwargs)
+
+        #Combine the parameters into a single object
+        # resolved_namespace =     cls._init_namespace(namespace)
+        resolved_config_files =  SettingsFileHandler.format_config_file_tuple(config_files)
+        resolved_kwargs =        SettingsKwargsHandler.format_kwargs_tuple(kwargs)
 
         return cls(
-            namespace=resolved_namespace,
+            namespace=namespace,
             config_files=resolved_config_files,
             kwargs=resolved_kwargs,
             settings_class=settings_class,
@@ -53,53 +63,23 @@ class SettingsParameters():
             secrets_dir=secrets_dir
         )
 
+    # Move Merge methods to utils class
+    # Resolve the settings parameters for creation
+   
+
+
+
+    #Move statics to utils class!
+
     @staticmethod
-    def _resolve_namespace(namespace: Optional[str]) -> str:
+    def _init_namespace(namespace: Optional[str]) -> str:
         return namespace or "DEFAULT"
 
-    @staticmethod
-    def _format_config_files(config_files: Optional[Union[UPath, str, List[Union[UPath, str]]]]) -> Optional[Tuple[Union[UPath, str], ...]]:
-        if config_files is None:
-            return None
-        if isinstance(config_files, (UPath, str)):
-            return (config_files,)
-        return tuple(sorted(set(config_files)))
 
-    @staticmethod
-    def _format_kwargs(kwargs: Optional[Dict[str, Any]]) -> Optional[Tuple[Tuple[str, Any], ...]]:
-        if kwargs is None:
-            return None
-        return tuple(sorted(kwargs.items()))
 
-    def resolve_with(self, other: 'SettingsParameters') -> 'SettingsParameters':
-        new_config_files = self._merge_config_files(self.config_files, other.config_files)
-        new_kwargs = self._merge_kwargs(self.kwargs, other.kwargs)
 
-        return SettingsParameters(
-            namespace=other.namespace or self.namespace,
-            config_files=new_config_files,
-            kwargs=new_kwargs,
-            settings_class=other.settings_class or self.settings_class,
-            env_prefix=other.env_prefix or self.env_prefix,
-            secrets_dir=other.secrets_dir or self.secrets_dir
-        )
 
-    @staticmethod
-    def _merge_config_files(config_files1: Optional[Tuple[Union[UPath, str], ...]],
-                            config_files2: Optional[Tuple[Union[UPath, str], ...]]) -> Optional[Tuple[Union[UPath, str], ...]]:
-        if config_files1 is None and config_files2 is None:
-            return None
-        merged = set(config_files1 or ()) | set(config_files2 or ())
-        return tuple(sorted(merged))
-
-    @staticmethod
-    def _merge_kwargs(kwargs1: Optional[Tuple[Tuple[str, Any], ...]],
-                      kwargs2: Optional[Tuple[Tuple[str, Any], ...]]) -> Optional[Tuple[Tuple[str, Any], ...]]:
-        if kwargs1 is None and kwargs2 is None:
-            return None
-        merged = dict(kwargs1 or ()) | dict(kwargs2 or ())
-        return tuple(sorted(merged.items()))
-
+    #Export / retrieve values
     def to_dict(self) -> Dict[str, Any]:
         return {
             'namespace': self.namespace,
@@ -109,3 +89,46 @@ class SettingsParameters():
             'env_prefix': self.env_prefix,
             'secrets_dir': self.secrets_dir
         }
+
+
+    def _get_settings_kwargs(self, 
+                             settings_class: Optional[Type[BaseSettings]] = None
+                             ) -> Set:
+
+        if settings_class is None:
+            settings_class = self.settings_class
+        if settings_class is None:
+            return set()
+
+        settings_class_mod: Type[BaseSettings] = getattr(import_module(name=settings_class.__module__), settings_class.__name__)       
+        obj_dummy_settings: BaseSettings = settings_class_mod(_dummy=True)
+        settings_kwarg_names = set(obj_dummy_settings.model_fields)
+
+        return settings_kwarg_names
+
+    def _get_valid_kwargs(self, 
+                          settings_class:    Optional[Type[BaseSettings]] = None
+                          ) -> Set:
+
+        if settings_class is None:
+            settings_class = self.settings_class
+        if settings_class is None:
+            return set()
+
+        settings_kwarg_names = self._get_settings_kwargs(settings_class)
+        valid_kwarg_names = settings_kwarg_names.union(self._reserved_kwargs)
+
+        return valid_kwarg_names
+
+
+    #Export a .env file from the settings parameters and class
+    # def export_env_file(self, 
+    #                     env_file: UPath,
+    #                     encoding: Optional[str] = "utf-8") -> None:
+        
+    #     valid_kwarg_names = self._get_settings_kwargs(self.settings_class)
+
+    #     with env_file.open(mode="w", encoding=encoding) as f:
+    #         for k, v in self.kwargs:
+    #             if k in valid_kwarg_names:
+    #                 f.write(f"{k}={v}\n")

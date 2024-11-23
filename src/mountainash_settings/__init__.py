@@ -1,13 +1,14 @@
 from .__version__ import __version__
 
-from mountainash_settings.settings_filehandler import SettingsFileHandler
-from mountainash_settings.base import MountainAshBaseSettings
-from mountainash_settings.settings_manager import SettingsManager
-from mountainash_settings.settings_utils import SettingsUtils
-from mountainash_settings.settings_parameters import SettingsParameters
-from mountainash_settings.settings_functions import get_settings, get_settings_manager, prepare_settings_parameters, get_app_settings
-from mountainash_settings.app.app_settings import AppSettings
-from mountainash_settings.app.app_settings_templates import AppSettingsTemplates
+from .settings_filehandler import SettingsFileHandler
+from .settings_kwargshandler import SettingsKwargsHandler
+from .base import MountainAshBaseSettings
+from .settings_manager import SettingsManager
+from .settings_parameters import SettingsParameters
+from .settings_utils import SettingsUtils
+from .settings_functions import get_settings, get_settings_manager,  get_app_settings
+from .app.app_settings import AppSettings
+from .app.app_settings_templates import AppSettingsTemplates
 
 
 __all__ = [
@@ -18,8 +19,9 @@ __all__ = [
     "SettingsUtils", 
     "get_settings",
     "get_settings_manager",
-    "prepare_settings_parameters",
+    # "prepare_settings_parameters",
     "SettingsFileHandler",
+    "SettingsKwargsHandler",
     "AppSettings",
     "AppSettingsTemplates",
     "get_app_settings"

@@ -5,7 +5,7 @@
 # from typing import Dict, Any
 
 # from mountainash_settings import MountainAshBaseSettings, AppSettings
-# from mountainash_settings.settings_functions import prepare_settings_parameters, get_settings
+# from mountainash_settings.settings_functions import  get_settings
 
 # class TestSettings(MountainAshBaseSettings):
 #     TEST_VAR: str = Field(default="default_value")
@@ -78,8 +78,8 @@
 #     assert app_settings.RUNDATETIME == "20230102T130000"
 
 # def test_get_settings():
-#     params = prepare_settings_parameters(
-#         settings_namespace="test",
+#     params = SettingsParameters.create(
+#         namespace="test",
 #         settings_class=TestSettings,
 #         config_files=None,
 #         p_kwargs={"TEST_VAR": "param_value"}
@@ -89,8 +89,8 @@
 #     assert settings.SETTINGS_NAMESPACE == "test"
 
 # def test_get_settings_with_config(temp_config_file):
-#     params = prepare_settings_parameters(
-#         settings_namespace="test",
+#     params = SettingsParameters.create(
+#         namespace="test",
 #         settings_class=TestSettings,
 #         config_files=[str(temp_config_file)],
 #         p_kwargs={"TEST_VAR": "param_value"}

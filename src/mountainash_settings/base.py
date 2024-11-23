@@ -1,11 +1,12 @@
 from typing import Optional, Union, List, Any, Dict, Type, Tuple
+from mountainash_settings.settings_utils import SettingsUtils
 from upath import UPath
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource, TomlConfigSettingsSource, YamlConfigSettingsSource
+from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource, TomlConfigSettingsSource, YamlConfigSettingsSource, JsonConfigSettingsSource
 from string import Formatter
-from .settings_filehandler import SettingsFileHandler
-
+from .settings_filehandler import SettingsFileHandler, ConfigFiles
+from .settings_parameters import SettingsParameters
 
 class MountainAshBaseSettings(BaseSettings):
 
@@ -15,97 +16,7 @@ class MountainAshBaseSettings(BaseSettings):
             #validate_assignment=True,
             arbitrary_types_allowed=True
         )
-
-    def __init__(self, 
-                 config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
-                 _dummy: Optional[bool] = False,
-                 **kwargs) -> None:  
-
-        if config_files is not None:
-
-            config_files_sorted = SettingsFileHandler.separate_config_files(config_files)
-            
-            # # Validate config files exist
-            SettingsFileHandler.validate_config_files_exist(config_files_sorted.env_files)
-            SettingsFileHandler.validate_config_files_exist(config_files_sorted.yaml_files)
-            SettingsFileHandler.validate_config_files_exist(config_files_sorted.toml_files)
-
-            # Check for conflicting kwargs
-            if config_files_sorted.env_files is not None and "SETTINGS_SOURCE_ENV_FILES" in kwargs:
-                raise ValueError("Cannot specify both env files in config_files and SETTINGS_SOURCE_ENV_FILES in kwargs")
-
-            if config_files_sorted.yaml_files is not None and "SETTINGS_SOURCE_YAML_FILES" in kwargs:
-                raise ValueError("Cannot specify both yaml files in config_files and SETTINGS_SOURCE_YAML_FILES in kwargs")
-
-            if config_files_sorted.toml_files is not None and "SETTINGS_SOURCE_TOML_FILES" in kwargs:
-                raise ValueError("Cannot specify both toml files in config_files and SETTINGS_SOURCE_TOML_FILES in kwargs")
-
-            #Add to the kwargs
-            if config_files_sorted.env_files is not None:
-                kwargs["SETTINGS_SOURCE_ENV_FILES"] = config_files_sorted.env_files
-            if config_files_sorted.yaml_files is not None:
-                kwargs["SETTINGS_SOURCE_YAML_FILES"] = config_files_sorted.yaml_files
-            if config_files_sorted.toml_files is not None:
-                kwargs["SETTINGS_SOURCE_TOML_FILES"] = config_files_sorted.toml_files
-
-        if not _dummy:
-
-            if kwargs.get("SETTINGS_SOURCE_YAML_FILES", None) is not None:
-                self.model_config["yaml_file"] = kwargs.get("SETTINGS_SOURCE_YAML_FILES", None)
-            if kwargs.get("SETTINGS_SOURCE_TOML_FILES", None) is not None:
-                self.model_config["toml_file"] = kwargs.get("SETTINGS_SOURCE_TOML_FILES", None)
-
-        super().__init__(_case_sensitive=True, 
-                            _env_prefix=            kwargs.get("SETTINGS_SOURCE_ENV_PREFIX", None),
-                            _env_file=              kwargs.get("SETTINGS_SOURCE_ENV_FILES", None), 
-                            _env_file_encoding =    'utf-8',
-                            _env_ignore_empty =     True,
-                            _env_parse_none_str =   "None",
-                            _secrets_dir=           kwargs.get("SETTINGS_SOURCE_SECRETS_DIR", None),
-                            # _yaml_file=             kwargs.get("SETTINGS_SOURCE_YAML_FILES", None),
-                            # _toml_file=             kwargs.get("SETTINGS_SOURCE_TOML_FILES", None),
-                            #**config_kwargs
-                        )
-
-        if not _dummy:
-
-            # Handle kwargs via Initialisation
-            if kwargs:
-                #Remove special flags from the stored kwargs
-                kwargs_to_remove = set(["SETTINGS_CLASS", 
-                                        "SETTINGS_CLASS_NAME", 
-                                        "SETTINGS_NAMESPACE", 
-                                        "SETTINGS_SOURCE_ENV_FILES", 
-                                        "SETTINGS_SOURCE_ENV_PREFIX",
-                                        "SETTINGS_SOURCE_YAML_FILES", 
-                                        "SETTINGS_SOURCE_TOML_FILES", 
-                                        "SETTINGS_SOURCE_KWARGS", 
-                                        "SETTINGS_SOURCE_SECRETS_DIR"])
-                
-                config_kwargs = {k: v for k, v in kwargs.items() if k not in kwargs_to_remove}
-
-                #Update all vals from valid kwargs                
-                self.update_settings_from_dict(config_kwargs)
-
-            setattr(self, "SETTINGS_NAMESPACE", kwargs.get("SETTINGS_NAMESPACE", "DEFAULT"))
-            setattr(self, "SETTINGS_CLASS", kwargs.get("SETTINGS_CLASS", MountainAshBaseSettings))
-            setattr(self, "SETTINGS_CLASS_NAME", kwargs.get("SETTINGS_CLASS_NAME", "MountainAshBaseSettings"))
-            setattr(self, "SETTINGS_SOURCE_ENV_PREFIX", kwargs.get("SETTINGS_SOURCE_ENV_PREFIX", None))
-            setattr(self, "SETTINGS_SOURCE_ENV_FILES", kwargs.get("SETTINGS_SOURCE_ENV_FILES", None))
-            setattr(self, "SETTINGS_SOURCE_YAML_FILES", kwargs.get("SETTINGS_SOURCE_YAML_FILES", None))
-            setattr(self, "SETTINGS_SOURCE_TOML_FILES", kwargs.get("SETTINGS_SOURCE_TOML_FILES", None))
-            setattr(self, "SETTINGS_SOURCE_SECRETS_DIR", kwargs.get("SETTINGS_SOURCE_SECRETS_DIR", None))
-
-
-
-            # Initialise templated variables
-            self.post_init()
-
-        else:
-            setattr(self, "SETTINGS_NAMESPACE", "DUMMY")
-            setattr(self, "SETTINGS_CLASS", MountainAshBaseSettings)
-            setattr(self, "SETTINGS_CLASS_NAME", "MountainAshBaseSettings")
-
+    
     #Tracablility and repeatability
     SETTINGS_NAMESPACE: str =                                         Field(default=None)
     SETTINGS_CLASS: Type =                                            Field(default=None)
@@ -115,8 +26,78 @@ class MountainAshBaseSettings(BaseSettings):
     SETTINGS_SOURCE_ENV_PREFIX: Optional[str] =                                 Field(default=None)
     SETTINGS_SOURCE_YAML_FILES: Optional[Union[Any, str, List[Any|str]]] =      Field(default=None)
     SETTINGS_SOURCE_TOML_FILES: Optional[Union[Any, str, List[Any|str]]] =      Field(default=None)
+    SETTINGS_SOURCE_JSON_FILES: Optional[Union[Any, str, List[Any|str]]] =      Field(default=None)
     SETTINGS_SOURCE_KWARGS: Optional[Dict[str,Any]] =                           Field(default=None)
     SETTINGS_SOURCE_SECRETS_DIR: Optional[Dict[str,Any]] =                      Field(default=None)
+
+
+    # protected_attributes: List[str] = ['BATCH_TIER', 'BATCH_VERSION']
+    # reserved_kwargs = {"_env_file","_env_file_encoding", "_env_prefix","_dummy"}
+
+
+    def __init__(self, 
+                 config_files:          Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 settings_parameters:   Optional[SettingsParameters] = None,
+                 _dummy: Optional[bool] = False,
+                 **kwargs) -> None:  
+
+        # Create a settings parameters object
+        local_settings_params = SettingsParameters.create(config_files=config_files, 
+                                                          kwargs = kwargs,
+                                                          settings_class=self.__class__,
+                                                          )
+        #Merge with the settings parameters
+        if settings_parameters is not None:
+            local_settings_params = SettingsUtils.merge_settings_parameter_objects(settings_parameters, local_settings_params)
+
+
+        obj_config_files: ConfigFiles = SettingsFileHandler.separate_config_files(local_settings_params.config_files)
+        
+        # # Validate config files exist
+        SettingsFileHandler.validate_config_files_exist(obj_config_files.env_files )
+        SettingsFileHandler.validate_config_files_exist(obj_config_files.yaml_files)
+        SettingsFileHandler.validate_config_files_exist(obj_config_files.toml_files)
+        SettingsFileHandler.validate_config_files_exist(obj_config_files.json_files)
+
+        if not _dummy:
+            # Handle non env config files via model_config
+            self.model_config["yaml_file"] = obj_config_files.yaml_files or None
+            self.model_config["toml_file"] = obj_config_files.toml_files or None
+            self.model_config["json_file"] = obj_config_files.json_files or None
+
+        super().__init__(_case_sensitive=True, 
+                            _env_prefix=            local_settings_params.env_prefix or None,
+                            _env_file=              obj_config_files.env_files or None, 
+                            _env_file_encoding =    'utf-8',
+                            _env_ignore_empty =     True,
+                            _env_parse_none_str =   "None",
+                            _secrets_dir=           local_settings_params.secrets_dir or None,
+                        )
+
+        if not _dummy:
+
+            #Update all vals from valid kwargs                
+            self.update_settings_from_dict(local_settings_params.kwargs)
+
+            setattr(self, "SETTINGS_NAMESPACE",             local_settings_params.namespace)
+            setattr(self, "SETTINGS_CLASS",                 local_settings_params.settings_class or MountainAshBaseSettings)
+            setattr(self, "SETTINGS_CLASS_NAME",            local_settings_params.settings_class.__name__ or "MountainAshBaseSettings")
+            setattr(self, "SETTINGS_SOURCE_ENV_PREFIX",     local_settings_params.env_prefix)
+            setattr(self, "SETTINGS_SOURCE_ENV_FILES",      obj_config_files.env_files)
+            setattr(self, "SETTINGS_SOURCE_YAML_FILES",     obj_config_files.yaml_files)
+            setattr(self, "SETTINGS_SOURCE_TOML_FILES",     obj_config_files.toml_files)
+            setattr(self, "SETTINGS_SOURCE_JSON_FILES",     obj_config_files.json_files)
+            setattr(self, "SETTINGS_SOURCE_SECRETS_DIR",    local_settings_params.secrets_dir)
+
+            # Initialise templated variables
+            self.post_init()
+
+        else:
+            setattr(self, "SETTINGS_NAMESPACE", "DUMMY")
+            setattr(self, "SETTINGS_CLASS", MountainAshBaseSettings)
+            setattr(self, "SETTINGS_CLASS_NAME", "MountainAshBaseSettings")
+
+
 
 
     @classmethod
@@ -131,9 +112,9 @@ class MountainAshBaseSettings(BaseSettings):
         return ( init_settings, 
                 env_settings, 
                 dotenv_settings, 
-                TomlConfigSettingsSource(settings_cls), 
                 YamlConfigSettingsSource(settings_cls),
-                # JsonConfigSettingsSource(settings_cls),
+                TomlConfigSettingsSource(settings_cls), 
+                JsonConfigSettingsSource(settings_cls),
                 file_secret_settings
         )
 
@@ -144,7 +125,14 @@ class MountainAshBaseSettings(BaseSettings):
         
         """
 
-        return hash((self.SETTINGS_NAMESPACE, self.SETTINGS_CLASS_NAME, self.SETTINGS_SOURCE_ENV_FILES, self.SETTINGS_SOURCE_ENV_PREFIX, self.SETTINGS_SOURCE_YAML_FILES, self.SETTINGS_SOURCE_TOML_FILES,self.SETTINGS_SOURCE_KWARGS))
+        return hash((self.SETTINGS_NAMESPACE, 
+                     self.SETTINGS_CLASS_NAME, 
+                     self.SETTINGS_SOURCE_ENV_FILES, 
+                     self.SETTINGS_SOURCE_ENV_PREFIX, 
+                     self.SETTINGS_SOURCE_YAML_FILES, 
+                     self.SETTINGS_SOURCE_TOML_FILES,
+                     self.SETTINGS_SOURCE_JSON_FILES,
+                     self.SETTINGS_SOURCE_KWARGS))
 
     def init_setting_from_template(self, template_str:str, current_value: Optional[str] = None, reinitialise: bool = False):
 
@@ -214,6 +202,9 @@ class MountainAshBaseSettings(BaseSettings):
             settings_dict: The dictionary of settings to update.
         """
         
+        settings_dict = SettingsUtils.format_kwargs_dict(p_kwargs=settings_dict)
+
+
         for key, value in settings_dict.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -227,4 +218,42 @@ class MountainAshBaseSettings(BaseSettings):
         # Set the settings namespace to the class name if not
         pass
 
+
+    def extract_settings_parameters(self) -> SettingsParameters:
+        """
+        Returns a SettingsParameters object reconstructed from a BaseSettings object.
+
+        Args:
+            objSettings (BaseSettings): The settings object.
+
+        Returns:
+            SettingsParameters: The settings parameters object
+        """
+
+        # combine the config files into a single list
+        config_files : List = []
+        if self.SETTINGS_SOURCE_ENV_FILES:
+            config_files += self.SETTINGS_SOURCE_ENV_FILES
+        if self.SETTINGS_SOURCE_YAML_FILES:
+            config_files += self.SETTINGS_SOURCE_YAML_FILES  
+        if self.SETTINGS_SOURCE_TOML_FILES:
+            config_files += self.SETTINGS_SOURCE_TOML_FILES
+        if self.SETTINGS_SOURCE_JSON_FILES:
+            config_files += self.SETTINGS_SOURCE_JSON_FILES
+
+
+        existing_namespace =        self.SETTINGS_NAMESPACE or None
+        existing_config_files =     self.format_config_file_list(config_files=config_files)
+        existing_kwargs =           self.format_kwargs_dict(p_kwargs=self.SETTINGS_SOURCE_KWARGS)
+        existing_settings_class =   self.SETTINGS_CLASS or None
+        existing_env_prefix =       self.SETTINGS_SOURCE_ENV_PREFIX or None
+
+        params: SettingsParameters = SettingsParameters.create(
+            settings_namespace= existing_namespace,
+            config_files=       existing_config_files,
+            kwargs=             existing_kwargs,
+            settings_class=     existing_settings_class,
+            env_prefix=         existing_env_prefix)
+            
+        return params        
 

@@ -1,27 +1,31 @@
+
 from typing import Optional, Union, List, Tuple, Dict, NamedTuple
 from upath import UPath
 import os
-from .settings_utils import SettingsUtils
-
+from enum import Enum
 
 class ConfigFiles(NamedTuple):
     """Container for different types of configuration files"""
     env_files: Optional[List[Union[UPath, str]]] = None
     yaml_files: Optional[List[Union[UPath, str]]] = None
     toml_files: Optional[List[Union[UPath, str]]] = None
+    json_files: Optional[List[Union[UPath, str]]] = None
 
-class FileType:
+class FileType():
     """Enumeration of supported file types and their extensions"""
     ENV = "env"
-    YAML = ("yaml", "yml")
+    YML = "yml"
+    YAML = "yaml"
     TOML = "toml"
+    JSON = "json"
 
 class SettingsFileHandler:
     """Handles validation and separation of configuration files by type"""
     
-    @staticmethod
+    @classmethod
     def separate_config_files(
-        files: Optional[Union[UPath, str, List[Union[UPath, str]], Tuple[Union[UPath, str]]]]
+        cls,
+        config_files: Optional[Union[UPath, str, List[Union[UPath, str]], Tuple[Union[UPath, str]]]] = None
     ) -> ConfigFiles:
         """
         Separates configuration files into their respective types.
@@ -35,58 +39,87 @@ class SettingsFileHandler:
         Raises:
             ValueError: If an invalid file type is encountered
         """
-        if files is None:
-            return ConfigFiles()
-            
+
+        if config_files is None:
+            return ConfigFiles()        
+
+        if isinstance(config_files, (list, tuple)) and len(config_files) == 0:
+            return ConfigFiles()        
+
         # Convert to list if single file
-        if isinstance(files, (str, UPath)):
-            files = [files]
+        if isinstance(config_files, (str, UPath)):
+            config_files = [config_files]
             
         # Convert tuple to list
-        files = list(files)
+        config_files = list(config_files)
         
         # Validate and group files
-        file_groups = SettingsFileHandler._group_files_by_type(files)
+        file_groups = cls.group_files_by_type(config_files)
         
         # Create ConfigFiles with deduplicated lists
-        return ConfigFiles(
-            env_files=SettingsFileHandler._deduplicate_files(file_groups.get(FileType.ENV, [])),
-            yaml_files=SettingsFileHandler._deduplicate_files(file_groups.get(FileType.YAML[0], []) + file_groups.get(FileType.YAML[1], [])),
-            toml_files=SettingsFileHandler._deduplicate_files(file_groups.get(FileType.TOML,[]))
+        obj_config_files =  ConfigFiles(
+            env_files=cls.deduplicate_files(file_groups.get(FileType.ENV, [])),
+            yaml_files=cls.deduplicate_files(file_groups.get(FileType.YAML, []) + file_groups.get(FileType.YML, [])),
+            toml_files=cls.deduplicate_files(file_groups.get(FileType.TOML,[])),
+            json_files=cls.deduplicate_files(file_groups.get(FileType.JSON,[]))
         )
 
+
+        return obj_config_files
+
+
     @staticmethod
-    def _validate_extension(file_path: Union[UPath, str]) -> str:
+    def merge_config_files(config_files1:   Optional[Tuple[Union[UPath, str], ...]] = None,
+                            config_files2:  Optional[Tuple[Union[UPath, str], ...]] = None) -> Optional[Tuple[Union[UPath, str], ...]]:
+        if config_files1 is None and config_files2 is None:
+            return None
+        merged = set(config_files1 or ()) | set(config_files2 or ())
+        return tuple(sorted(merged))
+
+
+    @staticmethod
+    def identify_file_extension(file_path: Union[UPath, str]) -> Optional[str]:
         """
-        Validates file extension and returns the file type.
+        Identify file extension and returns the file type.
         
         Args:
             file_path: Path to the configuration file
             
         Returns:
-            str: Validated file extension
+            str: File extension
             
-        Raises:
-            ValueError: If file extension is invalid
         """
+
+
+        if file_path is None:
+            return None
+
         # Convert to string if UPath
-        path_str = str(file_path)
-        
+        path_str = UPath(file_path)
+
+        ext = path_str.suffix.lower().lstrip('.')
+
         # Get extension without leading dot
-        ext = os.path.splitext(path_str)[1].lower().lstrip('.')
+        # ext = os.path.splitext(path_str)[1].lower().lstrip('.')
         
         # Validate extension
         if ext == FileType.ENV:
             return FileType.ENV
-        elif ext in FileType.YAML:
-            return ext
+        elif ext  == FileType.YAML:
+            return FileType.YAML
+        elif ext  == FileType.YML:
+            return FileType.YML
         elif ext == FileType.TOML:
             return FileType.TOML
+        elif ext == FileType.JSON:
+            return FileType.JSON
         else:
-            raise ValueError(
-                f"Invalid file type: {ext}. Supported types are: "
-                f".env, .yaml, .yml, .toml"
+            print(
+                f"Invalid file type: {ext} from file: '{file_path}''. Supported types are: "
+                f".env, .yaml, .yml, .toml, .json"
             )
+
+            return None    
 
     @staticmethod
     def validate_config_files_exist(
@@ -102,8 +135,16 @@ class SettingsFileHandler:
             FileNotFoundError: If the configuration file does not exist.
         """
 
+        if config_files is None:
+            return None        
 
-        config_files_list = SettingsUtils.format_config_file_list(config_files=config_files)
+        if isinstance(config_files, (list, tuple)) and len(config_files) == 0:
+            return None        
+
+        # if isinstance(config_files, (list, tuple)) and all(f is None for f in config_files):
+        #     return None    
+
+        config_files_list = list(sorted(set(config_files)))
 
         if config_files_list:
 
@@ -122,54 +163,132 @@ class SettingsFileHandler:
 
 
 
-    @staticmethod
-    def _group_files_by_type(
-        files: List[Union[UPath, str]]
+    @classmethod
+    def group_files_by_type(cls,
+        config_files: List[Union[UPath, str]]
     ) -> Dict[str, List[Union[UPath, str]]]:
         """
         Groups files by their extension type.
         
         Args:
-            files: List of file paths
+            config_files: List of file paths
             
         Returns:
             Dict mapping file extensions to lists of files
         """
+
+        if config_files is None:
+            return {}        
+
+        if isinstance(config_files, (list, tuple)) and len(config_files) == 0:
+            return {}        
+
         grouped_files: Dict[str, List[Union[UPath, str]]] = {}
         
-        for file in files:
-            ext = SettingsFileHandler._validate_extension(file)
+        for file in config_files:
+
+            ext = cls.identify_file_extension(file)
+
             if ext not in grouped_files:
                 grouped_files[ext] = []
+
             grouped_files[ext].append(file)
             
         return grouped_files
 
     @staticmethod
-    def _deduplicate_files(
-        files: List[Union[UPath, str]]
+    def deduplicate_files(
+        config_files: List[Union[UPath, str]]
     ) -> Optional[UPath|str|List[Union[UPath, str]]]:
         """
         Removes duplicate files while preserving order.
         
         Args:
-            files: List of file paths
+            config_files: List of file paths
             
         Returns:
             Deduplicated list of files, or None if empty
         """
-        if not files:
-            return None
-        if len(files) == 0:
-            return None
-        if len(files) == 1:
-            return files[0]
-            
+
+        print(f"deduplicate_files inputs: {config_files}")
+
+        if config_files is None:
+            return None        
+
+        if isinstance(config_files, (list, tuple)) and len(config_files) == 0:
+            return None        
+      
+        if isinstance(config_files, (list, tuple)) and len(config_files) == 1:
+            return list(config_files)
+
+        if isinstance(config_files, (str, UPath)):
+            return [config_files]
+
         # Use dict to preserve order while removing duplicates
-        unique_files = list(dict.fromkeys(str(f) for f in files))
+        unique_files = list(dict.fromkeys(str(f) for f in config_files))
         
-        # Convert back to original types
+        # Convert to UPath
         return [
-            UPath(f) if isinstance(files[0], UPath) else f 
+            UPath(f) #if isinstance(config_files[0], UPath) else f 
             for f in unique_files
         ]
+    
+    @classmethod
+    def format_config_file_tuple(cls, 
+                                config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None
+                                ) -> Optional[Tuple[UPath|str]]:
+        """
+        Formats the config_files as a tuple for immutability in the parameters.
+
+        Args:
+            config_files (Union[UPath, List[UPath]]): The configuration file or list of configuration files.
+
+        Returns:
+            Tuple[UPath|str]: The configuration files as a tuple, or None if not provided.
+
+        """
+
+        if config_files is None:
+            return None        
+
+        if isinstance(config_files, (list, tuple)) and len(config_files) == 0:
+            return None        
+
+        if isinstance(config_files, (UPath, str)):
+            return (config_files,)
+
+        config_files = cls.deduplicate_files(config_files)
+        
+        return tuple(config_files)    
+    
+
+
+    @classmethod
+    def format_config_file_list(cls, 
+                                 config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None
+                                 ) -> Optional[List[UPath|str]]:
+        
+        """
+        Ensures the config_files are formatted as a list.
+
+        Args:
+            config_files (Union[UPath, List[UPath]]): The configuration file or list of configuration files.
+
+        Returns:
+            List[UPath|str]: The list of configuration files, or None if not provided
+        """
+
+
+        if config_files is None:
+            return None        
+
+        if isinstance(config_files, (list, tuple)) and len(config_files) == 0:
+            return None        
+
+        if isinstance(config_files, (UPath, str)):
+            return [config_files]
+
+        if isinstance(config_files, (list, tuple)):
+            return cls.deduplicate_files(config_files)
+
+        raise ValueError(f"Invalid config_files: {config_files}")

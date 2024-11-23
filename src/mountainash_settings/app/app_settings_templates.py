@@ -6,9 +6,6 @@ from functools import lru_cache
 class AppSettingsTemplates(BaseSettings):
 
     model_config = SettingsConfigDict(
-        # `.env.prod` takes priority over `.env`
-        env_file=(
-        ),
         extra="ignore",
     )
 

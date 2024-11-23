@@ -42,3 +42,5 @@ class CONST_DB_POOL_MODE(BaseConstant):
     FIXED = "fixed"
     DYNAMIC = "dynamic"
     NONE = "none"
+
+    

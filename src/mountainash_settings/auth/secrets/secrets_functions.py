@@ -1,9 +1,10 @@
 from typing import List, Optional, Union
-from mountainash_settings import prepare_settings_parameters, get_settings
+from mountainash_settings import get_settings
 from upath import UPath
 
 from .base import SecretsAuthBase
 from .constants import CONST_SECRET_PROVIDER_TYPE
+from ...settings_parameters import SettingsParameters
 
 from .providers.azure_keyvault import AzureKeyVaultSettings
 from .providers.aws_secrets import AWSSecretsSettings
@@ -33,11 +34,11 @@ def create_secrets_settings(
     if not settings_class:
         raise ValueError(f"Unknown provider type: {provider_type}")
     
-    settings_parameters = prepare_settings_parameters(
-        settings_namespace=settings_namespace,
+    settings_parameters = SettingsParameters.create(
+        namespace=settings_namespace,
         settings_class=settings_class,
         config_files=config_files,
-        **kwargs
+        kwargs =kwargs
     )
     
     return get_settings(settings_parameters=settings_parameters)
