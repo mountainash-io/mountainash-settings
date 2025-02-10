@@ -3,6 +3,7 @@
 # path: tests/auth/storage/providers/cloud/test_s3_storage_auth.py
 
 import time
+from mountainash_settings.settings_paramaters import settings_parameters
 import pytest
 from typing import Dict, Any, List, Type
 import re
@@ -21,7 +22,7 @@ from mountainash_settings.auth.storage.exceptions import (
     StorageSecurityError
 )
 
-from mountainash_settings import get_settings, MountainAshBaseSettings, settings_parameters, SettingsParameters, SettingsManager, get_settings_manager, SettingsUtils
+from mountainash_settings import get_settings, MountainAshBaseSettings, SettingsParameters, SettingsManager, get_settings_manager, SettingsUtils
 from dotenv import dotenv_values, load_dotenv
 
 from test_auth_storage_base import BaseStorageAuthTests
@@ -76,8 +77,8 @@ class TestS3StorageAuth(BaseStorageAuthTests):
         # config_files: List[Any] = str(config_file_path)
         kwargs = {}
         
-        settings_parameters = SettingsParameters.create(namespace=settings_namespace, 
-                                                        settings_class=provider_class, 
+        settings_parameters = SettingsParameters.create(settings_class=provider_class, 
+                                                        namespace=settings_namespace, 
                                                         config_files=config_file_path, 
                                                         kwargs=kwargs)
         print(f"settings_parameters: {settings_parameters}")
