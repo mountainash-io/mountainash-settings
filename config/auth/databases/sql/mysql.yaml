@@ -1,0 +1,32 @@
+### config/auth/database/sql/mysql.yaml ###
+PROVIDER_TYPE: "mysql"
+HOST: "localhost"
+PORT: 3306
+DATABASE: "mydb"
+
+# Authentication Settings
+USERNAME: "root"
+PASSWORD: "your_password"
+
+# MySQL-specific Settings
+CHARSET: "utf8mb4"
+COLLATION: "utf8mb4_unicode_ci"
+AUTOCOMMIT: true
+
+# Security Settings
+ALLOW_LOCAL_INFILE: false
+SSL_MODE: "prefer"
+# SSL_CIPHER: "TLS_AES_256_GCM_SHA384"
+TLS_VERSION:
+  - "TLSv1.2"
+  - "TLSv1.3"
+
+# Connection Settings
+CONNECT_TIMEOUT: 10
+# READ_TIMEOUT: 30
+# WRITE_TIMEOUT: 30
+# MAX_ALLOWED_PACKET: 16777216
+
+# Compression Settings
+COMPRESSION: false
+# COMPRESSION_LEVEL: 6

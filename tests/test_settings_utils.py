@@ -92,20 +92,20 @@ def test_format_kwargs_dict_invalid_type():
 # Test case for when both new_config_files and original_config_files are None
 def test_resolve_config_files_both_none():
 
-    assert SettingsUtils.resolve_config_files(new_config_files=None, original_config_files=None) is None
+    assert SettingsUtils.merge_config_files(config_files1=None, config_files2=None) is None
 
 # Test case for when new_config_files is not None and original_config_files is None
 def test_resolve_config_files_new_not_none():
     new_config_files: List[Any] = ["file1", "file2"]
 
-    assert SettingsUtils.resolve_config_files(new_config_files=new_config_files) == new_config_files
+    assert SettingsUtils.merge_config_files(config_files1=new_config_files) == tuple(new_config_files)
 
 # Test case for when new_config_files is None and original_config_files is not None
 def test_resolve_config_files_original_not_none():
 
     original_config_files: List[Any] = ["file1", "file2"]
 
-    assert SettingsUtils.resolve_config_files(original_config_files=original_config_files) == original_config_files
+    assert SettingsUtils.merge_config_files(config_files2=original_config_files) == tuple(original_config_files)
 
 # Test case for when both new_config_files and original_config_files are not None
 def test_resolve_config_files_both_not_none():
@@ -114,5 +114,5 @@ def test_resolve_config_files_both_not_none():
     original_config_files: List[Any] = ["file4", "file3", "file1"]
     expected_result: List[Any] = ["file1", "file2", "file3", "file4"]
 
-    assert SettingsUtils.resolve_config_files(new_config_files=new_config_files,
-                                        original_config_files=original_config_files) == expected_result
+    assert SettingsUtils.merge_config_files(config_files1=new_config_files,
+                                        config_files2=original_config_files) == tuple(expected_result)

@@ -1,0 +1,52 @@
+### config/auth/storage/network/smb.yaml ###
+PROVIDER_TYPE: "smb"
+
+# Connection Settings
+SERVER: "fileserver"
+SHARE: "myshare"
+PORT: 445
+
+# Authentication Settings
+AUTH_METHOD: "password"
+USERNAME: "smbuser"
+PASSWORD: "your_password"
+DOMAIN: "WORKGROUP"
+USE_KERBEROS: false
+# KERBEROS_KDC: "kdc.example.com"
+
+# Protocol Settings
+VERSION: "3.0"
+MIN_VERSION: "2.1"
+MAX_VERSION: "3.1.1"
+# PREFERRED_DIALECT: "2.002"
+# FALLBACK_VERSIONS: ["2.1", "3.0"]
+
+# Security Settings
+ENCRYPTION: true
+SIGN_OPTIONS: "when_required"
+REQUIRE_SECURE_NEGOTIATE: true
+USE_NTLM: true
+USE_NTLMv2: true
+
+# Connection Settings
+TIMEOUT: 60.0
+KEEPALIVE: true
+KEEPALIVE_INTERVAL: 30
+MAX_CHANNELS: 4
+
+# Performance Settings
+BUFFER_SIZE: 16384  # 16KB
+MAX_WRITE_SIZE: 1048576  # 1MB
+MAX_READ_SIZE: 1048576  # 1MB
+USE_OPLOCKS: true
+USE_LEASES: true
+
+# Caching Settings
+CACHE_ENABLED: true
+CACHE_TTL: 60
+DIR_CACHE_TTL: 300
+
+# DFS Settings
+USE_DFS: true
+# DFS_DOMAIN_CONTROLLER: "dc.example.com"
+# DFS_ROOT: "\\domain.com\namespace"
