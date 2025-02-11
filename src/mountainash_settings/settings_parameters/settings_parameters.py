@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings
 from upath import UPath
 
 from .filehandler import SettingsFileHandler
+from .kwargshandler import SettingsKwargsHandler
 
 
 @dataclass(frozen=True)
@@ -98,7 +99,7 @@ class SettingsParameters():
         # resolved_namespace =     cls._init_namespace(namespace)
         resolved_config_files =  SettingsFileHandler.format_config_file_tuple(config_files)        
         # merged_kwargs =         SettingsKwargsHandler.merge_kwargs(kw_params, kwargs) if kwargs else kw_params
-        # resolved_kwargs =        SettingsKwargsHandler.format_kwargs_dict(kwargs) if kwargs else None
+        resolved_kwargs =        SettingsKwargsHandler.format_kwargs_dict(kwargs) if kwargs else None
 
         return cls(
             namespace=namespace,
@@ -106,7 +107,7 @@ class SettingsParameters():
             settings_class=settings_class,
             env_prefix=env_prefix,
             secrets_dir=secrets_dir,
-            kwargs = kwargs
+            kwargs=resolved_kwargs
         )
 
 
@@ -166,6 +167,8 @@ class SettingsParameters():
                                         ) -> Dict[str, Any]:
 
         valid_kwarg_names = self._get_valid_kwarg_names(settings_class=settings_class)
+
+        print(f"valid_kwarg_names in class: {settings_class.__name__} - {valid_kwarg_names}")
         return {k: v for k, v in self.kwargs.items() if k in valid_kwarg_names} if self.kwargs else {}
 
 

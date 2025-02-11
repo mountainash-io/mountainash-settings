@@ -16,6 +16,7 @@ class CONST_STORAGE_PROVIDER_TYPE(BaseConstant):
     MINIO = "minio"
     SSH = "ssh"
     B2 = "b2"
+    GITHUB = "github"
 
 class CONST_STORAGE_AUTH_METHOD(BaseConstant):
     """Authentication methods"""

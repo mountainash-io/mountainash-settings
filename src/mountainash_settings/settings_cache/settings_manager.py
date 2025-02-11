@@ -18,7 +18,7 @@ class SettingsManager:
     """
 
     # protected_attributes: List[str] = ['BATCH_TIER', 'BATCH_VERSION']
-    # reserved_kwargs = {"_env_file","_env_file_encoding", "_env_prefix","_dummy"}
+    # reserved_kwargs = {"_env_file","_env_file_encoding", "_env_prefix"}
 
     # auth_parameters: Optional[SettingsParameters] = None
     settings_object_cache: dict[Any, BaseSettings] = {}

@@ -92,13 +92,13 @@ class MSSQLAuthSettings(BaseDBAuthSettings):
     def __init__(self, 
                  config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
                  settings_parameters:   Optional[SettingsParameters] = None,
-                 _dummy: Optional[bool] = False,
+                #  _dummy: Optional[bool] = False,
                  **kwargs) -> None:  
         
 
         super().__init__(config_files=config_files, 
                          settings_parameters=settings_parameters,
-                         _dummy=_dummy, 
+                        #  _dummy=_dummy, 
                          **kwargs)
 
 
@@ -230,19 +230,19 @@ class MSSQLAuthSettings(BaseDBAuthSettings):
 
 
 
-    def get_connection_string_params(self) -> Dict:
+    # def get_connection_string_params(self) -> Dict:
 
-        params = {}
-        params['database'] = self.DATABASE
+    #     params = {}
+    #     params['database'] = self.DATABASE
 
-        if self.TOKEN is not None:
-            params['token'] = self.TOKEN
+    #     if self.TOKEN is not None:
+    #         params['token'] = self.TOKEN
 
-        # Add driver and parameters
-        # params = ["driver={driver}"]
+    #     # Add driver and parameters
+    #     # params = ["driver={driver}"]
 
 
-        return params
+    #     return params
 
 
 
@@ -271,7 +271,7 @@ class MSSQLAuthSettings(BaseDBAuthSettings):
         template += "/{database}"
         
         # Add driver and parameters
-        params = [f"driver={self.DRIVER}"]
+        # params = [f"driver={self.DRIVER}"]
         
         # Add encryption settings
         # if self.ENCRYPTION != MSSQLAuthEncryption.DISABLED:

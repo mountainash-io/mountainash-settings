@@ -54,13 +54,13 @@ class SecretsAuthBase(MountainAshBaseSettings):
     def __init__(self, 
                  config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
                  settings_parameters:   Optional[SettingsParameters] = None,
-                 _dummy: Optional[bool] = False,
+                #  _dummy: Optional[bool] = False,
                  **kwargs) -> None:  
         
 
         super().__init__(config_files=config_files, 
                          settings_parameters=settings_parameters,
-                         _dummy=_dummy, 
+                        #  _dummy=_dummy, 
                          **kwargs)
 
 

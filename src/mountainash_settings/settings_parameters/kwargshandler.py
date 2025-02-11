@@ -23,10 +23,13 @@ class SettingsKwargsHandler:
             return None
         
         if isinstance(p_kwargs, dict):
+            p_kwargs = p_kwargs.get("kwargs", p_kwargs)
             return p_kwargs
         
         if isinstance(p_kwargs, tuple):
-            return dict(p_kwargs)
+            p_kwargs = dict(p_kwargs)
+            p_kwargs = p_kwargs.get("kwargs", p_kwargs)
+            return p_kwargs
         
         raise ValueError(f"Invalid p_kwargs: {p_kwargs}")
 
@@ -65,7 +68,9 @@ class SettingsKwargsHandler:
             return None
 
         #TODO: Test the precedence of kwargs
-        merged = dict(kwargs1 or ()) | dict(kwargs2 or ())
+        resolved_kwargs = dict(kwargs1 or ()) | dict(kwargs2 or ())
 
-        return merged
+        resolved_kwargs = resolved_kwargs.get("kwargs", resolved_kwargs)
+
+        return resolved_kwargs
         # return tuple(sorted(merged.items()))

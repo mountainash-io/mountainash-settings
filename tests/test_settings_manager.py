@@ -1,5 +1,6 @@
 import pytest
-from mountainash_settings import SettingsManager, get_settings_manager, SettingsFileHandler
+from mountainash_settings import SettingsManager, get_settings_manager
+from mountainash_settings.settings_parameters import SettingsFileHandler
 
 # Fixture to create an instance of SettingsManager before each test
 @pytest.fixture

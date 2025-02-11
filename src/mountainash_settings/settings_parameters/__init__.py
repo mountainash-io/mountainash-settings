@@ -1,4 +1,4 @@
-from .filehandler import SettingsFileHandler, SettingsFiles
+from .filehandler import SettingsFileHandler
 from .kwargshandler import SettingsKwargsHandler
 from .settings_parameters import SettingsParameters
 from .utils import SettingsUtils

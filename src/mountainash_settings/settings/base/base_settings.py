@@ -5,7 +5,7 @@ from string import Formatter
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource, TomlConfigSettingsSource, YamlConfigSettingsSource, JsonConfigSettingsSource
 
-from ...settings_parameters import SettingsFileHandler, SettingsParameters, SettingsFiles, SettingsUtils
+from mountainash_settings.settings_parameters import SettingsFileHandler, SettingsParameters, SettingsUtils
 
 class MountainAshBaseSettings(BaseSettings):
 
@@ -33,52 +33,32 @@ class MountainAshBaseSettings(BaseSettings):
 
 
     # protected_attributes: List[str] = ['BATCH_TIER', 'BATCH_VERSION']
-    # reserved_kwargs = {"_env_file","_env_file_encoding", "_env_prefix","_dummy"}
+    # reserved_kwargs = {"_env_file","_env_file_encoding", "_env_prefix"}
 
 
     def __init__(self, 
                  config_files:          Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
                  settings_parameters:   Optional[SettingsParameters] = None,
-                 _dummy: Optional[bool] = False,
                  **kwargs) -> None:  
 
-        
-        #Merge with the settings parameters
-        # if _dummy:
 
-        #     # validate_assignment=True,
-        #     self.model_config["validate_default"] = False
-        #     self.model_config["validate_assignment"] = False
-
-        #     super().__init__()
-
-        #     setattr(self, "SETTINGS_NAMESPACE", "DUMMY")
-        #     setattr(self, "SETTINGS_CLASS", MountainAshBaseSettings)
-        #     setattr(self, "SETTINGS_CLASS_NAME", "MountainAshBaseSettings")
-
-        # else: # not _dummy:
-
-        # Create a settings parameters object
+        # Create a baseline settings parameters object
         local_settings_params = SettingsParameters.create(
             settings_class=self.__class__,
             config_files=config_files, 
             **kwargs
         )
 
-
-
         if settings_parameters is not None:
             local_settings_params = SettingsUtils.merge_settings_parameter_objects(settings_parameters, local_settings_params)
 
-        obj_config_files: SettingsFiles = SettingsFileHandler.separate_config_files(local_settings_params.config_files)
+        obj_config_files: SettingsFileHandler = SettingsFileHandler.separate_config_files(local_settings_params.config_files)
         
-        # # Validate config files exist
-        SettingsFileHandler.validate_config_files_exist(obj_config_files.env_files )
+        # Validate config files exist
+        SettingsFileHandler.validate_config_files_exist(obj_config_files.env_files)
         SettingsFileHandler.validate_config_files_exist(obj_config_files.yaml_files)
         SettingsFileHandler.validate_config_files_exist(obj_config_files.toml_files)
         SettingsFileHandler.validate_config_files_exist(obj_config_files.json_files)
-
-
 
         # Handle attribute kwargs
         valid_pydantic_modelconfig_kwargs: Dict[str, Any] = local_settings_params.get_pydantic_modelconfig_kwargs()
@@ -109,7 +89,6 @@ class MountainAshBaseSettings(BaseSettings):
                             **valid_attribute_kwargs
                         )
 
-        # if not _dummy:
 
         #Update all vals from valid kwargs                
         self.update_settings_from_dict(settings_dict=valid_attribute_kwargs)
@@ -126,9 +105,6 @@ class MountainAshBaseSettings(BaseSettings):
 
         # Initialise templated variables
         self.post_init()
-
-
-
 
  
     @classmethod

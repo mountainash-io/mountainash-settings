@@ -1,14 +1,14 @@
 from typing import Any, List, Optional, Type, Union
 
 import pytest
-from pydantic_settings import SettingsConfigDict, BaseSettings
+# from pydantic_settings import SettingsConfigDict, BaseSettings
 from pydantic import Field
 from pytest_check import check
 from upath import UPath
 
-from mountainash_settings import SettingsUtils, SettingsManager, MountainAshBaseSettings, SettingsParameters
+from mountainash_settings import SettingsManager, MountainAshBaseSettings, SettingsParameters
 
-from mountainash_settings.settings_functions import get_settings_manager, get_settings
+from mountainash_settings import get_settings_manager, get_settings
 
 
 @pytest.fixture
@@ -24,14 +24,14 @@ class TestSettings(MountainAshBaseSettings):
         self,
         config_files: Optional[List[UPath|str]] = None,
         settings_parameters:   Optional[SettingsParameters] = None,        
-        _dummy=False,
+        # _dummy=False,
         **kwargs
     ) -> None:
 
         super().__init__(
             config_files=config_files,
             settings_parameters=settings_parameters,
-            _dummy=_dummy,
+            # _dummy=_dummy,
             **kwargs
         )
 
@@ -102,12 +102,6 @@ def test_init_sets_env_prefix():
 #         assert "SETTINGS_NAMESPACE" not in settings.SETTINGS_SOURCE_KWARGS
 
 
-def test_init_dummy_sets_defaults():
-    settings = MountainAshBaseSettings(_dummy=True)
-    assert settings.SETTINGS_NAMESPACE == "DUMMY"
-    assert settings.SETTINGS_CLASS == MountainAshBaseSettings
-    assert settings.SETTINGS_CLASS_NAME == "MountainAshBaseSettings"
-
 
 ## ============================================================
 ## Test using variables with a prefix in the test config files, and in kwargs!
@@ -138,6 +132,7 @@ def test_init_no_file_kwarg(settings_manager: SettingsManager):
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
     with check:
+        #Getting None here!
         assert app_settings.TEST_VAL_1 == "ABC"
         assert app_settings.TEST_VAL_2 == "XYZ"
 
@@ -166,6 +161,7 @@ def test_init_file_and_kwarg(settings_manager: SettingsManager):
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
     with check:
+        #kwargs not working here
         assert app_settings.TEST_VAL_1 == "ABC"
         assert app_settings.TEST_VAL_2 == "TEST_VAL_2_File_1"
 
@@ -180,6 +176,7 @@ def test_init_file_and_kwarg2(settings_manager: SettingsManager):
 
     with check:
         assert app_settings.TEST_VAL_1 == "TEST_VAL_1_File_1"
+        #kwargs not working here
         assert app_settings.TEST_VAL_2 == "XYZ"
 
 
@@ -347,7 +344,6 @@ def test_init_config_valid_init_files_reverse_noprefix(settings_manager: Setting
 
 
 
-
 def test_init_config_valid_init_files_override_and_kwargs_noprefix(settings_manager: SettingsManager):
     # Arrange
     namespace = "test_init_config_valid_init_files_override_and_kwargs_noprefix"
@@ -359,6 +355,7 @@ def test_init_config_valid_init_files_override_and_kwargs_noprefix(settings_mana
 
     with check:
         assert app_settings.TEST_VAL_1 == "TEST_VAL_1_File_1"
+        #kwargs not working here
         assert app_settings.TEST_VAL_2 == "000003"
 
 def test_init_config_valid_init_files_override_and_kwargs_noprefix2(settings_manager: SettingsManager):
@@ -372,5 +369,6 @@ def test_init_config_valid_init_files_override_and_kwargs_noprefix2(settings_man
 
     #TEST_VAL_2 was 000002 in the file, but over-ridden by the kwarg
     with check:
+        #kwargs not working here
         assert app_settings.TEST_VAL_1 == "ABC"
         assert app_settings.TEST_VAL_2 == "TEST_VAL_2_File_2"

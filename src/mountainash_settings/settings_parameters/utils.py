@@ -32,9 +32,9 @@ class SettingsUtils:
                 raise ValueError(f"Settings class must match for merging. bsse: {base.settings_class} != other: {other.settings_class}")
 
 
-
         #Merge values based on precedence
         if not prioritise_self:
+
             resolved_namespace =    other.namespace or base._init_namespace(base.namespace)
             resolved_config_files = SettingsFileHandler.merge_config_files(other.config_files, base.config_files)
             resolved_kwargs =       SettingsKwargsHandler.merge_kwargs(other.kwargs, base.kwargs)
@@ -43,12 +43,17 @@ class SettingsUtils:
 
 
         else:
+
             resolved_namespace =    base.namespace or base._init_namespace(other.namespace)
             resolved_config_files = SettingsFileHandler.merge_config_files( base.config_files, other.config_files,)
             resolved_kwargs =       SettingsKwargsHandler.merge_kwargs(base.kwargs, other.kwargs)
             resolved_env_prefix=    base.env_prefix or other.env_prefix
             resolved_settings_class = base.settings_class or other.settings_class or None
 
+        if resolved_kwargs is not None:
+            resolved_kwargs = resolved_kwargs.get("kwargs", resolved_kwargs)
+        else:
+            resolved_kwargs = {}
 
         return SettingsParameters.create(
             settings_class= resolved_settings_class,
@@ -163,58 +168,58 @@ class SettingsUtils:
     ############################################################################################################
     # SettingsParameters extraction
 
-    @classmethod
-    def extract_namespace_from_settings_parameters(cls, 
-                                                   settings_parameters: SettingsParameters) -> Optional[str]:
+    # @classmethod
+    # def extract_namespace_from_settings_parameters(cls, 
+    #                                                settings_parameters: SettingsParameters) -> Optional[str]:
 
-        """
-        Extracts the namespace from the SettingsParameters object.
+    #     """
+    #     Extracts the namespace from the SettingsParameters object.
         
-        Args:
-            settings_parameters (SettingsParameters): The settings parameters object.
+    #     Args:
+    #         settings_parameters (SettingsParameters): The settings parameters object.
 
-        Returns:
-            str: The namespace.        
-        """
+    #     Returns:
+    #         str: The namespace.        
+    #     """
 
-        mutable_parameters: dict[str, Any] = cls.extract_settings_parameters(settings_parameters=settings_parameters)
+    #     # mutable_parameters: dict[str, Any] = cls.extract_settings_parameters(settings_parameters=settings_parameters)
 
-        return settings_parameters.namespace
+    #     return settings_parameters.namespace
 
-    @classmethod
-    def extract_config_files_from_settings_parameters(cls, 
-                                                      settings_parameters: SettingsParameters) -> Optional[List[UPath|str]]:
-        """
-        Extracts the config_files from the SettingsParameters object.
+    # @classmethod
+    # def extract_config_files_from_settings_parameters(cls, 
+    #                                                   settings_parameters: SettingsParameters) -> Optional[List[UPath|str]]:
+    #     """
+    #     Extracts the config_files from the SettingsParameters object.
 
-        Args:
-            settings_parameters (SettingsParameters): The settings parameters object.
+    #     Args:
+    #         settings_parameters (SettingsParameters): The settings parameters object.
 
-        Returns:
-            List[UPath|str]: The configuration files.
-        """
+    #     Returns:
+    #         List[UPath|str]: The configuration files.
+    #     """
 
 
-        mutable_parameters: dict[str, Any] = cls.extract_settings_parameters(settings_parameters=settings_parameters)
+    #     mutable_parameters: dict[str, Any] = cls.extract_settings_parameters(settings_parameters=settings_parameters)
 
-        return mutable_parameters["config_files"]
+    #     return mutable_parameters["config_files"]
 
-    @classmethod
-    def extract_kwargs_from_settings_parameters(cls, settings_parameters: SettingsParameters) -> Optional[dict[str, Any]]:
+    # @classmethod
+    # def extract_kwargs_from_settings_parameters(cls, settings_parameters: SettingsParameters) -> Optional[dict[str, Any]]:
 
-        """
-        Extracts the keyword arguments from the SettingsParameters object.
+    #     """
+    #     Extracts the keyword arguments from the SettingsParameters object.
 
-        Args:
-            settings_parameters (SettingsParameters): The settings parameters object.
+    #     Args:
+    #         settings_parameters (SettingsParameters): The settings parameters object.
 
-        Returns:
-            dict: The keyword arguments.
-        """
+    #     Returns:
+    #         dict: The keyword arguments.
+    #     """
 
-        mutable_parameters: dict[str, Any] = cls.extract_settings_parameters(settings_parameters=settings_parameters)
+    #     mutable_parameters: dict[str, Any] = cls.extract_settings_parameters(settings_parameters=settings_parameters)
 
-        return mutable_parameters["kwargs"]
+    #     return mutable_parameters["kwargs"]
 
     @classmethod
     def get_platform_slash(cls) -> str:
