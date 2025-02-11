@@ -150,20 +150,20 @@ class AzureBlobStorageAuthSettings(StorageAuthBase):
             
         return v
 
-    @field_validator("CUSTOM_DOMAIN")
-    def validate_custom_domain(cls, v: Optional[str]) -> Optional[str]:
-        """Validate custom domain if provided"""
-        if v is not None:
-            if not StorageValidator.validate_url(
-                f"https://{v}",
-                allowed_schemes={'https'},
-                required_parts={'netloc'}
-            ):
-                raise StorageValidationError(
-                    "Invalid custom domain format",
-                    validation_type="custom_domain"
-                )
-        return v
+    # @field_validator("CUSTOM_DOMAIN")
+    # def validate_custom_domain(cls, v: Optional[str]) -> Optional[str]:
+    #     """Validate custom domain if provided"""
+    #     if v is not None:
+    #         if not StorageValidator.validate_url(
+    #             f"https://{v}",
+    #             allowed_schemes={'https'},
+    #             required_parts={'netloc'}
+    #         ):
+    #             raise StorageValidationError(
+    #                 "Invalid custom domain format",
+    #                 validation_type="custom_domain"
+    #             )
+    #     return v
 
 
 

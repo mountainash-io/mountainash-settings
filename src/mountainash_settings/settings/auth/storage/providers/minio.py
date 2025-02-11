@@ -2,7 +2,6 @@ from typing import Optional, Dict, Any, List, Tuple
 from upath import UPath
 
 from pydantic import Field, SecretStr, field_validator
-from urllib.parse import urlparse
 
 from mountainash_settings import SettingsParameters
 from mountainash_settings.settings.auth.storage.base import StorageAuthBase
@@ -68,46 +67,46 @@ class MinIOStorageAuthSettings(StorageAuthBase):
 
 
     ## Field Validators ##
-    @field_validator("ENDPOINT")
-    def validate_endpoint(cls, v: str) -> str:
-        """Validate MinIO endpoint format"""
-        if not v:
-            raise StorageValidationError(
-                "Endpoint is required",
-                validation_type="endpoint"
-            )
+    # @field_validator("ENDPOINT")
+    # def validate_endpoint(cls, v: str) -> str:
+    #     """Validate MinIO endpoint format"""
+    #     if not v:
+    #         raise StorageValidationError(
+    #             "Endpoint is required",
+    #             validation_type="endpoint"
+    #         )
             
-        try:
-            parsed = urlparse(v)
-            if parsed.scheme and parsed.scheme not in {'http', 'https'}:
-                raise StorageValidationError(
-                    "Endpoint must use HTTP or HTTPS scheme",
-                    validation_type="endpoint"
-                )
+    #     try:
+    #         parsed = urlparse(v)
+    #         if parsed.scheme and parsed.scheme not in {'http', 'https'}:
+    #             raise StorageValidationError(
+    #                 "Endpoint must use HTTP or HTTPS scheme",
+    #                 validation_type="endpoint"
+    #             )
                 
-            # Strip scheme if provided
-            endpoint = parsed.netloc if parsed.netloc else parsed.path
+    #         # Strip scheme if provided
+    #         endpoint = parsed.netloc if parsed.netloc else parsed.path
             
-            # Basic hostname validation
-            if not StorageValidator.validate_url(
-                f"https://{endpoint}",
-                allowed_schemes={'https'},
-                required_parts={'netloc'}
-            ):
-                raise StorageValidationError(
-                    "Invalid endpoint format",
-                    validation_type="endpoint"
-                )
+    #         # Basic hostname validation
+    #         if not StorageValidator.validate_url(
+    #             f"https://{endpoint}",
+    #             allowed_schemes={'https'},
+    #             required_parts={'netloc'}
+    #         ):
+    #             raise StorageValidationError(
+    #                 "Invalid endpoint format",
+    #                 validation_type="endpoint"
+    #             )
                 
-            return endpoint
+    #         return endpoint
             
-        except Exception as e:
-            if isinstance(e, StorageValidationError):
-                raise
-            raise StorageValidationError(
-                f"Invalid endpoint: {str(e)}",
-                validation_type="endpoint"
-            )
+    #     except Exception as e:
+    #         if isinstance(e, StorageValidationError):
+    #             raise
+    #         raise StorageValidationError(
+    #             f"Invalid endpoint: {str(e)}",
+    #             validation_type="endpoint"
+    #         )
 
     @field_validator("BUCKET")
     def validate_bucket(cls, v: str) -> str:
