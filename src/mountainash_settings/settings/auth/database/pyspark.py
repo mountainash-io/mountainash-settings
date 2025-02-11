@@ -3,11 +3,11 @@
 from typing import Optional, List, Any, Dict, Tuple
 from upath import UPath
 
-from pydantic import Field, field_validator
+from pydantic import Field
 
 from ....settings_parameters import SettingsParameters
 from .base import BaseDBAuthSettings
-from .constants import CONST_DB_PROVIDER_TYPE, CONST_DB_AUTH_METHOD
+from .constants import CONST_DB_PROVIDER_TYPE
 
 class PySparkMode():
     BATCH = "batch"

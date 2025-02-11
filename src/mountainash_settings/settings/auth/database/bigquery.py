@@ -4,7 +4,6 @@ from typing import Optional, List, Any, Dict, Tuple
 from upath import UPath
 
 from pydantic import Field, field_validator
-import json
 
 from ....settings_parameters import SettingsParameters
 from .base import BaseDBAuthSettings
@@ -67,7 +66,7 @@ class BigQueryAuthSettings(BaseDBAuthSettings):
         valid: bool = (not precondition) | test
 
         if not valid:
-            raise ValueError(f"PROJECT_ID must be between 6 and 30 characters.")
+            raise ValueError("PROJECT_ID must be between 6 and 30 characters.")
         
         return value
 

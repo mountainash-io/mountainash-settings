@@ -9,7 +9,7 @@ from enum import Enum
 from ....settings_parameters import SettingsParameters
 from .base import BaseDBAuthSettings
 from .constants import CONST_DB_PROVIDER_TYPE, CONST_DB_AUTH_METHOD
-
+from .exceptions import DBAuthValidationError
 
 class MSSQLAuthMethod(str, Enum):
     """MSSQL connection encryption settings"""
@@ -159,7 +159,8 @@ class MSSQLAuthSettings(BaseDBAuthSettings):
     #             )
     #     return v
 
-    def _psot_init(self, reinitialise: bool) -> None:
+    def _post_init(self, reinitialise: bool) -> None:
+        pass
         """Initialize provider-specific settings"""
         # super()._init_provider_specific(reinitialise)
         
@@ -224,8 +225,9 @@ class MSSQLAuthSettings(BaseDBAuthSettings):
 
         template += "/{database}"
         
-        # Add driver and parameters
-        params = ["driver={driver}"]
+
+        return template
+
 
 
     def get_connection_string_params(self) -> Dict:
@@ -235,6 +237,10 @@ class MSSQLAuthSettings(BaseDBAuthSettings):
 
         if self.TOKEN is not None:
             params['token'] = self.TOKEN
+
+        # Add driver and parameters
+        # params = ["driver={driver}"]
+
 
         return params
 

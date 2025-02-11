@@ -1,4 +1,4 @@
-from typing import NamedTuple, Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any
 
 
 class SettingsKwargsHandler:

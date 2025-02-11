@@ -14,7 +14,6 @@ from .mssql import MSSQLAuthSettings
 from .mysql import MySQLAuthSettings
 from .postgresql import PostgreSQLAuthSettings
 from .motherduck import MotherDuckAuthSettings
-from .bigquery import BigQueryAuthSettings
 from .pyspark import PySparkAuthSettings
 from .trino import TrinoAuthSettings
 

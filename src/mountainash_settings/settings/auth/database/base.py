@@ -1,21 +1,12 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, List, Tuple, Self, ClassVar
-from sqlalchemy import false
+from typing import Optional, Dict, Any, List, Tuple, Self
 from upath import UPath
 from pydantic import Field, SecretStr, field_validator, model_validator
-from urllib.parse import quote_plus
-from collections import defaultdict
 
-import inspect
-from functools import lru_cache
 
 from ....settings_parameters import SettingsParameters
 from ...base import MountainAshBaseSettings
-from .constants import CONST_DB_AUTH_METHOD, CONST_DB_PROVIDER_TYPE
-from .exceptions import (
-    DBAuthConfigError,
-    DBAuthValidationError
-)
+from .constants import CONST_DB_AUTH_METHOD
 
 class BaseDBAuthSettings(MountainAshBaseSettings, ABC):
     """Base class for database authentication settings"""
@@ -105,7 +96,7 @@ class BaseDBAuthSettings(MountainAshBaseSettings, ABC):
 
 
         if not valid:
-            raise ValueError(f"USERNAME and PASSWORD required for password authentication")
+            raise ValueError("USERNAME and PASSWORD required for password authentication")
         
         return self
 
@@ -117,7 +108,7 @@ class BaseDBAuthSettings(MountainAshBaseSettings, ABC):
         valid: bool = (not precondition) | test
 
         if not valid:
-            raise ValueError(f"TOKEN required for token authentication")
+            raise ValueError("TOKEN required for token authentication")
         
         return self
 

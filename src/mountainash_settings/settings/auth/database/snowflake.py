@@ -88,7 +88,7 @@ class SnowflakeAuthSettings(BaseDBAuthSettings):
         valid: bool = value is not None
 
         if not valid:
-            raise ValueError(f"Account identifier is required.")
+            raise ValueError("Account identifier is required.")
         
         return value
 
@@ -103,7 +103,7 @@ class SnowflakeAuthSettings(BaseDBAuthSettings):
         valid: bool = (not precondition) | test
 
         if not valid:
-            raise ValueError(f"Account identifier is required.")
+            raise ValueError("Account identifier is required.")
         
         return value
 
@@ -118,7 +118,7 @@ class SnowflakeAuthSettings(BaseDBAuthSettings):
         valid: bool = (not precondition) | test
 
         if not valid:
-            raise ValueError(f"Account identifier is required.")
+            raise ValueError("Account identifier is required.")
         
         return value
 
@@ -148,7 +148,7 @@ class SnowflakeAuthSettings(BaseDBAuthSettings):
         valid: bool = (not precondition) | test
 
         if not valid:
-            raise ValueError(f"Private key or key path required for certificate authentication")
+            raise ValueError("Private key or key path required for certificate authentication")
         
         return self
 
@@ -160,7 +160,7 @@ class SnowflakeAuthSettings(BaseDBAuthSettings):
         valid: bool = (not precondition) | test
 
         if not valid:
-            raise ValueError(f"OAuth token or client credentials required for OAuth authentication")
+            raise ValueError("OAuth token or client credentials required for OAuth authentication")
         
         return self
 

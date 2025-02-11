@@ -9,6 +9,7 @@ import re
 from ....settings_parameters import SettingsParameters
 from .base import BaseDBAuthSettings
 from .constants import CONST_DB_PROVIDER_TYPE, CONST_DB_AUTH_METHOD
+from .exceptions import DBAuthValidationError
 
 
 class RedshiftAuthSettings(BaseDBAuthSettings):

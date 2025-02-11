@@ -3,8 +3,7 @@
 from typing import Optional, List, Any, Dict, Tuple, Self
 from upath import UPath
 
-import os
-from pydantic import Field, model_validator, field_validator, SecretStr
+from pydantic import Field, model_validator, field_validator
 
 from ....settings_parameters import SettingsParameters
 from .base import BaseDBAuthSettings
@@ -46,7 +45,7 @@ class MotherDuckAuthSettings(BaseDBAuthSettings):
         valid: bool = (not precondition) | test
 
         if not valid:
-            raise ValueError(f"DATABASE must be set")
+            raise ValueError("DATABASE must be set")
         
         return value
 
@@ -59,7 +58,7 @@ class MotherDuckAuthSettings(BaseDBAuthSettings):
         valid: bool = (not precondition) | test
 
         if not valid:
-            raise ValueError(f"Username and password required for password authentication")
+            raise ValueError("Username and password required for password authentication")
         
         return self
 

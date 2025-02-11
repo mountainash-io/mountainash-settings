@@ -4,7 +4,6 @@ from typing import Optional, List, Any, Dict, Tuple
 from upath import UPath
 import re
 
-import os
 from pydantic import Field, field_validator
 
 from ....settings_parameters import SettingsParameters
@@ -69,7 +68,7 @@ class DuckDBAuthSettings(BaseDBAuthSettings):
         valid: bool = (not precondition) | test
 
         if not valid:
-            raise ValueError(f"Memory limit must match the format: number + unit (KB, MB, GB).")
+            raise ValueError("Memory limit must match the format: number + unit (KB, MB, GB).")
         
         return value
 

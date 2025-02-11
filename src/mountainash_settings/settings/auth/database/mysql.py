@@ -138,7 +138,7 @@ class MySQLAuthSettings(BaseDBAuthSettings):
         valid: bool = (not precondition) | test
 
         if not valid:
-            raise ValueError(f"SSL_CERT both SSL_KEY required if SSL_ENABLED for certificate and key")
+            raise ValueError("SSL_CERT both SSL_KEY required if SSL_ENABLED for certificate and key")
         
         return self
 
