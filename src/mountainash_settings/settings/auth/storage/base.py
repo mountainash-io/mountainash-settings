@@ -39,6 +39,12 @@ class StorageAuthBase(MountainAshBaseSettings, ABC):
     SECRET_KEY:     Optional[SecretStr] = Field(default=None)
     TOKEN:          Optional[SecretStr] = Field(default=None)
     
+
+    #File Management
+    COMPRESSION_TYPE: Optional[str] = Field(default=None)
+    ENCRYPTION_TYPE: Optional[int] = Field(default=None)
+    
+
     # # Security
     # ENCRYPTION_ENABLED: bool = Field(default=False)
     # ENCRYPTION_TYPE: str = Field(default=CONST_STORAGE_ENCRYPTION_TYPE.AES256)

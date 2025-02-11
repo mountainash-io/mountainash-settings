@@ -34,13 +34,13 @@ Documentation = "https://github.com/mountainash-io/mountainash-settings#readme"
 Issues = "https://github.com/mountainash-io/mountainash-settings/issues"
 Source = "https://github.com/mountainash-io/mountainash-settings" 
   
-#================ 
+#================  
 # Tool: Coverage  
-#================
+#================ 
 [tool.coverage.run] 
 source_pkgs = ["mountainash_settings", "tests"] 
 branch = true
-parallel = true
+parallel = true 
 omit = [
   "src/mountainash_settings/__version__.py",
 ]
@@ -53,11 +53,5 @@ tests = ["tests", "*/mountainash-settings/tests"]
 exclude_lines = [
   "no cov",
   "if __name__ == .__main__:",
-  "if TYPE_CHECKING:",
+  "if TYPE_CHECKING:"
 ]
-
-[tool.hatch.version]
-source = "regex"
-path = "src/mountainash_settings/__version__.py"
-pattern = "(?P<version>[\\d.]+)"
-increment = "build"

@@ -13,6 +13,7 @@ from .minio import MinIOStorageAuthSettings
 from .b2 import BackblazeB2StorageAuthSettings
 
 from .github import GitHubStorageAuthSettings
+from .local import LocalStorageAuthSettings
 
 __all__ = [
     "AzureBlobStorageAuthSettings",
@@ -28,5 +29,6 @@ __all__ = [
     
     "MinIOStorageAuthSettings",
     "BackblazeB2StorageAuthSettings",
-    "GitHubStorageAuthSettings"
+    "GitHubStorageAuthSettings",
+    "LocalStorageAuthSettings"
     ]
