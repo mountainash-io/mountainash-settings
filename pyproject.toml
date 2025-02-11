@@ -1,44 +1,44 @@
 [build-system]
 requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "mountainash_settings"
-dynamic = ["version"]
-description = 'Mountain Ash - Settings'
-readme = "README.md"
-requires-python = ">=3.10"
-license = "MIT"
-keywords = []
-authors = [
-  { name = "Nathaniel Ramm", email = "nathaniel.ramm@discretedatascience.com" },
-]
-classifiers = [
-  "Development Status :: 4 - Beta",
-  "Programming Language :: Python",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: Implementation :: CPython",
-  "Programming Language :: Python :: Implementation :: PyPy",
-]
-dependencies = [
-  "pydantic==2.7.4",
-  "pydantic-settings==2.2.1",
-  "universal_pathlib==0.2.2",
-]
-
-[project.urls]
-Documentation = "https://github.com/mountainash-io/mountainash-settings#readme"
+build-backend = "hatchling.build" 
+   
+[project]   
+name = "mountainash_settings"           
+dynamic = ["version"]        
+description = 'Mountain Ash - Settings'               
+readme = "README.md"                
+requires-python = ">=3.10"                        
+license = "MIT"                    
+keywords = []                
+authors = [             
+  { name = "Nathaniel Ramm", email = "nathaniel.ramm@discretedatascience.com" },        
+]       
+classifiers = [       
+  "Development Status :: 4 - Beta",                
+  "Programming Language :: Python",           
+  "Programming Language :: Python :: 3.10",     
+  "Programming Language :: Python :: 3.11",      
+  "Programming Language :: Python :: 3.12",       
+  "Programming Language :: Python :: Implementation :: CPython",   
+  "Programming Language :: Python :: Implementation :: PyPy",  
+]   
+dependencies = [   
+  "pydantic==2.9.2",     
+  "pydantic-settings==2.6.1",     
+  "universal_pathlib==0.2.2",      
+  "pyaml",     
+]    
+  
+[project.urls]  
+Documentation = "https://github.com/mountainash-io/mountainash-settings#readme"  
 Issues = "https://github.com/mountainash-io/mountainash-settings/issues"
-Source = "https://github.com/mountainash-io/mountainash-settings"
-
-
+Source = "https://github.com/mountainash-io/mountainash-settings" 
+  
+#================ 
+# Tool: Coverage  
 #================
-# Tool: Coverage
-#================
-[tool.coverage.run]
-source_pkgs = ["mountainash_settings", "tests"]
+[tool.coverage.run] 
+source_pkgs = ["mountainash_settings", "tests"] 
 branch = true
 parallel = true
 omit = [
