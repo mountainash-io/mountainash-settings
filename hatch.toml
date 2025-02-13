@@ -193,7 +193,6 @@ check = "mypy --install-types --non-interactive {args:src/mountainash_settings t
 # dependencies = [  
 #   "pytest",
 #   "pytest_check",
-#   "mountainash_auth_settings @ {root:uri}/../mountainash-auth-settings",
 #   "mountainash_acrds_settings @ {root:uri}/../mountainash-acrds-settings",
 #   "mountainash_constants @ {root:uri}/../mountainash-constants",
 #   "mountainash_acrds_constants @ {root:uri}/../mountainash-acrds-constants",
