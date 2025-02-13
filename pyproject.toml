@@ -53,5 +53,6 @@ tests = ["tests", "*/mountainash-settings/tests"]
 exclude_lines = [
   "no cov", 
   "if __name__ == .__main__:",
-  "if TYPE_CHECKING:"
+  "if TYPE_CHECKING:" 
 ]
+ 
