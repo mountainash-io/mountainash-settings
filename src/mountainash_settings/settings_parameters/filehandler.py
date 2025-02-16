@@ -50,6 +50,10 @@ class SettingsFileHandler:
             
         # Convert tuple to list
         config_files = list(config_files)
+
+        #Correctly format files before loading
+        config_files = [UPath(file).expanduser() for file in config_files]
+
         
         # Validate and group files
         file_groups = cls.group_files_by_type(config_files)
@@ -146,10 +150,9 @@ class SettingsFileHandler:
         if config_files_list:
 
             for config_file_temp in config_files_list:
-                
 
                 if not isinstance(config_file_temp, UPath):
-                    config_file_temp = UPath(config_file_temp)
+                    config_file_temp = UPath(config_file_temp).expanduser()
 
                 #Only works for local files
                 if not config_file_temp.exists():

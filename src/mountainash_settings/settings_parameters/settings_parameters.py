@@ -168,7 +168,6 @@ class SettingsParameters():
 
         valid_kwarg_names = self._get_valid_kwarg_names(settings_class=settings_class)
 
-        print(f"valid_kwarg_names in class: {settings_class.__name__} - {valid_kwarg_names}")
         return {k: v for k, v in self.kwargs.items() if k in valid_kwarg_names} if self.kwargs else {}
 
 

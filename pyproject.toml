@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]   
 name = "mountainash_settings"           
 dynamic = ["version"]        
-description = 'Mountain Ash - Settings'               
+description = 'Mountain Ash - Settings'                
 readme = "README.md"                
 requires-python = ">=3.10"                        
 license = "MIT"                    
@@ -53,6 +53,6 @@ tests = ["tests", "*/mountainash-settings/tests"]
 exclude_lines = [
   "no cov", 
   "if __name__ == .__main__:",
-  "if TYPE_CHECKING:" 
+  "if TYPE_CHECKING:"  
 ]
  

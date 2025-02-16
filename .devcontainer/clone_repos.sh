@@ -27,7 +27,6 @@ repos=(
     # "mountainash-datacontracts"
     # "mountainash-settings"
     # "mountainash-syntheticdata"
-    # "mountainash-auth-settings"
     # "mountainash-utils-dataclasses"
     # "mountainash-utils-factoryclasses"
     # "mountainash-utils-files"
