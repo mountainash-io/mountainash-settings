@@ -17,6 +17,7 @@ class CONST_STORAGE_PROVIDER_TYPE(BaseConstant):
     SSH = "ssh"
     B2 = "b2"
     GITHUB = "github"
+    R2 = "r2"
 
 class CONST_STORAGE_AUTH_METHOD(BaseConstant):
     """Authentication methods"""

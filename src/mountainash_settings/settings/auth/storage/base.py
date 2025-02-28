@@ -1,4 +1,4 @@
-#base.py
+#path: mountainash_settings/settings/auth/storage/base.py
 
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, List, Set, Tuple

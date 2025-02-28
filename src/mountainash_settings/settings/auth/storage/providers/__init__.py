@@ -14,6 +14,7 @@ from .b2 import BackblazeB2StorageAuthSettings
 
 from .github import GitHubStorageAuthSettings
 from .local import LocalStorageAuthSettings
+from .r2 import R2StorageAuthSettings
 
 __all__ = [
     "AzureBlobStorageAuthSettings",
@@ -31,4 +32,5 @@ __all__ = [
     "BackblazeB2StorageAuthSettings",
     "GitHubStorageAuthSettings",
     "LocalStorageAuthSettings"
+    "R2StorageAuthSettings"
     ]

@@ -1,4 +1,5 @@
 #path: mountainash_settings/auth/storage/providers/cloud/s3.py
+
 from typing import Optional, Dict, Any, List, Tuple
 from upath import UPath
 from pydantic import Field, SecretStr, field_validator
@@ -45,7 +46,7 @@ class S3StorageAuthSettings(StorageAuthBase):
     DUALSTACK_ENDPOINT: bool =      Field(default=False)
     
     # Security Settings
-    # USE_SSL: bool = Field(default=False)
+    USE_SSL: bool = Field(default=False)
     # VERIFY_SSL: bool = Field(default=False)
     # CA_BUNDLE: Optional[str] = Field(default=None)
     
