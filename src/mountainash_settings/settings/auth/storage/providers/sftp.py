@@ -286,15 +286,15 @@ class SFTPStorageAuthSettings(StorageAuthBase):
         
         # Add authentication credentials based on method
         if self.AUTH_METHOD == CONST_STORAGE_AUTH_METHOD.PASSWORD:
-            args["password"] = self.PASSWORD.get_secret_value()
+            args["password"] = self.PASSWORD
         elif self.AUTH_METHOD == CONST_STORAGE_AUTH_METHOD.KEY:
             if self.PRIVATE_KEY_STRING:
-                args["pkey"] = self.PRIVATE_KEY_STRING.get_secret_value()
+                args["pkey"] = self.PRIVATE_KEY_STRING
             else:
                 args["key_filename"] = self.PRIVATE_KEY_PATH
                 
             if self.PRIVATE_KEY_PASSPHRASE:
-                args["passphrase"] = self.PRIVATE_KEY_PASSPHRASE.get_secret_value()
+                args["passphrase"] = self.PRIVATE_KEY_PASSPHRASE
                 
         # Add security settings
         if self.KNOWN_HOSTS_FILE:

@@ -61,7 +61,7 @@
 #     """Test secret caching behavior"""
 #     # Initial fetch should cache the value
 #     secret = mock_secrets.get_secret("test-secret")
-#     assert secret.get_secret_value() == "test-secret-value"
+#     assert secret == "test-secret-value"
     
 #     # Should return cached value
 #     cached_secret = mock_secrets._cache_get("test-secret")
@@ -110,6 +110,6 @@
 # def test_validation_custom_function(mock_secrets):
 #     """Test custom validation function"""
 #     def validate_length(secret: SecretStr) -> bool:
-#         return len(secret.get_secret_value()) > 5
+#         return len(secret) > 5
 
 #     assert mock_secrets.validate_secret("test-secret", validate_length)

@@ -233,8 +233,8 @@ class S3StorageAuthSettings(StorageAuthBase):
         if self.AUTH_METHOD == CONST_STORAGE_AUTH_METHOD.KEY:
             args.update({
                 "aws_access_key_id": self.ACCESS_KEY_ID,
-                "aws_secret_access_key": self.SECRET_ACCESS_KEY.get_secret_value() if self.SECRET_ACCESS_KEY else None,
-                "aws_session_token": self.SESSION_TOKEN.get_secret_value() if self.SESSION_TOKEN else None
+                "aws_secret_access_key": self.SECRET_ACCESS_KEY if self.SECRET_ACCESS_KEY else None,
+                "aws_session_token": self.SESSION_TOKEN if self.SESSION_TOKEN else None
             })
             
         # # Add transfer configuration

@@ -141,7 +141,7 @@ class AzureKeyVaultSettings(SecretsAuthBase):
     #             return ClientSecretCredential(
     #                 tenant_id=self.TENANT_ID,
     #                 client_id=self.CLIENT_ID,
-    #                 client_secret=self.CLIENT_SECRET.get_secret_value()
+    #                 client_secret=self.CLIENT_SECRET
     #             )
             
     #         elif self.AUTH_METHOD == CONST_SECRET_AUTH_METHOD.CERTIFICATE:
@@ -154,7 +154,7 @@ class AzureKeyVaultSettings(SecretsAuthBase):
     #                 tenant_id=self.TENANT_ID,
     #                 client_id=self.CLIENT_ID,
     #                 certificate_path=self.CERTIFICATE_PATH,
-    #                 password=self.CERTIFICATE_PASSWORD.get_secret_value() if self.CERTIFICATE_PASSWORD else None
+    #                 password=self.CERTIFICATE_PASSWORD if self.CERTIFICATE_PASSWORD else None
     #             )
             
     #         # Default to DefaultAzureCredential as fallback

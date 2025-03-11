@@ -260,7 +260,7 @@ class FTPStorageAuthSettings(StorageAuthBase):
         url = f"{scheme}://{self.USERNAME}"
         
         if self.PASSWORD:
-            url += f":{self.PASSWORD.get_secret_value()}"
+            url += f":{self.PASSWORD}"
             
         url += f"@{self.HOST}:{self.PORT}"
         
@@ -278,7 +278,7 @@ class FTPStorageAuthSettings(StorageAuthBase):
             "host": self.HOST,
             "port": self.PORT,
             "username": self.USERNAME,
-            "password": self.PASSWORD.get_secret_value() if self.PASSWORD else None,
+            "password": self.PASSWORD if self.PASSWORD else None,
             "account": self.ACCOUNT,
             # "timeout": self.CONNECT_TIMEOUT,
             # "data_timeout": self.DATA_TIMEOUT,
@@ -295,7 +295,7 @@ class FTPStorageAuthSettings(StorageAuthBase):
         #         "verify_ssl": self.VERIFY_SSL,
         #         "ca_certs": self.CA_CERTS,
         #         "certfile": self.CERT_FILE,
-        #         "keyfile": self.KEY_FILE.get_secret_value() if self.KEY_FILE else None,
+        #         "keyfile": self.KEY_FILE if self.KEY_FILE else None,
         #         "check_hostname": self.CHECK_HOSTNAME
         #     })
             

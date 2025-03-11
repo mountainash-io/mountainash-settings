@@ -217,7 +217,7 @@ class SnowflakeAuthSettings(BaseDBAuthSettings):
  
         if self.AUTH_METHOD == CONST_DB_AUTH_METHOD.PASSWORD:
             if self.PASSWORD:
-                args["password"] =  self.PASSWORD.get_secret_value()
+                args["password"] =  self.PASSWORD
 
 
             
@@ -245,22 +245,22 @@ class SnowflakeAuthSettings(BaseDBAuthSettings):
             if self.AUTH_METHOD:
                 args['authenticator'] = self.AUTH_METHOD
             if self.OAUTH_TOKEN:
-                args['token'] =     self.OAUTH_TOKEN.get_secret_value()
+                args['token'] =     self.OAUTH_TOKEN
 
             if self.OAUTH_CLIENT_ID:
                 args["oauth_client_id"] = self.OAUTH_CLIENT_ID
             if self.OAUTH_CLIENT_SECRET:
-                args["oauth_client_secret"] = self.OAUTH_CLIENT_SECRET.get_secret_value() 
+                args["oauth_client_secret"] = self.OAUTH_CLIENT_SECRET 
             if self.OAUTH_REFRESH_TOKEN:
-                args["oauth_refresh_token"] = self.OAUTH_REFRESH_TOKEN.get_secret_value() 
+                args["oauth_refresh_token"] = self.OAUTH_REFRESH_TOKEN 
                   
         if self.AUTH_METHOD == CONST_DB_AUTH_METHOD.CERTIFICATE:
             if self.PRIVATE_KEY:
-                args["private_key"] =            self.PRIVATE_KEY.get_secret_value()
+                args["private_key"] =            self.PRIVATE_KEY
             if self.PRIVATE_KEY_PATH:
                 args["private_key_path"] =       self.PRIVATE_KEY_PATH
             if self.PRIVATE_KEY_PASSPHRASE:
-                args["private_key_passphrase"] = self.PRIVATE_KEY_PASSPHRASE.get_secret_value()
+                args["private_key_passphrase"] = self.PRIVATE_KEY_PASSPHRASE
 
         return {k: v for k, v in args.items() if v is not None}
 

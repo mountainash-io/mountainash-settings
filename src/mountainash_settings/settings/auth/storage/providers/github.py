@@ -268,7 +268,7 @@ class GitHubStorageAuthSettings(StorageAuthBase):
         # Add authentication
         args.update({
             "token_type": self.TOKEN_TYPE,
-            "token": self.TOKEN.get_secret_value()
+            "token": self.TOKEN
         })
         
         # Add GitHub App settings if applicable
@@ -276,7 +276,7 @@ class GitHubStorageAuthSettings(StorageAuthBase):
             args.update({
                 "app_id": self.APP_ID,
                 "installation_id": self.INSTALLATION_ID,
-                "private_key": self.PRIVATE_KEY.get_secret_value()
+                "private_key": self.PRIVATE_KEY
             })
             
         # Add storage-type specific settings

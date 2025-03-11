@@ -62,7 +62,7 @@ class BaseStorageAuthTests:
     #     assert storage_auth.PROVIDER_TYPE == self.provider_type
     #     assert storage_auth.AUTH_METHOD == CONST_STORAGE_AUTH_METHOD.KEY.value
     #     assert storage_auth.ACCESS_KEY_ID == "test_key"
-    #     assert storage_auth.SECRET_KEY.get_secret_value() == "test_secret"
+    #     assert storage_auth.SECRET_KEY == "test_secret"
 
     # def test_provider_type_validation(self):
     #     """Test validation of provider type"""

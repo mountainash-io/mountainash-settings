@@ -33,6 +33,14 @@ dependencies = [
 ]
 
 #================
+# Env: tower
+#================
+[envs.tower]
+installer = "uv"
+
+dependencies = []
+
+#================
 # Env: test_github
 #================
 [[envs.test_github.matrix]]

@@ -114,9 +114,9 @@ class AWSSecretsSettings(SecretsAuthBase):
     #             if self.ACCESS_KEY_ID:
     #                 credentials['aws_access_key_id'] = self.ACCESS_KEY_ID
     #             if self.SECRET_ACCESS_KEY:
-    #                 credentials['aws_secret_access_key'] = self.SECRET_ACCESS_KEY.get_secret_value()
+    #                 credentials['aws_secret_access_key'] = self.SECRET_ACCESS_KEY
     #             if self.SESSION_TOKEN:
-    #                 credentials['aws_session_token'] = self.SESSION_TOKEN.get_secret_value()
+    #                 credentials['aws_session_token'] = self.SESSION_TOKEN
 
     #         # Initialize the Secrets Manager client
     #         self._client = boto3.client(
@@ -141,9 +141,9 @@ class AWSSecretsSettings(SecretsAuthBase):
     #             if self.ACCESS_KEY_ID:
     #                 sts_credentials['aws_access_key_id'] = self.ACCESS_KEY_ID
     #             if self.SECRET_ACCESS_KEY:
-    #                 sts_credentials['aws_secret_access_key'] = self.SECRET_ACCESS_KEY.get_secret_value()
+    #                 sts_credentials['aws_secret_access_key'] = self.SECRET_ACCESS_KEY
     #             if self.SESSION_TOKEN:
-    #                 sts_credentials['aws_session_token'] = self.SESSION_TOKEN.get_secret_value()
+    #                 sts_credentials['aws_session_token'] = self.SESSION_TOKEN
 
     #             self._sts_client = boto3.client(
     #                 'sts',

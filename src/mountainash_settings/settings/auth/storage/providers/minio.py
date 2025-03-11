@@ -213,7 +213,7 @@ class MinIOStorageAuthSettings(StorageAuthBase):
             "port": self.PORT,
             "bucket": self.BUCKET,
             "access_key": self.ACCESS_KEY,
-            "secret_key": self.SECRET_KEY.get_secret_value(),
+            "secret_key": self.SECRET_KEY,
             "region": self.REGION,
             "secure": self.USE_SSL,
             "cert_verify": self.CERT_VERIFY,

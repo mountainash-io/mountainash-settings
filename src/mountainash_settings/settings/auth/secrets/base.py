@@ -90,7 +90,7 @@ class SecretsAuthBase(MountainAshBaseSettings):
     #     """Initialize encryption based on configuration"""
     #     if self.ENCODING_TYPE == CONST_SECRET_ENCODING.FERNET:
     #         if self.ENCRYPTION_KEY:
-    #             key = self.ENCRYPTION_KEY.get_secret_value().encode()
+    #             key = self.ENCRYPTION_KEY.encode()
     #         elif self.ENCRYPTION_KEY_FILE:
     #             try:
     #                 with open(self.ENCRYPTION_KEY_FILE, 'rb') as f:

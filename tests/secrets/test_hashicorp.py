@@ -27,7 +27,7 @@
 # def test_vault_initialization(vault_secrets):
 #     """Test HashiCorp Vault initialization"""
 #     assert vault_secrets.VAULT_HOST == "localhost"
-#     assert vault_secrets.VAULT_TOKEN.get_secret_value() == "test-token"
+#     assert vault_secrets.VAULT_TOKEN == "test-token"
 
 # def test_vault_host_validation():
 #     """Test vault host validation"""
@@ -48,7 +48,7 @@
 #     }
     
 #     secret = vault_secrets.get_secret("test-secret")
-#     assert secret.get_secret_value() == "test-value"
+#     assert secret == "test-value"
     
 #     # Test secret not found
 #     mock_client.secrets.kv.v2.read_secret_version.side_effect = InvalidPath("not found")

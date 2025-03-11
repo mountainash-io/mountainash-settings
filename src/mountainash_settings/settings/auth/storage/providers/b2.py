@@ -265,7 +265,7 @@ class BackblazeB2StorageAuthSettings(StorageAuthBase):
         # Add B2-specific arguments
         args.update({
             "application_key_id": self.APPLICATION_KEY_ID,
-            "application_key": self.APPLICATION_KEY.get_secret_value(),
+            "application_key": self.APPLICATION_KEY,
             "bucket_name": self.BUCKET_NAME,
             "bucket_id": self.BUCKET_ID,
             "bucket_type": self.BUCKET_TYPE,
@@ -280,7 +280,7 @@ class BackblazeB2StorageAuthSettings(StorageAuthBase):
         })
         
         if self.SERVER_SIDE_ENCRYPTION == B2ServerSideEncryption.SSE_C:
-            args["customer_key"] = self.CUSTOMER_KEY.get_secret_value()
+            args["customer_key"] = self.CUSTOMER_KEY
             
         # Add lifecycle settings
         if self.FILE_RETENTION_DAYS:

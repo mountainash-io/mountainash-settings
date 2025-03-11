@@ -87,7 +87,7 @@ class MotherDuckAuthSettings(BaseDBAuthSettings):
         params['database'] = self.DATABASE
 
         if self.TOKEN is not None:
-            params['token'] = self.TOKEN.get_secret_value()
+            params['token'] = self.TOKEN
 
         return params
 

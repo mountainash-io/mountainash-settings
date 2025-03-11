@@ -158,10 +158,10 @@ class RedshiftAuthSettings(BaseDBAuthSettings):
             if self.ACCESS_KEY_ID and self.SECRET_ACCESS_KEY:
                 args.update({
                     "aws_access_key_id": self.ACCESS_KEY_ID,
-                    "aws_secret_access_key": self.SECRET_ACCESS_KEY.get_secret_value(),
+                    "aws_secret_access_key": self.SECRET_ACCESS_KEY,
                 })
                 if self.SESSION_TOKEN:
-                    args["aws_session_token"] = self.SESSION_TOKEN.get_secret_value()
+                    args["aws_session_token"] = self.SESSION_TOKEN
                     
         # Add Redshift-specific arguments
         # args.update({
@@ -188,10 +188,10 @@ class RedshiftAuthSettings(BaseDBAuthSettings):
     #         if self.ACCESS_KEY_ID and self.SECRET_ACCESS_KEY:
     #             session_kwargs.update({
     #                 "aws_access_key_id": self.ACCESS_KEY_ID,
-    #                 "aws_secret_access_key": self.SECRET_ACCESS_KEY.get_secret_value(),
+    #                 "aws_secret_access_key": self.SECRET_ACCESS_KEY,
     #             })
     #             if self.SESSION_TOKEN:
-    #                 session_kwargs["aws_session_token"] = self.SESSION_TOKEN.get_secret_value()
+    #                 session_kwargs["aws_session_token"] = self.SESSION_TOKEN
                     
     #         # if self.PROFILE_NAME:
     #         #     session_kwargs["profile_name"] = self.PROFILE_NAME
@@ -228,10 +228,10 @@ class RedshiftAuthSettings(BaseDBAuthSettings):
     #         if self.ACCESS_KEY_ID and self.SECRET_ACCESS_KEY:
     #             session_kwargs.update({
     #                 "aws_access_key_id": self.ACCESS_KEY_ID,
-    #                 "aws_secret_access_key": self.SECRET_ACCESS_KEY.get_secret_value(),
+    #                 "aws_secret_access_key": self.SECRET_ACCESS_KEY,
     #             })
     #             if self.SESSION_TOKEN:
-    #                 session_kwargs["aws_session_token"] = self.SESSION_TOKEN.get_secret_value()
+    #                 session_kwargs["aws_session_token"] = self.SESSION_TOKEN
                     
     #         if self.PROFILE_NAME:
     #             session_kwargs["profile_name"] = self.PROFILE_NAME

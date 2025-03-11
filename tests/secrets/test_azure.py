@@ -53,7 +53,7 @@
 #     mock_client.get_secret.return_value = mock_secret
     
 #     secret = azure_secrets.get_secret("test-secret")
-#     assert secret.get_secret_value() == "test-value"
+#     assert secret == "test-value"
     
 #     # Test secret not found
 #     mock_client.get_secret.side_effect = HttpResponseError(status_code=404)

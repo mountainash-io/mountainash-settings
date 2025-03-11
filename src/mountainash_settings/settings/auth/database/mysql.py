@@ -174,7 +174,7 @@ class MySQLAuthSettings(BaseDBAuthSettings):
             if self.USERNAME is not None:
                 params['user'] =     self.USERNAME
             if self.PASSWORD is not None:
-                params['password'] = self.PASSWORD.get_secret_value()
+                params['password'] = self.PASSWORD
             if self.HOST is not None:
                 params['host'] =     self.HOST
             if self.PORT is not None:

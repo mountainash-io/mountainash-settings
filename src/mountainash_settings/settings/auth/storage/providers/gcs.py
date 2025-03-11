@@ -313,13 +313,13 @@ class GCSStorageAuthSettings(StorageAuthBase):
                 args["credentials_path"] = self.SERVICE_ACCOUNT_FILE
         elif self.AUTH_METHOD == CONST_STORAGE_AUTH_METHOD.TOKEN:
             args["credentials"] = {
-                "token": self.OAUTH_TOKEN.get_secret_value()
+                "token": self.OAUTH_TOKEN
             }
             
         # # Add encryption settings if enabled
         # if self.USE_ENCRYPTION:
         #     if self.ENCRYPTION_KEY:
-        #         args["encryption_key"] = self.ENCRYPTION_KEY.get_secret_value()
+        #         args["encryption_key"] = self.ENCRYPTION_KEY
         #     if self.KMS_KEY_NAME:
         #         args["kms_key_name"] = self.KMS_KEY_NAME
                 

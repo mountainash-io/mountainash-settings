@@ -110,7 +110,7 @@ class TrinoAuthSettings(BaseDBAuthSettings):
         if self.HTTP_SCHEME:
             kwargs["http_scheme"] =  self.HTTP_SCHEME
         if self.AUTH_METHOD == "password" and self.PASSWORD:
-            kwargs["password"] = self.PASSWORD.get_secret_value()
+            kwargs["password"] = self.PASSWORD
 
         return kwargs
 

@@ -199,13 +199,13 @@
 # def mock_validation_functions():
 #     """Provide common validation functions for testing"""
 #     def validate_length(secret: SecretStr, min_length: int = 8) -> bool:
-#         return len(secret.get_secret_value()) >= min_length
+#         return len(secret) >= min_length
     
 #     def validate_format(secret: SecretStr, prefix: str = '') -> bool:
-#         return secret.get_secret_value().startswith(prefix)
+#         return secret.startswith(prefix)
     
 #     def validate_content(secret: SecretStr, required_chars: str = '') -> bool:
-#         return all(char in secret.get_secret_value() for char in required_chars)
+#         return all(char in secret for char in required_chars)
     
 #     return {
 #         'length': validate_length,

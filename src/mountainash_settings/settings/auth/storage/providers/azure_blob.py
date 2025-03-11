@@ -228,22 +228,22 @@ class AzureBlobStorageAuthSettings(StorageAuthBase):
         # Add authentication credentials based on method
         if self.AUTH_METHOD == CONST_STORAGE_AUTH_METHOD.KEY:
             if self.CONNECTION_STRING:
-                args["connection_string"] = self.CONNECTION_STRING.get_secret_value()
+                args["connection_string"] = self.CONNECTION_STRING
             else:
-                args["credential"] = self.ACCOUNT_KEY.get_secret_value()
+                args["credential"] = self.ACCOUNT_KEY
         elif self.AUTH_METHOD == CONST_STORAGE_AUTH_METHOD.TOKEN:
-            args["sas_token"] = self.SAS_TOKEN.get_secret_value()
+            args["sas_token"] = self.SAS_TOKEN
         elif self.AUTH_METHOD == CONST_STORAGE_AUTH_METHOD.MANAGED_IDENTITY:
             args.update({
                 "tenant_id": self.TENANT_ID,
                 "client_id": self.CLIENT_ID,
-                "client_secret": self.CLIENT_SECRET.get_secret_value()
+                "client_secret": self.CLIENT_SECRET
             })
             
         # # Add encryption settings if required
         # if self.REQUIRE_ENCRYPTION:
         #     if self.KEY_ENCRYPTION_KEY:
-        #         args["key_encryption_key"] = self.KEY_ENCRYPTION_KEY.get_secret_value()
+        #         args["key_encryption_key"] = self.KEY_ENCRYPTION_KEY
         #     if self.KEY_RESOLVER_FUNCTION:
         #         args["key_resolver_function"] = self.KEY_RESOLVER_FUNCTION
                 

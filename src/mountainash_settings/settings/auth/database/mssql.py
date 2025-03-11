@@ -336,13 +336,13 @@ class MSSQLAuthSettings(BaseDBAuthSettings):
                 args.update({
                     "authentication": "ActiveDirectoryServicePrincipal",
                     "user_id": self.AZURE_CLIENT_ID,
-                    "password": self.AZURE_CLIENT_SECRET.get_secret_value() if self.AZURE_CLIENT_SECRET else None,
+                    "password": self.AZURE_CLIENT_SECRET if self.AZURE_CLIENT_SECRET else None,
                     "tenant_id": self.AZURE_TENANT_ID
                 })
         else:
             args.update({
                 "username": self.USERNAME,
-                "password": self.PASSWORD.get_secret_value() if self.PASSWORD else None
+                "password": self.PASSWORD if self.PASSWORD else None
             })
             
         # Add instance/port
@@ -363,7 +363,7 @@ class MSSQLAuthSettings(BaseDBAuthSettings):
         #         "key_store_authentication": self.KEY_STORE_AUTHENTICATION,
         #         "key_store_principal_id": self.KEY_STORE_PRINCIPAL_ID,
         #         "key_store_secret": (
-        #             self.KEY_STORE_SECRET.get_secret_value() 
+        #             self.KEY_STORE_SECRET 
         #             if self.KEY_STORE_SECRET else None
         #         )
         #     })

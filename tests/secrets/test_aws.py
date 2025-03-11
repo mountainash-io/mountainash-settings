@@ -32,7 +32,7 @@
 #     """Test AWS secrets initialization"""
 #     assert aws_secrets.REGION == "us-west-2"
 #     assert aws_secrets.ACCESS_KEY_ID == "test-key"
-#     assert aws_secrets.SECRET_ACCESS_KEY.get_secret_value() == "test-secret"
+#     assert aws_secrets.SECRET_ACCESS_KEY == "test-secret"
 
 # def test_aws_region_validation():
 #     """Test AWS region validation"""
@@ -54,7 +54,7 @@
 #     }
     
 #     secret = aws_secrets.get_secret("test-secret")
-#     assert secret.get_secret_value() == "test-value"
+#     assert secret == "test-value"
     
 #     # Test secret not found
 #     mock_client.get_secret_value.side_effect = ClientError(

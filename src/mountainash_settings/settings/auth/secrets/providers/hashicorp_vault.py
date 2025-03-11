@@ -122,7 +122,7 @@ class HashiCorpVaultSettings(SecretsAuthBase):
     #         # Initialize the Vault client
     #         self._client = hvac.Client(
     #             url=url,
-    #             token=self.VAULT_TOKEN.get_secret_value() if self.VAULT_TOKEN else None,
+    #             token=self.VAULT_TOKEN if self.VAULT_TOKEN else None,
     #             cert=cert,
     #             verify=verify
     #         )
