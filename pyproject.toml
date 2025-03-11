@@ -36,7 +36,7 @@ Source = "https://github.com/mountainash-io/mountainash-settings"
   
 #================  
 # Tool: Coverage  
-#================ 
+#================  
 [tool.coverage.run] 
 source_pkgs = ["mountainash_settings", "tests"] 
 branch = true

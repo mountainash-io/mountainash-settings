@@ -143,7 +143,7 @@ class R2StorageAuthSettings(StorageAuthBase):
             "use_ssl": self.USE_SSL,
             "verify": self.VERIFY_SSL,
             "aws_access_key_id": self.ACCESS_KEY_ID,
-            "aws_secret_access_key": self.SECRET_ACCESS_KEY.get_secret_value() if self.SECRET_ACCESS_KEY else None,
+            "aws_secret_access_key": self.SECRET_ACCESS_KEY if self.SECRET_ACCESS_KEY else None,
             "region_name": "auto"  # R2 doesn't use regions in the same way as S3
         })
         

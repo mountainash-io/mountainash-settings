@@ -267,3 +267,18 @@ class MountainAshBaseSettings(BaseSettings):
             
         return params        
 
+    def __getattribute__(self, name):
+        """
+        Custom attribute access that handles SecretStr types by automatically extracting their values.
+        
+        This allows transparent access to secret values through normal property access.
+        """
+        # Get the attribute normally first
+        value = super().__getattribute__(name)
+        
+        # If it's a SecretStr, return its value instead
+        if hasattr(value, 'get_secret_value') and callable(getattr(value, 'get_secret_value')):
+            return value.get_secret_value()
+        
+        # Otherwise return the original value
+        return value

@@ -168,10 +168,10 @@ class StorageAuthBase(MountainAshBaseSettings, ABC):
             "port": self.PORT,
             "timeout": self.TIMEOUT,
             "username": self.USERNAME,
-            "password": self.PASSWORD.get_secret_value() if self.PASSWORD else None,
+            "password": self.PASSWORD if self.PASSWORD else None,
             "access_key": self.ACCESS_KEY_ID,
-            "secret_key": self.SECRET_KEY.get_secret_value() if self.SECRET_KEY else None,
-            "token": self.TOKEN.get_secret_value() if self.TOKEN else None
+            "secret_key": self.SECRET_KEY if self.SECRET_KEY else None,
+            "token": self.TOKEN if self.TOKEN else None
         }
         
         # # Add SSL configuration if enabled
@@ -187,7 +187,7 @@ class StorageAuthBase(MountainAshBaseSettings, ABC):
         #     args["encryption"] = {
         #         "type": self.ENCRYPTION_TYPE,
         #         "key": (
-        #             self.ENCRYPTION_KEY.get_secret_value() if self.ENCRYPTION_KEY 
+        #             self.ENCRYPTION_KEY if self.ENCRYPTION_KEY 
         #             else self._load_encryption_key()
         #         )
         #     }
