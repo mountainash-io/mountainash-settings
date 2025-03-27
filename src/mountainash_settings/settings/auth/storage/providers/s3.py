@@ -30,6 +30,7 @@ class S3StorageAuthSettings(StorageAuthBase):
     REGION: str =                   Field(...)  # Required
     BUCKET: str =                   Field(...)  # Required
     ENDPOINT_URL: Optional[str] =   Field(default=None)
+    ACCOUNT_ID: str = Field(...)  
     
     # Authentication Settings
     AUTH_METHOD: Optional[str] =            Field(default=CONST_STORAGE_AUTH_METHOD.KEY.value)

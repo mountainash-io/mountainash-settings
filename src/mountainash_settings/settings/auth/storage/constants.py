@@ -6,6 +6,7 @@ class CONST_STORAGE_PROVIDER_TYPE(BaseConstant):
     """Storage provider types"""
     LOCAL = "local"
     S3 = "s3"
+    S3EXPRESS = "s3express" 
     AZURE_BLOB = "azure_blob"
     AZURE_FILES = "azure_files"
     GCS = "gcs"

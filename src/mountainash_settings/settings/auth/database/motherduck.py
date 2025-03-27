@@ -73,7 +73,9 @@ class MotherDuckAuthSettings(BaseDBAuthSettings):
 
         template = f"{scheme}"  
 
-        template +=  "{database}"
+        # template +=  "{database}"
+        if self.DATABASE is not None:
+            template += "{database}"
 
         if self.TOKEN is not None:
             template += "?motherduck_token={token}"
