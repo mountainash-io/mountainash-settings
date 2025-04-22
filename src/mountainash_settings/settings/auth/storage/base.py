@@ -31,6 +31,7 @@ class StorageAuthBase(MountainAshBaseSettings, ABC):
     # Path Settings
     ROOT_PATH:      Optional[str] = Field(default=None)
     CREATE_PATH:    bool = Field(default=False)
+
     
     # Authentication
     USERNAME:       Optional[str] = Field(default=None)
@@ -43,7 +44,7 @@ class StorageAuthBase(MountainAshBaseSettings, ABC):
     #File Management
     COMPRESSION_TYPE: Optional[str] = Field(default=None)
     ENCRYPTION_TYPE: Optional[int] = Field(default=None)
-    
+   
 
     # # Security
     # ENCRYPTION_ENABLED: bool = Field(default=False)
@@ -65,11 +66,7 @@ class StorageAuthBase(MountainAshBaseSettings, ABC):
     # USE_SSL: bool = Field(default=False)
     # VERIFY_SSL: bool = Field(default=False)
     # CA_CERT: Optional[str] = Field(default=None)
-    
-    # State tracking
-    # _connection_tested: bool = False
-    # _connection_valid: bool = False
-    # _permissions_validated: bool = False
+   
 
 
     def __init__(self, 

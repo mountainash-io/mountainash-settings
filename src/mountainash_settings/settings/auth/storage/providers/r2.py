@@ -37,6 +37,7 @@ class R2StorageAuthSettings(StorageAuthBase):
     AUTH_METHOD: str = Field(default=CONST_STORAGE_AUTH_METHOD.KEY.value)
     ACCESS_KEY_ID: str = Field(...)  # Required - R2 Access Key ID
     SECRET_ACCESS_KEY: SecretStr = Field(...)  # Required - R2 Secret Access Key
+    TOKEN: Optional[SecretStr] = Field(default=None) 
     
     # Connection Settings
     USE_SSL: bool = Field(default=False)

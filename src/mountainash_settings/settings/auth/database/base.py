@@ -53,19 +53,19 @@ class BaseDBAuthSettings(MountainAshBaseSettings, ABC):
 
     ########################
     #Single Field Validators
-    @field_validator("AUTH_METHOD")
-    @classmethod    
-    def validate_auth_method(cls, value: Optional[str]) -> Optional[str]:
-        """Validate validate_auth_method"""
+    # @field_validator("AUTH_METHOD")
+    # @classmethod    
+    # def validate_auth_method(cls, value: Optional[str]) -> Optional[str]:
+    #     """Validate validate_auth_method"""
 
-        precondition: bool = value is not None
-        test: bool = value in CONST_DB_AUTH_METHOD.get_values_set()
-        valid: bool = (not precondition) | test
+    #     precondition: bool = value is not None
+    #     test: bool = value in CONST_DB_AUTH_METHOD.get_values_set()
+    #     valid: bool = (not precondition) | test
 
-        if not valid:
-            raise ValueError(f"Invalid authentication method: {value}")
+    #     if not valid:
+    #         raise ValueError(f"Invalid authentication method: {value}")
         
-        return value
+    #     return value
 
 
     @field_validator("PORT")

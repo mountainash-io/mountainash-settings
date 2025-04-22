@@ -16,7 +16,7 @@ from .postgresql import PostgreSQLAuthSettings
 from .motherduck import MotherDuckAuthSettings
 from .pyspark import PySparkAuthSettings
 from .trino import TrinoAuthSettings
-
+from .pyiceberg_rest import PyIcebergRestAuthSettings
 
 
 __all__ = [
@@ -45,7 +45,8 @@ __all__ = [
     "MotherDuckAuthSettings",
     "BigQueryAuthSettings",
     "PySparkAuthSettings",
-    "TrinoAuthSettings"
+    "TrinoAuthSettings",
+    "PyIcebergRestAuthSettings"
 
     ]
 

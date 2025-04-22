@@ -14,6 +14,7 @@ class CONST_DB_PROVIDER_TYPE(BaseConstant):
     DUCKDB = "duckdb"
     MOTHERDUCK = "motherduck"
     TRINO = "trino"
+    PYICEBERG_REST = "pyiceberg_rest"
 
 class CONST_DB_AUTH_METHOD(BaseConstant):
     """Authentication methods"""
