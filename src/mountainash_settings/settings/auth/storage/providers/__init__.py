@@ -31,6 +31,6 @@ __all__ = [
     "MinIOStorageAuthSettings",
     "BackblazeB2StorageAuthSettings",
     "GitHubStorageAuthSettings",
-    "LocalStorageAuthSettings"
+    "LocalStorageAuthSettings",
     "R2StorageAuthSettings"
     ]

@@ -8,7 +8,6 @@ import re
 from mountainash_settings import SettingsParameters
 from mountainash_settings.settings.auth.storage.base import StorageAuthBase
 from mountainash_settings.settings.auth.storage.constants import (
-    CONST_STORAGE_PROVIDER_TYPE,
     CONST_STORAGE_AUTH_METHOD
 )
 from mountainash_settings.settings.auth.storage.exceptions import (

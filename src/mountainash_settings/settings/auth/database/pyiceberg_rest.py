@@ -2,18 +2,13 @@
 
 from typing import Optional, Dict, Any, List, Tuple
 from upath import UPath
-from pydantic import Field, SecretStr, field_validator
-import re
+from pydantic import Field
 
 from mountainash_settings import SettingsParameters
 from mountainash_settings.settings.auth.database import BaseDBAuthSettings
 from mountainash_settings.settings.auth.database.constants import (
     # CONST_STORAGE_PROVIDER_TYPE,
     CONST_DB_AUTH_METHOD
-)
-from mountainash_settings.settings.auth.storage.exceptions import (
-    # StorageValidationError,
-    StorageConfigError 
 )
 
 class PyIcebergRestAuthSettings(BaseDBAuthSettings):
