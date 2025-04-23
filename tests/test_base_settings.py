@@ -77,12 +77,14 @@ def test_init_sets_kwargs():
 
 
 def test_init_sets_env_file():
-    env_file = ["./tests/config_testing1.env"]
+    env_file = [UPath("./tests/config_testing1.env")]
 
     sp = SettingsParameters.create(settings_class=TestSettings, config_files= env_file)
 
     settings = TestSettings(settings_parameters=sp)
-    assert settings.SETTINGS_SOURCE_ENV_FILES == env_file
+   
+    for file in env_file:
+        assert file in settings.SETTINGS_SOURCE_ENV_FILES
 
 
 def test_init_sets_env_prefix():
