@@ -1,0 +1,32 @@
+### config/auth/database/cloud/bigquery.yaml ###
+PROVIDER_TYPE: "bigquery"
+PROJECT_ID: "my-project-id"
+DATASET_ID: "my_dataset"
+LOCATION: "US"
+
+# Authentication Settings
+SERVICE_ACCOUNT_INFO:
+  type: service_account
+  project_id: my-project-id
+  private_key_id: key-id
+  private_key: "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+  client_email: service@project.iam.gserviceaccount.com
+  client_id: "123456789"
+  auth_uri: "https://accounts.google.com/o/oauth2/auth"
+  token_uri: "https://oauth2.googleapis.com/token"
+  auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs"
+  client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/..."
+
+# Alternative to SERVICE_ACCOUNT_INFO
+# SERVICE_ACCOUNT_FILE: /path/to/service-account.json
+
+# Client Settings
+# DEFAULT_QUERY_JOB_CONFIG:
+#   maximum_bytes_billed: 1000000000
+#   use_query_cache: true
+# MAXIMUM_BYTES_BILLED: 1000000000
+# API_ENDPOINT: https://bigquery.googleapis.com
+
+# Performance Settings
+NUM_RETRIES: 3
+# RETRIES_WITH_LOGGING: [1, 5, 10]

@@ -1,0 +1,36 @@
+### config/auth/storage/cloud/azure_blob.yaml ###
+PROVIDER_TYPE: "azure_blob"
+
+# Azure Settings
+ACCOUNT_NAME: "mystorageaccount"
+CONTAINER_NAME: "mycontainer"
+
+# Authentication Settings
+AUTH_METHOD: "key"  # key, managed_identity, token
+ACCOUNT_KEY: "your_account_key"
+# CONNECTION_STRING: "DefaultEndpointsProtocol=https;AccountName=mystorageaccount;AccountKey=your_account_key;EndpointSuffix=core.windows.net"
+# SAS_TOKEN: "your_sas_token"
+
+# AAD Settings (for managed identity auth)
+# TENANT_ID: "your_tenant_id"
+# CLIENT_ID: "your_client_id"
+# CLIENT_SECRET: "your_client_secret"
+
+# Endpoint Settings
+ENDPOINT_SUFFIX: "core.windows.net"
+# CUSTOM_DOMAIN: "custom.domain.com"
+
+# Performance Settings
+MAX_CHUNK_SIZE: 4194304  # 4 MB
+MAX_SINGLE_PUT_SIZE: 67108864  # 64 MB
+MIN_LARGE_BLOCK_UPLOAD_THRESHOLD: 134217728  # 128 MB
+
+# Retry Settings
+MAX_RETRIES: 3
+RETRY_WAIT: 1
+MAX_RETRY_WAIT: 60
+
+# Security Settings
+REQUIRE_ENCRYPTION: true
+# KEY_ENCRYPTION_KEY: "your_encryption_key"
+# KEY_RESOLVER_FUNCTION: "my_resolver_function"

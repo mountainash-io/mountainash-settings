@@ -1,14 +1,14 @@
 from typing import Any, List, Optional, Type, Union
 
 import pytest
-from pydantic_settings import SettingsConfigDict
+# from pydantic_settings import SettingsConfigDict, BaseSettings
 from pydantic import Field
 from pytest_check import check
 from upath import UPath
 
-from mountainash_settings import SettingsUtils, SettingsManager, MountainAshBaseSettings, SettingsParameters
+from mountainash_settings import SettingsManager, MountainAshBaseSettings, SettingsParameters
 
-from mountainash_settings.settings_functions import get_settings_manager, get_settings
+from mountainash_settings import get_settings_manager, get_settings
 
 
 @pytest.fixture
@@ -22,12 +22,16 @@ def settings_manager() -> SettingsManager:
 class TestSettings(MountainAshBaseSettings):
     def __init__(
         self,
-        _dummy=False,
+        config_files: Optional[List[UPath|str]] = None,
+        settings_parameters:   Optional[SettingsParameters] = None,        
+        # _dummy=False,
         **kwargs
     ) -> None:
 
         super().__init__(
-            _dummy=_dummy,
+            config_files=config_files,
+            settings_parameters=settings_parameters,
+            # _dummy=_dummy,
             **kwargs
         )
 
@@ -60,7 +64,9 @@ def get_test_settings(settings_parameters: SettingsParameters,
 
 def test_init_sets_namespace():
     namespace = "test"
-    settings = TestSettings(SETTINGS_NAMESPACE=namespace)
+    sp = SettingsParameters.create(settings_class=TestSettings, namespace = namespace)
+
+    settings = TestSettings(settings_parameters=sp)
     assert settings.SETTINGS_NAMESPACE == namespace
 
 
@@ -71,37 +77,36 @@ def test_init_sets_kwargs():
 
 
 def test_init_sets_env_file():
-    env_file = "test.env"
-    settings = TestSettings(SETTINGS_SOURCE_ENV_FILES=env_file)
-    assert settings.SETTINGS_SOURCE_ENV_FILES == env_file
+    env_file = [UPath("./tests/config_testing1.env")]
+
+    sp = SettingsParameters.create(settings_class=TestSettings, config_files= env_file)
+
+    settings = TestSettings(settings_parameters=sp)
+   
+    for file in env_file:
+        assert file in settings.SETTINGS_SOURCE_ENV_FILES
 
 
 def test_init_sets_env_prefix():
     prefix = "PREFIX_"
-    settings = TestSettings(SETTINGS_SOURCE_ENV_PREFIX=prefix)
+
+    sp = SettingsParameters.create(settings_class=TestSettings, env_prefix= prefix)
+
+    settings = TestSettings(settings_parameters=sp)
     assert settings.SETTINGS_SOURCE_ENV_PREFIX == prefix
 
 
-def test_init_removes_special_kwargs():
-    kwargs: dict[str, Any] = {"SETTINGS_NAMESPACE": "test", "TEST_VAL_1": "value1"}
-    settings = TestSettings(**kwargs)
+# def test_init_removes_special_kwargs():
+#     kwargs: dict[str, Any] = {"SETTINGS_NAMESPACE": "test", "TEST_VAL_1": "value1"}
+#     settings = TestSettings(**kwargs)
 
-    if settings.SETTINGS_SOURCE_KWARGS:
-        assert "SETTINGS_NAMESPACE" not in settings.SETTINGS_SOURCE_KWARGS
+#     if settings.SETTINGS_SOURCE_KWARGS:
+#         assert "SETTINGS_NAMESPACE" not in settings.SETTINGS_SOURCE_KWARGS
 
-
-def test_init_dummy_sets_defaults():
-    settings = MountainAshBaseSettings(_dummy=True)
-    assert settings.SETTINGS_NAMESPACE == "DUMMY"
-    assert settings.SETTINGS_CLASS == MountainAshBaseSettings
-    assert settings.SETTINGS_CLASS_NAME == "MountainAshBaseSettings"
 
 
 ## ============================================================
 ## Test using variables with a prefix in the test config files, and in kwargs!
-        
-
-
 
 
 
@@ -111,7 +116,7 @@ def test_init_no_file(settings_manager: SettingsManager):
     config_files: List[Any] = []#"./tests/config_testing1.env"]
     kwargs = {}
     
-    settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
+    settings_parameters = SettingsParameters.create( settings_class=TestSettings,namespace=namespace, config_files=config_files, kwargs=kwargs)
 
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
@@ -124,11 +129,12 @@ def test_init_no_file_kwarg(settings_manager: SettingsManager):
     config_files: List[Any] = []#"./tests/config_testing1.env"]
     kwargs = {"TEST_VAL_1": "ABC", "TEST_VAL_2": "XYZ"}
     
-    settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
+    settings_parameters = SettingsParameters.create(settings_class=TestSettings, namespace=namespace, config_files=config_files, kwargs=kwargs)
 
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
     with check:
+        #Getting None here!
         assert app_settings.TEST_VAL_1 == "ABC"
         assert app_settings.TEST_VAL_2 == "XYZ"
 
@@ -138,7 +144,7 @@ def test_init_file(settings_manager: SettingsManager):
     config_files: List[Any] = ["./tests/config_testing1.env"]
     kwargs = {}
     
-    settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
+    settings_parameters = SettingsParameters.create(settings_class=TestSettings, namespace=namespace, config_files=config_files, kwargs=kwargs)
 
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
@@ -152,11 +158,12 @@ def test_init_file_and_kwarg(settings_manager: SettingsManager):
     config_files: List[Any] = ["./tests/config_testing1.env"]
     kwargs = {"TEST_VAL_1": "ABC"}
     
-    settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
+    settings_parameters = SettingsParameters.create(settings_class=TestSettings, namespace=namespace, config_files=config_files, kwargs=kwargs)
 
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
     with check:
+        #kwargs not working here
         assert app_settings.TEST_VAL_1 == "ABC"
         assert app_settings.TEST_VAL_2 == "TEST_VAL_2_File_1"
 
@@ -165,12 +172,13 @@ def test_init_file_and_kwarg2(settings_manager: SettingsManager):
     config_files: List[Any] = ["./tests/config_testing1.env"]
     kwargs = {"TEST_VAL_2": "XYZ"}
     
-    settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
+    settings_parameters = SettingsParameters.create(settings_class=TestSettings, namespace=namespace, config_files=config_files, kwargs=kwargs)
 
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
     with check:
         assert app_settings.TEST_VAL_1 == "TEST_VAL_1_File_1"
+        #kwargs not working here
         assert app_settings.TEST_VAL_2 == "XYZ"
 
 
@@ -178,9 +186,13 @@ def test_init_file_and_kwarg2(settings_manager: SettingsManager):
 def test_init_file_prefix1(settings_manager: SettingsManager):
     namespace = "test_init_file_prefix1"
     config_files: List[Any] = ["./tests/config_testing1.env"]
-    kwargs = {"SETTINGS_SOURCE_ENV_PREFIX": "PREFIX_"}
+    kwargs = {}
     
-    settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
+    settings_parameters = SettingsParameters.create(settings_class=TestSettings, 
+                                                    namespace=namespace, 
+                                                    config_files=config_files, 
+                                                    env_prefix="PREFIX_",
+                                                    kwargs=kwargs)
 
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
@@ -189,11 +201,16 @@ def test_init_file_prefix1(settings_manager: SettingsManager):
         assert app_settings.TEST_VAL_2 == "TEST_VAL_2_File_1"
 
 def test_init_file_prefix2(settings_manager: SettingsManager):
+
     namespace = "test_init_file_prefix2"
     config_files: List[Any] = ["./tests/config_testing_prefix1.env"]
-    kwargs = {"SETTINGS_SOURCE_ENV_PREFIX": "PREFIX_"}
+    kwargs = {}
     
-    settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
+    settings_parameters = SettingsParameters.create(settings_class=TestSettings,
+                                                    namespace=namespace, 
+                                                    config_files=config_files,
+                                                    env_prefix="PREFIX_",
+                                                    kwargs=kwargs)
 
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
@@ -206,7 +223,7 @@ def test_init_file_prefix3(settings_manager: SettingsManager):
     config_files: List[Any] = ["./tests/config_testing_prefix1.env"]
     kwargs = {}
     
-    settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
+    settings_parameters = SettingsParameters.create(settings_class=TestSettings, namespace=namespace, config_files=config_files, kwargs=kwargs)
 
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
@@ -222,7 +239,7 @@ def test_init_file_prefix3(settings_manager: SettingsManager):
 #     config_files: List[Any] = ["./tests/config_testing1.env"]
 #     kwargs = {}
     
-#     settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
+#     settings_parameters = SettingsParameters.create(namespace=namespace, settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
 
 #     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
@@ -235,7 +252,7 @@ def test_init_file_prefix3(settings_manager: SettingsManager):
 #     config_files: List[Any] = ["./tests/config_testing2.env"]
 #     kwargs = {}
     
-#     settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
+#     settings_parameters = SettingsParameters.create(namespace=namespace, settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
 
 #     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
@@ -249,7 +266,7 @@ def test_init_file_prefix3(settings_manager: SettingsManager):
 #     config_files: List[str] = ["./tests/config_testing1.env"]
 #     kwargs = {"_env_prefix": "TESTING_PREFIX_"}
     
-#     settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
+#     settings_parameters = SettingsParameters.create(namespace=namespace, settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
 
 #     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
@@ -262,7 +279,7 @@ def test_init_file_prefix3(settings_manager: SettingsManager):
 #     config_files: List[Any] = ["./tests/config_testing2.env"]
 #     kwargs = {"_env_prefix": "TESTING_PREFIX_"}
     
-#     settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
+#     settings_parameters = SettingsParameters.create(namespace=namespace, settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
 
 #     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
@@ -278,7 +295,7 @@ def test_init_file_prefix3(settings_manager: SettingsManager):
 #     config_files: List[Any] = ["./tests/config_testing1.env", "./tests/config_testing2.env"]
 #     kwargs = {"_env_prefix": "TESTING_PREFIX_"}
 
-#     settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
+#     settings_parameters = SettingsParameters.create(namespace=namespace, settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
 
 #     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
@@ -290,7 +307,7 @@ def test_init_file_prefix3(settings_manager: SettingsManager):
 #     config_files: List[Any] =  ["./tests/config_testing2.env", "./tests/config_testing1.env"]
 #     kwargs = {"_env_prefix": "TESTING_PREFIX_"}
 
-#     settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
+#     settings_parameters = SettingsParameters.create(namespace=namespace, settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
 
 #     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
@@ -305,7 +322,7 @@ def test_init_config_valid_init_two_files_noprefix(settings_manager: SettingsMan
     config_files: List[Any] = [ "./tests/config_testing1.env", "./tests/config_testing2.env"]
     kwargs = {}
 
-    settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
+    settings_parameters = SettingsParameters.create(settings_class=TestSettings, namespace=namespace, config_files=config_files, kwargs=kwargs)
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
     #TEST_VAL_2 was 000002 in the file, but over-ridden by the kwarg
@@ -318,7 +335,7 @@ def test_init_config_valid_init_files_reverse_noprefix(settings_manager: Setting
     config_files: List[Any] = ["./tests/config_testing2.env", "./tests/config_testing1.env"]
     kwargs = {}
 
-    settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
+    settings_parameters = SettingsParameters.create(settings_class=TestSettings, namespace=namespace, config_files=config_files, kwargs=kwargs)
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
     #TEST_VAL_2 was 000002 in the file, but over-ridden by the kwarg
@@ -329,18 +346,18 @@ def test_init_config_valid_init_files_reverse_noprefix(settings_manager: Setting
 
 
 
-
 def test_init_config_valid_init_files_override_and_kwargs_noprefix(settings_manager: SettingsManager):
     # Arrange
     namespace = "test_init_config_valid_init_files_override_and_kwargs_noprefix"
     config_files: List[Any] = ["./tests/config_testing1.env"]
     kwargs = {"TEST_VAL_2": "000003"}
 
-    settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
+    settings_parameters = SettingsParameters.create(settings_class=TestSettings, namespace=namespace, config_files=config_files, kwargs=kwargs)
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
     with check:
         assert app_settings.TEST_VAL_1 == "TEST_VAL_1_File_1"
+        #kwargs not working here
         assert app_settings.TEST_VAL_2 == "000003"
 
 def test_init_config_valid_init_files_override_and_kwargs_noprefix2(settings_manager: SettingsManager):
@@ -349,10 +366,11 @@ def test_init_config_valid_init_files_override_and_kwargs_noprefix2(settings_man
     config_files: List[Any] = [ "./tests/config_testing2.env"]
     kwargs = {"TEST_VAL_1": "ABC"}
 
-    settings_parameters = SettingsUtils.prepare_settings_parameters(settings_namespace=namespace, settings_class=TestSettings, config_files=config_files, p_kwargs=kwargs)
+    settings_parameters = SettingsParameters.create(settings_class=TestSettings, namespace=namespace, config_files=config_files, kwargs=kwargs)
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
     #TEST_VAL_2 was 000002 in the file, but over-ridden by the kwarg
     with check:
+        #kwargs not working here
         assert app_settings.TEST_VAL_1 == "ABC"
         assert app_settings.TEST_VAL_2 == "TEST_VAL_2_File_2"

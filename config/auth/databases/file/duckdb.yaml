@@ -1,0 +1,21 @@
+### config/auth/database/file/duckdb.yaml ###
+PROVIDER_TYPE: "duckdb"
+DATABASE_PATH: "/home/nathanielramm/parkrun_data/silver_staging_parkrun.duckdbb"
+READ_ONLY: false
+MEMORY: false
+
+# Configuration Settings
+THREADS: 4
+MEMORY_LIMIT: "8GB"
+# TEMP_DIRECTORY: "/path/to/temp"
+
+# Extension Settings
+EXTENSIONS:
+  - "json"
+  - "httpfs"
+ALLOW_UNSIGNED_EXTENSIONS: false
+
+# Performance Settings
+# PAGE_SIZE: 16384
+# COMPRESSION: "auto"
+# ACCESS_MODE: "AUTOMATIC"

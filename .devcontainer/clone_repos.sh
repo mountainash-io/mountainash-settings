@@ -1,32 +1,54 @@
 #!/bin/bash
 
+# Function to clone and checkout branch with fallback
+clone_and_checkout() {
+    repo_name=$(basename "$2" .git)
+    git clone "https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/$1/$2" "/workspaces/$repo_name"
+    cd "/workspaces/$repo_name"
+    
+    if git branch -r | grep -q "origin/develop"; then
+        git checkout develop
+        echo "Checked out 'develop' branch in $repo_name"
+    elif git branch -r | grep -q "origin/main"; then
+        git checkout main
+        echo "Warning: 'develop' branch not found in $repo_name. Checked out 'main' branch."
+    else
+        default_branch=$(git symbolic-ref --short HEAD)
+        echo "Warning: Neither 'develop' nor 'main' branch found in $repo_name. Staying on default branch '$default_branch'."
+    fi
+    
+    cd - > /dev/null
+}
 
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-constants.git /workspaces/mountainash-constants
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-data.git /workspaces/mountainash-data
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-datacontracts.git /workspaces/mountainash-datacontracts
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-settings.git /workspaces/mountainash-settings
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-syntheticdata.git /workspaces/mountainash-syntheticdata
-git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-auth-settings.git /workspaces/mountainash-auth-settings
+# List of repositories
+repos=(
+    # "mountainash-constants"
+    # "mountainash-data"
+    # "mountainash-datacontracts"
+    # "mountainash-settings"
+    # "mountainash-syntheticdata"
+    # "mountainash-utils-dataclasses"
+    # "mountainash-utils-factoryclasses"
+    # "mountainash-utils-files"
+    # "mountainash-utils-ssh"
+    # "mountainash-utils-xml"
+    # "mountainash-utils-gpg"
+    # "mountainash-utils-hamilton"
+    "mountainash-utils-os"
+    # "mountainash-utils-rules"
+    # "mountainash-acrds-constants"
+    # "mountainash-acrds-settings"
+    # "mountainash-acrds-core"
+    # "mountainash-acrds-dagster"
+    # "mountainash-acrds-syntheticdata"
+    # "mountainash-acrds-datacontracts"
+    # "mountainash-acrds-orchestration"
+    # "mountainash-acrds-notebooks"
+)
 
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-utils.git /workspaces/mountainash-utils
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-utils-dataclasses.git /workspaces/mountainash-utils-dataclasses
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-utils-files.git /workspaces/mountainash-utils-files
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-utils-ssh.git /workspaces/mountainash-utils-ssh
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-utils-xml.git /workspaces/mountainash-utils-xml
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-utils-gpg.git /workspaces/mountainash-utils-gpg
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-utils-hamilton.git /workspaces/mountainash-utils-hamilton
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-utils-os.git /workspaces/mountainash-utils-os
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-utils-rules.git /workspaces/mountainash-utils-rules
+# Clone and checkout each repository
+for repo in "${repos[@]}"; do
+    clone_and_checkout "mountainash-io" "$repo.git"
+done
 
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-acrds-constants.git /workspaces/mountainash-acrds-constants
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-acrds-settings.git /workspaces/mountainash-acrds-settings
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-acrds-core.git /workspaces/mountainash-acrds-core
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-acrds-syntheticdata.git /workspaces/mountainash-acrds-syntheticdata
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-acrds-datacontracts.git /workspaces/mountainash-acrds-datacontracts
-# git clone --depth 1 https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/mountainash-io/mountainash-acrds-orchestration.git /workspaces/mountainash-acrds-orchestration
- 
-
-# Clone other private repos as needed
-# git clone --depth 1 https://github.com/your-org/repo2.git temp/repo2
-
-# Note: Replace https://github.com with git@github.com: if using SSH
+echo "All repositories have been cloned and appropriate branches checked out."

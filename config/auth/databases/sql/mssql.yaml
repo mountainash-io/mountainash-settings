@@ -1,0 +1,40 @@
+### config/auth/database/sql/mssql.yaml ###
+PROVIDER_TYPE: "mssql"
+HOST: "localhost"
+PORT: 1433
+DATABASE: "master"
+
+# Authentication Settings
+AUTH_METHOD: "password"
+USERNAME: "sa"
+PASSWORD: "your_password"
+# WINDOWS_DOMAIN: "MYDOMAIN"
+# AZURE_TENANT_ID: "your_tenant_id"
+# AZURE_CLIENT_ID: "your_client_id"
+# AZURE_CLIENT_SECRET: "your_client_secret"
+
+# Connection Settings
+DRIVER: "ODBC Driver 18 for SQL Server"
+PROTOCOL: "tcp"
+APP_NAME: "MyApp"
+# INSTANCE_NAME: "SQLEXPRESS"
+MARS_ENABLED: false
+
+# Security Settings
+ENCRYPTION: "mandatory"
+TRUST_SERVER_CERTIFICATE: false
+COLUMN_ENCRYPTION: false
+# KEY_STORE_AUTHENTICATION: "KeyVault"
+# KEY_STORE_PRINCIPAL_ID: "your_principal_id"
+# KEY_STORE_SECRET: "your_secret"
+
+# Timeout Settings
+LOGIN_TIMEOUT: 15
+CONNECTION_TIMEOUT: 30
+# QUERY_TIMEOUT: 0
+
+# Connection Pool Settings
+POOL_SIZE: 5
+# MIN_POOL_SIZE: 1
+# MAX_POOL_SIZE: 20
+POOL_TIMEOUT: 30

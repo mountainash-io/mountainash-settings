@@ -1,0 +1,45 @@
+### config/auth/storage/network/sftp.yaml ###
+PROVIDER_TYPE: "sftp"
+
+# Connection Settings
+HOST: "sftp.example.com"
+PORT: 22
+USERNAME: "sftpuser"
+
+# Authentication Settings
+AUTH_METHOD: "key"  # password, key, agent
+# PASSWORD: "your_password"
+PRIVATE_KEY_PATH: "/path/to/private_key"
+# PRIVATE_KEY_STRING: "-----BEGIN OPENSSH PRIVATE KEY-----\n...\n-----END OPENSSH PRIVATE KEY-----"
+# PRIVATE_KEY_PASSPHRASE: "your_passphrase"
+
+# SSH Settings
+# KNOWN_HOSTS_FILE: "/path/to/known_hosts"
+HOST_KEY_POLICY: "reject"  # reject, warn, auto_add, ignore
+# HOST_KEY_ALGORITHMS: ["ssh-ed25519", "ecdsa-sha2-nistp256"]
+# CIPHERS: ["aes256-gcm@openssh.com", "aes256-ctr"]
+# KEX_ALGORITHMS: ["curve25519-sha256", "diffie-hellman-group16-sha512"]
+COMPRESSION: true
+COMPRESSION_LEVEL: 6
+
+# Path Settings
+# ROOT_PATH: "/path/on/server"
+# DEFAULT_PATH: "/path/on/server/default"
+
+# Security Settings
+CIPHERS: ["chacha20-poly1305@openssh.com", "aes256-gcm@openssh.com"]
+KEX_ALGORITHMS: ["curve25519-sha256@libssh.org", "diffie-hellman-group18-sha512"]
+HOSTKEY_ALGORITHMS: ["ssh-ed25519", "ecdsa-sha2-nistp384"]
+ALLOW_AGENT: true
+LOOK_FOR_KEYS: true
+
+# Transfer Settings
+BUFFER_SIZE: 32768  # 32KB
+MAX_PACKET_SIZE: 32768
+WINDOW_SIZE: 2097152  # 2MB
+
+# Timeout Settings
+TIMEOUT: 30.0
+BANNER_TIMEOUT: 60.0
+AUTH_TIMEOUT: 30.0
+KEEPALIVE_INTERVAL: 30
