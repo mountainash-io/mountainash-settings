@@ -7,6 +7,9 @@ path = "src/mountainash_settings/__version__.py"
 [build.targets.wheel]
 packages = ["src/mountainash_settings"]
 
+#================
+# Env: build_github
+#================
 [envs.build_github]
 installer = "uv"
 dependencies = [
@@ -20,17 +23,12 @@ sbom-all = "cyclonedx-py environment > ./sbom-full.xml"
 sbom-direct = "cyclonedx-py requirements > ./sbom-direct.xml"
 export-requirements = "hatch dep show requirements > ./requirements.txt"   
 
-
 #================
 # Env: default
 #================
 [envs.default]
 installer = "uv"
-
-dependencies = [
- 
-  # "mountainash_utils_os @ {root:uri}/temp/mountainash-utils-os",  
-]
+dependencies = []
 
 #================
 # Env: tower
@@ -49,44 +47,17 @@ python = ["3.12"] #,"3.11", "3.10", # "3.8", "3.9","3.9",
 [envs.test_github]
 installer = "uv"
 dependencies = [
-  "coverage[toml]>=6.5",
-  "pytest==8.1.1",
-  "pytest-check==2.3.1",
-  "pytest-mock==3.12.0",
-  "pytest-json-report>=1.5.0",    # Structured JSON output
-  "pytest-metadata>=2.0.0",       # Additional test metadata
-  "pytest-benchmark>=4.0.0",      # Performance benchmarking
-  "pytest-cov>=4.1.0",           # Better coverage integration
-  "pytest-clarity>=1.0.1",       # Better test output diff
-  "pytest-timeout>=2.1.0",       # Test timing control
-  "pytest-picked>=0.5.0",         # Changed files testing
-  
-  # Provider Dependencies
-  # "boto3>=1.34.0",
-  # "azure-identity>=1.15.0",
-  # "azure-keyvault-secrets>=4.8.0",
-  # "google-cloud-secret-manager>=2.18.0",
-  # "hvac>=2.1.0",
+  # "coverage[toml]>=6.5",
+  "pytest==8.3.5",
+  "pytest-check==2.5.3",
+  "pytest-cov==6.1.1",
   
   "mountainash_constants @ {root:uri}/temp/mountainash-constants",  
   "mountainash_utils_os @ {root:uri}/temp/mountainash-utils-os",  
 ]
 [envs.test_github.scripts]
 test = "pytest"
-test-cov = "coverage run -m pytest"
-test-xml = "coverage xml"
-cov-report = [
-  "- coverage combine",
-  "coverage report",
-]
-cov = [
-  "test-cov",
-  "cov-report",
-  "test-xml",
-]
-cov-html = [
-  "coverage html",
-]
+test-cov = "pytest --cov --junitxml=junit.xml -o junit_family=legacy  --cov-report=xml"
 
 
 #================
@@ -99,8 +70,8 @@ python = [ "3.12"] #,  "3.11",, "3.10" ] # "3.8", "3.9","3.9",
 installer = "uv"
 dependencies = [
   "coverage[toml]>=6.5",
-  "pytest==8.1.1",
-  "pytest-check==2.3.1",
+  "pytest==8.3.5",
+  "pytest-check==2.5.3",
   "pytest-mock==3.12.0",
   "pytest-json-report>=1.5.0",    # Structured JSON output
   "pytest-metadata>=2.0.0",       # Additional test metadata
@@ -155,6 +126,7 @@ test-cov-junit = [
  "pytest --cov --junitxml=junit.xml"
 ]
 
+
 #================
 # Env: ruff
 #================
@@ -195,36 +167,5 @@ dependencies = [
 ]
 [envs.mypy.scripts]
 check = "mypy --install-types --non-interactive {args:src/mountainash_settings tests}"
-
-# Downstream package testing
-# [envs.test_downstream]
-# dependencies = [  
-#   "pytest",
-#   "pytest_check",
-#   "mountainash_acrds_settings @ {root:uri}/../mountainash-acrds-settings",
-#   "mountainash_constants @ {root:uri}/../mountainash-constants",
-#   "mountainash_acrds_constants @ {root:uri}/../mountainash-acrds-constants",
-#   "mountainash_utils_dataclasses @ {root:uri}/../mountainash-utils-dataclasses"
-#   ]
-
-# [envs.test_downstream.scripts]
-# test = [#"pytest {args:tests}", 
-#         "pytest ../mountainash-auth-settings"
-# ]
-
-# # Downstream ACRDS package testing
-# [envs.test_downstream_acrds]
-# dependencies = [  
-#   "pytest",
-#   "pytest_check",
-#   "mountainash_constants @ {root:uri}/../mountainash-constants",
-#   "mountainash_acrds_settings @ {root:uri}/../mountainash-acrds-settings",
-#   "mountainash_acrds_constants @ {root:uri}/../mountainash-acrds-constants",
-#   "mountainash_utils_dataclasses @ {root:uri}/../mountainash-utils-dataclasses",
-#   "mountainash_utils @ {root:uri}/../mountainash-utils"
-#   ]
-
-# [envs.test_downstream_acrds.scripts]
-# test = ["pytest ../mountainash-acrds-settings"]
 
 

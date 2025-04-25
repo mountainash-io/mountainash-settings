@@ -41,6 +41,7 @@ jobs:
           else
             echo "FALLBACK_BRANCH=develop" >> $GITHUB_ENV
           fi
+          
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.BRANCH_NAME }}
@@ -74,23 +75,23 @@ jobs:
 
       - name: Create virtual environment
         run: hatch env create test_github
-
+        
       #Run Pytest
-      - name: Run tests
-        run: hatch run test_github:test
+      # - name: Run tests
+      #   run: hatch run test_github:test
 
-      # Run Coverage
+      # Run Pytest with Coverage
       - name: Run Coverage Tests
-        run: hatch run test_github:cov
+        run: hatch run test_github:test-cov
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4.5.0
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          slug: mountainash-io/mountainash-settings
+          verbose: true
 
-      # Sonarcloud analysis          
-      # - name: SonarCloud Scan
-      #   uses: SonarSource/sonarcloud-github-action@master
-      #   env:
-      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}                
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}          
