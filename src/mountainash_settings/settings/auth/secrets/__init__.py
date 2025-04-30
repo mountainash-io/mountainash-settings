@@ -14,7 +14,6 @@ __all__ = [
     "CONST_SECRET_ENCODING", 
     "CONST_AWS_SECRET_STAGES",
     "CONST_SECRET_ROTATION_POLICY",
-    "SecretSecretsErrorsError", 
     "SecretConfigurationError",
     "SecretAuthenticationError",
     "SecretsSettingsTemplates",
