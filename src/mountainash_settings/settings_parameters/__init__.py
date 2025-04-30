@@ -5,7 +5,6 @@ from .utils import SettingsUtils
 
 
 __all__ = [
-    "__version__",
     "SettingsParameters", 
     "SettingsUtils", 
     "SettingsFileHandler",
