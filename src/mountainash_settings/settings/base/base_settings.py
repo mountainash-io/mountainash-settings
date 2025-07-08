@@ -1,11 +1,17 @@
-from typing import Optional, Union, List, Any, Dict, Type, Tuple
+from typing import Optional, Union, List, Any, Dict, Type, Tuple, TypeVar
 from upath import UPath
 from string import Formatter
+from abc import ABC, abstractmethod
+from importlib import import_module
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource, TomlConfigSettingsSource, YamlConfigSettingsSource, JsonConfigSettingsSource
 
-from mountainash_settings.settings_parameters import SettingsFileHandler, SettingsParameters, SettingsUtils
+from mountainash_settings.settings_parameters import SettingsFileHandler, SettingsParameters, SettingsUtils, SettingsFiles
+from mountainash_settings.settings_cache import get_settings as func_get_settings
+
+T = TypeVar('T', bound='BaseSettings')
+# T = TypeVar('T', BaseSettings, 'MountainAshBaseSettings')
 
 class MountainAshBaseSettings(BaseSettings):
 
@@ -52,7 +58,7 @@ class MountainAshBaseSettings(BaseSettings):
         if settings_parameters is not None:
             local_settings_params = SettingsUtils.merge_settings_parameter_objects(settings_parameters, local_settings_params)
 
-        obj_config_files: SettingsFileHandler = SettingsFileHandler.separate_config_files(local_settings_params.config_files)
+        obj_config_files: SettingsFiles = SettingsFileHandler.separate_config_files(local_settings_params.config_files)
         
         # Validate config files exist
         SettingsFileHandler.validate_config_files_exist(obj_config_files.env_files)
@@ -125,7 +131,42 @@ class MountainAshBaseSettings(BaseSettings):
                 file_secret_settings
         )
 
-    
+    @classmethod
+    # @abstractmethod
+    def get_settings(cls: Type[T], 
+                    settings_parameters:   Optional[SettingsParameters] = None,
+                    settings_class:        Optional[Type[T]] = None, 
+                    settings_namespace:    Optional[str] = None,
+                    config_files:          Optional[Union[UPath, str, List[UPath|str]]]  = None,
+                    env_prefix:            Optional[str] = None,
+                    **kwargs                     
+                     
+                     ) -> T:
+
+        if settings_class is None:
+            class_module = T.__module__
+            class_name = T.__name__
+            settings_class = getattr(import_module(name=class_module), class_name)
+
+
+        settings_instance: T =  func_get_settings(
+                                    settings_parameters = settings_parameters,
+                                    settings_class = settings_class, 
+                                    settings_namespace = settings_namespace,
+                                    config_files = config_files,
+                                    env_prefix=env_prefix
+                                    **kwargs
+                            )
+
+        if not isinstance(settings_instance, cls):
+            raise TypeError(
+                f"Created instance of type {type(settings_instance).__name__} "
+                f"but expected {cls.__name__} when calling {cls.__name__}.get_settings()"
+            )
+
+        return settings_instance
+
+
     def __hash__(self) -> int:
         """
         Hash the settings object based on the settings namespace, class name, and source kwargs.
