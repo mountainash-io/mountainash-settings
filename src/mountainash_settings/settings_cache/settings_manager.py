@@ -3,7 +3,7 @@ from typing import Optional, Any, Type, Dict
 from importlib import import_module
 from pydantic_settings import BaseSettings
 from ..settings_parameters import SettingsParameters, SettingsUtils
-from ..settings.base import MountainAshBaseSettings
+# from ..settings.base import MountainAshBaseSettings
 
 class SettingsManager:
     """
@@ -66,9 +66,9 @@ class SettingsManager:
         #check if the namespace is already initialised by looking at the keys in the settings_object_cache dict
         return settings_parameters.__hash__() in self.settings_object_cache.keys()
 
- 
+
     # @classmethod
-    def get_or_create_settings(self, 
+    def get_or_create_settings(self,
                     settings_parameters: SettingsParameters) -> BaseSettings:
         """
         Initializes the settings for a given set of parameters.
@@ -88,13 +88,13 @@ class SettingsManager:
 
             if not settings_parameters.settings_class:
                 raise ValueError("settings_parameters.settings_class cannot be empty.")
-            
+
             # #Create the Settings object
             class_module = settings_parameters.settings_class.__module__
             class_name = settings_parameters.settings_class.__name__
             settings_class_ref: Type[BaseSettings] = getattr(import_module(name=class_module), class_name)
 
-            if issubclass(settings_class_ref, MountainAshBaseSettings):
+            if issubclass(settings_class_ref, BaseSettings):
                 obj_settings = settings_class_ref(settings_parameters = settings_parameters)
 
             else:
@@ -105,7 +105,7 @@ class SettingsManager:
                     obj_settings = settings_class_ref(**settings_kwargs)
                 else:
                     obj_settings = settings_class_ref()
-            
+
             # if not isinstance(obj_settings, BaseSettings):
             #     raise ValueError(f"Configuration for namespace '{settings_parameters.namespace}' found, but obj_settings is not an BaseSettings object. It is of type {type(obj_settings)}")
 
@@ -117,16 +117,16 @@ class SettingsManager:
     #             settings_parameters: SettingsParameters,
 
     #             # settings_namespace: str,
-    #             # settings_class:     Optional[Type[BaseSettings]] = BaseSettings,  
+    #             # settings_class:     Optional[Type[BaseSettings]] = BaseSettings,
     #             # config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
     #             # **kwargs
-                
+
     #             ) -> BaseSettings:
-                    
+
     #     """
-        
+
     #     Gets the configuration object for a given namespace. If the namespace is not initialised, it will create a new configuration object.
-        
+
     #     Args:
     #         settings_namespace (str): The namespace for the configuration.
     #         settings_class (Type[BaseSettings]): The settings class to be used.
@@ -138,7 +138,7 @@ class SettingsManager:
 
     #     Raises:
     #         ValueError: If the settings_class is empty.
-            
+
     #     """
 
     #     # First step is the namespace only
@@ -160,7 +160,7 @@ class SettingsManager:
 
 
     # # @classmethod
-    # def get_existing_settings(self, 
+    # def get_existing_settings(self,
     #             settings_parameters: SettingsParameters,
     #             # settings_namespace: str,
     #             # #config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
@@ -178,7 +178,7 @@ class SettingsManager:
     #     print(f"Getting existing config via get_existing_config(): {settings_namespace}")
 
     #     # Get the existing settings object
-    #     obj_settings: BaseSettings = self.get_config_object(settings_namespace=settings_namespace)       
+    #     obj_settings: BaseSettings = self.get_config_object(settings_namespace=settings_namespace)
     #     settings_class: Type = obj_settings.SETTINGS_CLASS
 
     #     # Overwrite the settings with valid runtime kwargs
@@ -186,7 +186,7 @@ class SettingsManager:
     #     merged_kwargs: Dict[str, Any] | None = SettingsUtils.resolve_kwargs(new_kwargs=new_kwargs,
     #                                                 original_kwargs=obj_settings.SETTINGS_SOURCE_KWARGS)
 
-    #     #Is this correct? 
+    #     #Is this correct?
     #     if merged_kwargs and merged_kwargs != obj_settings.SETTINGS_SOURCE_KWARGS:
     #         print(f"Creating a copy of settings for namespace '{settings_namespace}' with kwargs: {merged_kwargs}. Original kwargs {obj_settings.SETTINGS_SOURCE_KWARGS}")
     #         #This is a localised update with kwargs. Not a change to the original
@@ -198,9 +198,9 @@ class SettingsManager:
     # # @classmethod
     # def get_new_config(self,
     #             settings_namespace: str,
-    #             settings_class:     Type[BaseSettings],  
+    #             settings_class:     Type[BaseSettings],
     #             config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
-    #             **kwargs) -> BaseSettings:    
+    #             **kwargs) -> BaseSettings:
 
     #     """
     #     Creates a new configuration object for a given namespace.
@@ -213,14 +213,14 @@ class SettingsManager:
 
     #     Returns:
     #         BaseSettings: The configuration object for the given namespace.
-        
+
     #     """
 
 
     #     print(f"Initialising new config via get_new_config(): {settings_namespace}")
 
-    #     obj_settings: BaseSettings = self.init_config(settings_namespace=settings_namespace, 
-    #                                                              settings_class=settings_class, 
+    #     obj_settings: BaseSettings = self.init_config(settings_namespace=settings_namespace,
+    #                                                              settings_class=settings_class,
     #                                                              config_files=config_files,  **kwargs)
 
     #     if isinstance(obj_settings, BaseSettings):
@@ -232,9 +232,9 @@ class SettingsManager:
 
 
     # # @classmethod
-    # def validate_kwargs_keys(self, 
-    #                          settings_class:    Type[BaseSettings],                             
-    #                          kwargs:            Optional[Dict[str, Any]]=None, 
+    # def validate_kwargs_keys(self,
+    #                          settings_class:    Type[BaseSettings],
+    #                          kwargs:            Optional[Dict[str, Any]]=None,
     #     ) -> None:
     #     """
     #     Combines multiple dictionaries or sets and checks if a comparison dictionary or set
@@ -266,15 +266,15 @@ class SettingsManager:
     #             raise ValueError(f"Invalid kwargs provided: {unique_elements}")
 
 
-        
+
     # # @classmethod
-    # def validate_init_existing_namespace(self, 
-    #                 settings_namespace: str, 
+    # def validate_init_existing_namespace(self,
+    #                 settings_namespace: str,
     #                 config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
     #                 env_prefix: Optional[str] = None,
     #                 **kwargs) -> None:
     #     """
-        
+
     #     Validates that the namespace is already initialised and that the parameters have not changed.
 
     #     Args:
@@ -285,7 +285,7 @@ class SettingsManager:
     #         ValueError: If the namespace is already initialised and the parameters have changed.
     #     """
 
-        
+
     #     #This will raise an error if not found
     #     obj_settings: BaseSettings = self.get_config_object(settings_namespace=settings_namespace)
 
@@ -308,10 +308,10 @@ class SettingsManager:
 
 
     # # @classmethod
-    # def init_settings(self, 
+    # def init_settings(self,
     #                 settings_parameters: SettingsParameters) -> BaseSettings:
-    #                 # settings_namespace: str, 
-    #                 # settings_class:     Type[BaseSettings],                    
+    #                 # settings_namespace: str,
+    #                 # settings_class:     Type[BaseSettings],
     #                 # config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None,
     #                 # env_prefix: Optional[str] = None,
     #                 # **kwargs) -> BaseSettings:
@@ -337,7 +337,7 @@ class SettingsManager:
 
     #         #If it was already initialised, why are we trying to re-initialse it? Fail if parameters have changed. Pass if the same, but with a warning.
     #         # self.validate_init_existing_namespace(settings_namespace=settings_namespace, config_files=config_files, **kwargs)
-            
+
     #         #Get the existing settings object
     #         obj_settings: BaseSettings = self.get_config_object(settings_parameters=settings_parameters)
 
@@ -348,12 +348,12 @@ class SettingsManager:
 
     #         # Process config files
     #         # config_files_sorted = SettingsFileHandler.separate_config_files(config_files)
-            
+
     #         # # Validate config files exist
     #         # SettingsFileHandler.validate_config_files_exist(config_files_sorted.env_files)
     #         # SettingsFileHandler.validate_config_files_exist(config_files_sorted.yaml_files)
     #         # SettingsFileHandler.validate_config_files_exist(config_files_sorted.toml_files)
-           
+
     #         # ### HANDLE KWARGS ###
     #         # self.validate_kwargs_keys(settings_class=settings_class, kwargs=kwargs)
 
@@ -364,7 +364,7 @@ class SettingsManager:
 
     #         # #Create the parameters object
     #         # obj_settings_parameters = SettingsParameters.create(
-    #         #     namespace = settings_namespace,                
+    #         #     namespace = settings_namespace,
     #         #     config_files=config_files,
     #         #     kwargs=kwargs,
     #         #     settings_class=settings_class,
@@ -376,20 +376,15 @@ class SettingsManager:
     #             settings_parameters = settings_parameters
     #         )
 
-    #         # obj_settings = settings_class_ref(                
+    #         # obj_settings = settings_class_ref(
     #         #                                   SETTINGS_SOURCE_ENV_FILES=config_files_sorted.env_files,
     #         #                                   SETTINGS_SOURCE_YAML_FILES=config_files_sorted.yaml_files,
     #         #                                   SETTINGS_SOURCE_TOML_FILES=config_files_sorted.toml_files,
-    #         #                                   SETTINGS_NAMESPACE=settings_namespace, 
-    #         #                                   SETTINGS_CLASS = settings_class_ref, 
-    #         #                                   SETTINGS_CLASS_NAME = settings_class.__name__, 
+    #         #                                   SETTINGS_NAMESPACE=settings_namespace,
+    #         #                                   SETTINGS_CLASS = settings_class_ref,
+    #         #                                   SETTINGS_CLASS_NAME = settings_class.__name__,
     #         #                                   **kwargs)
 
     #         self.settings_object_cache[settings_parameters.__hash__()] = obj_settings
 
     #     return obj_settings
-
- 
-
-
-

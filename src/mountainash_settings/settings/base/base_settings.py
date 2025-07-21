@@ -23,7 +23,7 @@ class MountainAshBaseSettings(BaseSettings):
             # validate_assignment=False,
 
         )
-    
+
     #Tracablility and repeatability
     SETTINGS_NAMESPACE: str =                                         Field(default=None)
     SETTINGS_CLASS: Type =                                            Field(default=None)
@@ -42,16 +42,16 @@ class MountainAshBaseSettings(BaseSettings):
     # reserved_kwargs = {"_env_file","_env_file_encoding", "_env_prefix"}
 
 
-    def __init__(self, 
+    def __init__(self,
                  config_files:          Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
                  settings_parameters:   Optional[SettingsParameters] = None,
-                 **kwargs) -> None:  
+                 **kwargs) -> None:
 
 
         # Create a baseline settings parameters object
         local_settings_params = SettingsParameters.create(
             settings_class=self.__class__,
-            config_files=config_files, 
+            config_files=config_files,
             **kwargs
         )
 
@@ -59,7 +59,7 @@ class MountainAshBaseSettings(BaseSettings):
             local_settings_params = SettingsUtils.merge_settings_parameter_objects(settings_parameters, local_settings_params)
 
         obj_config_files: SettingsFiles = SettingsFileHandler.separate_config_files(local_settings_params.config_files)
-        
+
         # Validate config files exist
         SettingsFileHandler.validate_config_files_exist(obj_config_files.env_files)
         SettingsFileHandler.validate_config_files_exist(obj_config_files.yaml_files)
@@ -82,10 +82,10 @@ class MountainAshBaseSettings(BaseSettings):
 
 
         #Now we initialise the values!
-        super().__init__(   _case_sensitive=valid_pydantic_kwargs.get('_case_sensitive') or True, 
+        super().__init__(   _case_sensitive=valid_pydantic_kwargs.get('_case_sensitive') or True,
                             _nested_model_default_partial_update=valid_pydantic_kwargs.get('_nested_model_default_partial_update') or False,
                             _env_prefix=            local_settings_params.env_prefix or valid_pydantic_kwargs.get('_env_prefix') or None,
-                            _env_file=              obj_config_files.env_files or valid_pydantic_kwargs.get('_env_file') or None, 
+                            _env_file=              obj_config_files.env_files or valid_pydantic_kwargs.get('_env_file') or None,
                             _env_file_encoding =    valid_pydantic_kwargs.get('_env_file_encoding') or 'utf-8',
                             _env_ignore_empty =     valid_pydantic_kwargs.get('_env_ignore_empty') or True,
                             _env_nested_delimiter = valid_pydantic_kwargs.get('_env_nested_delimiter') or None,
@@ -96,7 +96,7 @@ class MountainAshBaseSettings(BaseSettings):
                         )
 
 
-        #Update all vals from valid kwargs                
+        #Update all vals from valid kwargs
         self.update_settings_from_dict(settings_dict=valid_attribute_kwargs)
 
         setattr(self, "SETTINGS_NAMESPACE",             local_settings_params.namespace)
@@ -112,7 +112,7 @@ class MountainAshBaseSettings(BaseSettings):
         # Initialise templated variables
         self.post_init()
 
- 
+
     @classmethod
     def settings_customise_sources(
         cls,
@@ -122,25 +122,25 @@ class MountainAshBaseSettings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
-        return ( init_settings, 
-                env_settings, 
-                dotenv_settings, 
+        return ( init_settings,
+                env_settings,
+                dotenv_settings,
                 YamlConfigSettingsSource(settings_cls),
-                TomlConfigSettingsSource(settings_cls), 
+                TomlConfigSettingsSource(settings_cls),
                 JsonConfigSettingsSource(settings_cls),
                 file_secret_settings
         )
 
     @classmethod
     # @abstractmethod
-    def get_settings(cls: Type[T], 
+    def get_settings(cls: Type[T],
                     settings_parameters:   Optional[SettingsParameters] = None,
-                    settings_class:        Optional[Type[T]] = None, 
+                    settings_class:        Optional[Type[T]] = None,
                     settings_namespace:    Optional[str] = None,
                     config_files:          Optional[Union[UPath, str, List[UPath|str]]]  = None,
                     env_prefix:            Optional[str] = None,
-                    **kwargs                     
-                     
+                    **kwargs
+
                      ) -> T:
 
         if settings_class is None:
@@ -151,7 +151,7 @@ class MountainAshBaseSettings(BaseSettings):
 
         settings_instance: T =  func_get_settings(
                                     settings_parameters = settings_parameters,
-                                    settings_class = settings_class, 
+                                    settings_class = settings_class,
                                     settings_namespace = settings_namespace,
                                     config_files = config_files,
                                     env_prefix=env_prefix
@@ -170,14 +170,14 @@ class MountainAshBaseSettings(BaseSettings):
     def __hash__(self) -> int:
         """
         Hash the settings object based on the settings namespace, class name, and source kwargs.
-        
+
         """
 
-        return hash((self.SETTINGS_NAMESPACE, 
-                     self.SETTINGS_CLASS_NAME, 
-                     tuple(self.SETTINGS_SOURCE_ENV_FILES) if self.SETTINGS_SOURCE_ENV_FILES else None, 
-                     tuple(self.SETTINGS_SOURCE_ENV_PREFIX) if self.SETTINGS_SOURCE_ENV_PREFIX else None, 
-                     tuple(self.SETTINGS_SOURCE_YAML_FILES) if self.SETTINGS_SOURCE_YAML_FILES else None, 
+        return hash((self.SETTINGS_NAMESPACE,
+                     self.SETTINGS_CLASS_NAME,
+                     tuple(self.SETTINGS_SOURCE_ENV_FILES) if self.SETTINGS_SOURCE_ENV_FILES else None,
+                     tuple(self.SETTINGS_SOURCE_ENV_PREFIX) if self.SETTINGS_SOURCE_ENV_PREFIX else None,
+                     tuple(self.SETTINGS_SOURCE_YAML_FILES) if self.SETTINGS_SOURCE_YAML_FILES else None,
                      tuple(self.SETTINGS_SOURCE_TOML_FILES) if self.SETTINGS_SOURCE_TOML_FILES else None,
                      tuple(self.SETTINGS_SOURCE_JSON_FILES) if self.SETTINGS_SOURCE_JSON_FILES else None,
                     #  self.SETTINGS_SOURCE_KWARGS
@@ -185,7 +185,7 @@ class MountainAshBaseSettings(BaseSettings):
 
     def init_setting_from_template(self, template_str:str, current_value: Optional[str] = None, reinitialise: bool = False):
 
-        """Initializes a setting value from a template string, 
+        """Initializes a setting value from a template string,
         replacing placeholders with  values from the settings object.
 
         Args:
@@ -212,7 +212,7 @@ class MountainAshBaseSettings(BaseSettings):
                     mapping[field_name] = getattr(self, field_name)
                 else:
                     raise AttributeError(f"The object does not have an attribute named '{field_name}'")
-                
+
         return template_str.format(**mapping)
 
 
@@ -241,7 +241,7 @@ class MountainAshBaseSettings(BaseSettings):
                     mapping[field_name] = getattr(self, field_name)
                 else:
                     raise AttributeError(f"The object does not have an attribute named '{field_name}'")
-                
+
         return template_str.format(**mapping)
 
     def update_settings_from_dict(self, settings_dict: Optional[dict[str, Any]]) -> None:
@@ -286,7 +286,7 @@ class MountainAshBaseSettings(BaseSettings):
         if self.SETTINGS_SOURCE_ENV_FILES:
             config_files += self.SETTINGS_SOURCE_ENV_FILES
         if self.SETTINGS_SOURCE_YAML_FILES:
-            config_files += self.SETTINGS_SOURCE_YAML_FILES  
+            config_files += self.SETTINGS_SOURCE_YAML_FILES
         if self.SETTINGS_SOURCE_TOML_FILES:
             config_files += self.SETTINGS_SOURCE_TOML_FILES
         if self.SETTINGS_SOURCE_JSON_FILES:
@@ -305,21 +305,21 @@ class MountainAshBaseSettings(BaseSettings):
             config_files=       existing_config_files,
             kwargs=             existing_kwargs,
             env_prefix=         existing_env_prefix)
-            
-        return params        
+
+        return params
 
     def __getattribute__(self, name):
         """
         Custom attribute access that handles SecretStr types by automatically extracting their values.
-        
+
         This allows transparent access to secret values through normal property access.
         """
         # Get the attribute normally first
         value = super().__getattribute__(name)
-        
+
         # If it's a SecretStr, return its value instead
         if hasattr(value, 'get_secret_value') and callable(getattr(value, 'get_secret_value')):
             return value.get_secret_value()
-        
+
         # Otherwise return the original value
         return value
