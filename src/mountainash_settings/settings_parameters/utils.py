@@ -1,7 +1,8 @@
 
 from typing import Optional, Union, List, Any, Tuple, Dict
-from upath import UPath
 import platform
+
+from upath import UPath
 
 from .settings_parameters import SettingsParameters
 from .filehandler import SettingsFileHandler
@@ -21,9 +22,9 @@ class SettingsUtils:
 
     @classmethod
     def merge_settings_parameter_objects(cls,
-                        base: SettingsParameters, 
+                        base: SettingsParameters,
                         other: SettingsParameters,
-                        prioritise_self: Optional[bool] = False
+                        prioritise_self: bool = False
                    ) -> SettingsParameters:
 
 
@@ -45,7 +46,7 @@ class SettingsUtils:
         else:
 
             resolved_namespace =    base.namespace or base._init_namespace(other.namespace)
-            resolved_config_files = SettingsFileHandler.merge_config_files( base.config_files, other.config_files,)
+            resolved_config_files = SettingsFileHandler.merge_config_files( base.config_files, other.config_files)
             resolved_kwargs =       SettingsKwargsHandler.merge_kwargs(base.kwargs, other.kwargs)
             resolved_env_prefix=    base.env_prefix or other.env_prefix
             resolved_settings_class = base.settings_class or other.settings_class or None
@@ -66,7 +67,7 @@ class SettingsUtils:
 
     @classmethod
     def merge_settings_parameters(cls,
-                            base: SettingsParameters, 
+                            base: SettingsParameters,
                             namespace: Optional[str] = None,
                             config_files: Optional[Union[UPath, str, List[Union[UPath, str]]]] = None,
                             kwargs: Optional[Dict[str, Any]] = None,
@@ -74,7 +75,7 @@ class SettingsUtils:
                             secrets_dir: Optional[str] = None,
                             prioritise_self: Optional[bool] = False
                ) -> 'SettingsParameters':
-        
+
 
         if not prioritise_self:
             resolved_namespace =    namespace or base._init_namespace(base.namespace)
@@ -83,7 +84,7 @@ class SettingsUtils:
             resolved_env_prefix=    cls.merge_env_prefix(env_prefix, base.env_prefix)
         else:
             resolved_namespace =    base.namespace or base._init_namespace(namespace)
-            resolved_config_files = SettingsFileHandler.merge_config_files( base.config_files, config_files,)
+            resolved_config_files = SettingsFileHandler.merge_config_files( base.config_files, config_files)
             resolved_kwargs =       SettingsKwargsHandler.merge_kwargs(base.kwargs, kwargs)
             resolved_env_prefix=    cls.merge_env_prefix(base.env_prefix, env_prefix)
 
@@ -105,42 +106,42 @@ class SettingsUtils:
     ############################################################################################################
     # Parameter formatting
 
-    @classmethod
-    def format_kwargs_dict(cls, 
+    @staticmethod
+    def format_kwargs_dict(
                             p_kwargs: None | Dict[str,Any] | Tuple[Any,Any] = None
                             ) -> Optional[Dict[str,Any]]:
-        
+
         return SettingsKwargsHandler.format_kwargs_dict(p_kwargs=p_kwargs)
 
 
-    @classmethod
-    def format_kwargs_tuple(cls, 
+    @staticmethod
+    def format_kwargs_tuple(
                             p_kwargs: None | Dict[str,Any] | Tuple[Any,Any]  = None
                             ) -> Optional[Tuple[Any,Any]]:
-        
+
         return SettingsKwargsHandler.format_kwargs_tuple(p_kwargs=p_kwargs)
 
 
 
-    @classmethod
-    def format_config_file_list(cls, 
+    @staticmethod
+    def format_config_file_list(
                                  config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None
                                  ) -> Optional[List[UPath|str]]:
-        
+
         return SettingsFileHandler.format_config_file_list(config_files=config_files)
 
 
-    @classmethod
-    def format_config_file_tuple(cls, 
+    @staticmethod
+    def format_config_file_tuple(
                                 config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None
                                 ) -> Optional[Tuple[UPath|str]]:
-        
+
         return SettingsFileHandler.format_config_file_tuple(config_files=config_files)
 
 
-    #Resolve / Merge values 
+    #Resolve / Merge values
     @staticmethod
-    def merge_namspaces(namespace1: Optional[str] = None,
+    def merge_namespaces(namespace1: Optional[str] = None,
                          namespace2: Optional[str] = None) -> str:
         return namespace1 or namespace2 or "DEFAULT"
 
@@ -154,13 +155,13 @@ class SettingsUtils:
     @staticmethod
     def merge_config_files(config_files1: Optional[Tuple[Union[UPath, str], ...]] = None,
                             config_files2: Optional[Tuple[Union[UPath, str], ...]] = None) -> Optional[Tuple[Union[UPath, str], ...]]:
-    
+
         return SettingsFileHandler.merge_config_files(config_files1=config_files1, config_files2=config_files2)
 
     @staticmethod
     def merge_kwargs(kwargs1: Optional[Tuple[Tuple[str, Any], ...]] = None,
                       kwargs2: Optional[Tuple[Tuple[str, Any], ...]] = None) -> Optional[Tuple[Tuple[str, Any], ...]]:
-        
+
         return SettingsKwargsHandler.merge_kwargs(kwargs1=kwargs1, kwargs2=kwargs2)
 
 
@@ -169,17 +170,17 @@ class SettingsUtils:
     # SettingsParameters extraction
 
     # @classmethod
-    # def extract_namespace_from_settings_parameters(cls, 
+    # def extract_namespace_from_settings_parameters(cls,
     #                                                settings_parameters: SettingsParameters) -> Optional[str]:
 
     #     """
     #     Extracts the namespace from the SettingsParameters object.
-        
+
     #     Args:
     #         settings_parameters (SettingsParameters): The settings parameters object.
 
     #     Returns:
-    #         str: The namespace.        
+    #         str: The namespace.
     #     """
 
     #     # mutable_parameters: dict[str, Any] = cls.extract_settings_parameters(settings_parameters=settings_parameters)
@@ -187,7 +188,7 @@ class SettingsUtils:
     #     return settings_parameters.namespace
 
     # @classmethod
-    # def extract_config_files_from_settings_parameters(cls, 
+    # def extract_config_files_from_settings_parameters(cls,
     #                                                   settings_parameters: SettingsParameters) -> Optional[List[UPath|str]]:
     #     """
     #     Extracts the config_files from the SettingsParameters object.
@@ -221,18 +222,17 @@ class SettingsUtils:
 
     #     return mutable_parameters["kwargs"]
 
-    @classmethod
-    def get_platform_slash(cls) -> str:
+    # @classmethod
+    # def get_platform_slash(cls) -> str:
 
-        """
-        Returns the platform-specific slash.
+    #     """
+    #     Returns the platform-specific slash.
 
-        Returns:
-            str: The platform-specific slash.
-        """
+    #     Returns:
+    #         str: The platform-specific slash.
+    #     """
 
-        if platform.system() == "Windows":
-            return "\\"
-        else:
-            return "/"
-
+    #     if platform.system() == "Windows":
+    #         return "\\"
+    #     else:
+    #         return "/"

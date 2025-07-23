@@ -1,7 +1,8 @@
 from typing import Optional, Any, Type, Dict
-
 from importlib import import_module
+
 from pydantic_settings import BaseSettings
+
 from ..settings_parameters import SettingsParameters, SettingsUtils
 # from ..settings.base import MountainAshBaseSettings
 
@@ -21,11 +22,13 @@ class SettingsManager:
     # reserved_kwargs = {"_env_file","_env_file_encoding", "_env_prefix"}
 
     # auth_parameters: Optional[SettingsParameters] = None
-    settings_object_cache: dict[Any, BaseSettings] = {}
+    # settings_object_cache: dict[Any, BaseSettings] = {}
 
-    def __init__(self,
+    def __init__(self
                  ) -> None:
-        ...
+
+        self.settings_object_cache: Dict[Any, BaseSettings] = {}
+
 
     # @classmethod
     def get_settings_object(self, settings_parameters: SettingsParameters) -> BaseSettings:
