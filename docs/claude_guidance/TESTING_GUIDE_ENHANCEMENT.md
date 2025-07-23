@@ -8,7 +8,8 @@ Analyze existing tests and develop new/improved tests:
 
 ## Package Information
 - **Name**: mountainash-settings
-- **Has Tests**: Yes - analyze existing tests- **Modules**: mountainash_settings
+- **Has Tests**: Yes - analyze existing tests
+- **Modules**: mountainash_settings
 ## Analysis Steps
 
 ### 1. Read Existing Documentation
