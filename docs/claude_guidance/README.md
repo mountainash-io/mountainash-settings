@@ -4,8 +4,8 @@ This directory contains guidance files for generating high-quality documentation
 
 ## Available Guidance Files
 
-### [Testing Enhancement](TESTING_GUIDE_ENHANCEMENT.md)
-Instructions for improving testing documentation
+### [Package Overview](PACKAGE_OVERVIEW_GUIDE.md)
+Guide for creating detailed package documentation
 
 ## Usage Instructions
 
@@ -26,7 +26,7 @@ claude-code "Please create a README.md based on docs/claude_guidance/README_GENE
 claude-code "Please create usage examples based on docs/claude_guidance/EXAMPLES_GENERATION_GUIDE.md"
 
 # Generate package overview
-claude-code "Please create docs/package_overview.md based on docs/claude_guidance/PACKAGE_OVERVIEW_GUIDE.md"
+claude-code "Please create docs/PACKAGE_OVERVIEW.md based on docs/claude_guidance/PACKAGE_OVERVIEW_GUIDE.md"
 ```
 
 ## Regenerating These Files
@@ -42,4 +42,4 @@ mountainash-docs create-claude-guidance --package mountainash-settings --types r
 ```
 
 ---
-*Generated on 2025-07-21 21:38:29 by Mountain Ash Documentation Generator*
+*Generated on 2025-07-22 16:59:48 by Mountain Ash Documentation Generator*

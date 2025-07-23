@@ -13,7 +13,7 @@ Analyze existing tests and develop new/improved tests:
 
 ### 1. Read Existing Documentation
 **Required Reading:**
-- `TESTING.md` - Local and CI test execution guidance
+- `TESTING.md` - Execution of local and CI test execution guidance
 - `hatch.toml` or `pyproject.toml` - Test script definitions and configuration
 - `tests/conftest.py` - Shared fixtures and test configuration
 
@@ -178,6 +178,29 @@ def test_function_with_external_dependency(mock_api):
 ## Avoid Unfailable Tests
 
 Don't create mocks that only verify method calls - ensure tests can fail meaningfully by testing actual behavior and outcomes.
+
+## Test Review and Fixing Philosophy
+Preserve Failing Tests
+
+Never delete failing tests - they reveal real bugs that need investigation
+Leave failing tests in place so you can find and diagnose the underlying issues
+
+Debug Failing Tests Systematically
+When tests fail, ultrathink:
+
+Is the test wrong? - Poor test design, incorrect assertions, or flawed test logic
+Is the code wrong? - Actual bugs in the implementation
+
+## Refactoring Strategy
+
+If the test is wrong: Ultrathink how to refactor the test to be more accurate and maintainable
+If there are no failing tests: Ultrathink how to refactor the code to improve readability and maintainability
+
+## Keep Framework Code Clean
+
+Don't shoe-horn test-specific fixes into framework code
+Instead, subclass the real code in your tests to create test-specific behavior
+This keeps production code focused and test code explicit about its modifications
 
 
 ## Implementation Tasks

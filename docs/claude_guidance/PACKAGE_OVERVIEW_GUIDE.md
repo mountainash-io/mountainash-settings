@@ -1,42 +1,45 @@
-# Package Overview Generation Guide for mountainash-settings
+# Package Overview Generation Task
 
-This guide provides instructions for creating a comprehensive package overview document.
+## Output Required
+Create: `docs/PACKAGE_OVERVIEW.md`
 
-## Package Context
-- **Package**: mountainash-settings
-- **Category**: core
-- **Purpose**: This is a **core Mountain Ash package** providing fundamental functionality for the ecosystem.
+## Package Information
+- **Name**: mountainash-settings
+- **Modules**: mountainash_settings- **API Elements**: Analyze source code
+## Document Structure
+```markdown
+# mountainash-settings Package Overview
 
-## Overview Document Structure
+## Purpose
+[What this package does - 1-2 sentences]
 
-### 1. Package Purpose
-- Clear explanation of what the package does
-- Problem it solves
-- Target audience
+## Architecture
+[High-level component structure]
 
-### 2. Architecture Overview
-- High-level architecture
-- Key components and their relationships
-- Data flow diagrams if applicable
+## Directory + File Structure
+[Complete directory and file structure]
 
-### 3. API Reference
-- Public interfaces
-- Key classes and functions
-- Configuration options
+## Key Components
+### mountainash_settings
+[Module purpose and key functions]
 
-### 4. Integration Guide
-- How it fits in the Mountain Ash ecosystem
-- Dependencies and relationships
-- Usage patterns
 
-## Output Location
-Create the overview as: `docs/package_overview.md`
+## Usage Patterns
+[Common ways this package is used]
 
-## Quality Standards
-- Technical accuracy
-- Clear explanations for developers
-- Practical examples
-- Keep it focused on this specific package
+## Dependencies
+Runtime: 4 packages
+[Local Dependencies List]
+[External Dependencies List]
 
----
-*Generated on 2025-07-21 11:35:27 by Mountain Ash Documentation Generator*
+
+## Integration
+[How this fits with other packages/systems]
+```
+
+## Instructions
+1. Analyze the source code structure
+2. Document the main purpose clearly
+3. List key components and their roles
+4. Keep it focused on developers who need to understand the package
+5. Save as `docs/PACKAGE_OVERVIEW.md`
