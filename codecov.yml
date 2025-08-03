@@ -1,5 +1,9 @@
-
 cli:
-  plugins:
-    pycoverage:
-      report_type: "xml"
+    plugins:
+        pycoverage:
+            report_type: "xml"
+
+badge:
+    org-name: "codecov"
+    repo-name: "flat-square"
+    token: A1VZKIRWBZ
