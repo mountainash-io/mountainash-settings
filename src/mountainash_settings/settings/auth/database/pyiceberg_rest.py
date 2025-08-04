@@ -14,30 +14,30 @@ from mountainash_settings.settings.auth.database.constants import (
 class PyIcebergRestAuthSettings(BaseDBAuthSettings):
     """
     Cloudflare R2 storage authentication settings.
-    
+
     Handles authentication configuration for Cloudflare R2 storage.
-    Does not perform actual authentication or connection. 
-    """     
+    Does not perform actual authentication or connection.
+    """
     PROVIDER_TYPE: str = Field(default="PYICEBERG_REST")  # Need to add PYICEBERG_REST to CONST_STORAGE_PROVIDER_TYPE
-    
+
     # R2 Settings
     WAREHOUSE: str = Field(...)  # Required - R2 bucket name
     CATALOG_NAME: str = Field(...)  # Required - R2 bucket name
     CATALOG_URI: str = Field(...)  # Required - R2 bucket name
-   
+
     # Authentication Settings
-    AUTH_METHOD: str = Field(default=CONST_DB_AUTH_METHOD.TOKEN.value)
-    
-    # Connection Settings 
+    AUTH_METHOD: str = Field(default=CONST_DB_AUTH_METHOD.TOKEN)
+
+    # Connection Settings
     USE_SSL: bool = Field(default=False)
     VERIFY_SSL: bool = Field(default=True)
-    
-    def __init__(self, 
+
+    def __init__(self,
                  config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
                  settings_parameters: Optional[SettingsParameters] = None,
-                 **kwargs) -> None:  
+                 **kwargs) -> None:
 
-        super().__init__(config_files=config_files, 
+        super().__init__(config_files=config_files,
                          settings_parameters=settings_parameters,
                          **kwargs)
 
@@ -48,13 +48,13 @@ class PyIcebergRestAuthSettings(BaseDBAuthSettings):
         pass
 
 
-    def get_connection_url(self) -> Dict[str, Any]:            
+    def get_connection_url(self) -> Dict[str, Any]:
         return None
 
     def get_connection_kwargs(self, db_abstraction_layer: Optional[str] = None) -> Dict[str, Any]:
         """Get connection arguments as dictionary"""
         args = {}#  super().get_connection_kwargs()
-        
+
         # Add R2-specific arguments
         args.update({
             "name": self.CATALOG_NAME,
@@ -62,7 +62,7 @@ class PyIcebergRestAuthSettings(BaseDBAuthSettings):
             "uri": self.CATALOG_URI,
             "token": self.TOKEN,
         })
-        
+
         return {k: v for k, v in args.items() if v is not None}
 
 

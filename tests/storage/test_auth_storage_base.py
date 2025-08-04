@@ -26,26 +26,26 @@ class BaseStorageAuthTests:
     Base class for storage authentication tests.
     Each storage provider's test class should inherit from this.
     """
-    
+
     # To be implemented by child classes
     provider_class: Type[StorageAuthBase] = None
     provider_type: str = None
-    
+
     # Example valid config - override in child classes
     valid_config: Dict[str, Any] = {
         "PROVIDER_TYPE": None,  # Set in child class
-        "AUTH_METHOD": CONST_STORAGE_AUTH_METHOD.KEY.value,
+        "AUTH_METHOD": CONST_STORAGE_AUTH_METHOD.KEY,
         "ACCESS_KEY": "test_key",
         "SECRET_KEY": "test_secret"
     }
-    
+
     @pytest.fixture
     def storage_auth(self):
 
         """Create instance of storage auth class with valid config"""
         if not self.provider_class or not self.provider_type:
             pytest.skip("Test class not properly configured")
-            
+
         config = self.valid_config.copy()
         config["PROVIDER_TYPE"] = self.provider_type
         return self.provider_class(**config)
@@ -60,7 +60,7 @@ class BaseStorageAuthTests:
     # def test_basic_initialization(self, storage_auth: StorageAuthBase):
     #     """Test basic initialization with valid config"""
     #     assert storage_auth.PROVIDER_TYPE == self.provider_type
-    #     assert storage_auth.AUTH_METHOD == CONST_STORAGE_AUTH_METHOD.KEY.value
+    #     assert storage_auth.AUTH_METHOD == CONST_STORAGE_AUTH_METHOD.KEY
     #     assert storage_auth.ACCESS_KEY_ID == "test_key"
     #     assert storage_auth.SECRET_KEY == "test_secret"
 
@@ -72,7 +72,7 @@ class BaseStorageAuthTests:
 
     #     config = self.valid_config.copy()
     #     config["PROVIDER_TYPE"] = "invalid_provider"
-        
+
     #     with pytest.raises(StorageValidationError) as exc_info:
     #         self.provider_class(**config)
     #     assert "Invalid provider type" in str(exc_info.value)
@@ -87,14 +87,14 @@ class BaseStorageAuthTests:
     #     """Test validation of access type"""
     #     # Valid access types
     #     for access_type in [
-    #         CONST_STORAGE_ACCESS_TYPE.READ_ONLY.value,
-    #         CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY.value,
-    #         CONST_STORAGE_ACCESS_TYPE.READ_WRITE.value,
-    #         CONST_STORAGE_ACCESS_TYPE.ADMIN.value
+    #         CONST_STORAGE_ACCESS_TYPE.READ_ONLY,
+    #         CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY,
+    #         CONST_STORAGE_ACCESS_TYPE.READ_WRITE,
+    #         CONST_STORAGE_ACCESS_TYPE.ADMIN
     #     ]:
     #         storage_auth.ACCESS_TYPE = access_type
     #         assert storage_auth.ACCESS_TYPE == access_type
-        
+
     #     # Invalid access type
     #     with pytest.raises(StorageValidationError) as exc_info:
     #         storage_auth.ACCESS_TYPE = "invalid_access"
@@ -120,10 +120,10 @@ class BaseStorageAuthTests:
     #     """Test encryption key file handling"""
     #     storage_auth.ENCRYPTION_ENABLED = True
     #     storage_auth.ENCRYPTION_KEY_FILE = temp_key_file
-        
+
     #     # Should not raise exception
     #     storage_auth._validate_security_config()
-        
+
     #     # Test with non-existent key file
     #     storage_auth.ENCRYPTION_KEY_FILE = "/nonexistent/path"
     #     with pytest.raises(StorageSecurityError) as exc_info:
@@ -135,7 +135,7 @@ class BaseStorageAuthTests:
     #     """Test SSL configuration validation"""
     #     storage_auth.USE_SSL = True
     #     storage_auth.VERIFY_SSL = True
-        
+
     #     # Should raise error when no CA cert provided
     #     with pytest.raises(StorageSecurityError) as exc_info:
     #         storage_auth._validate_security_config()
@@ -152,22 +152,22 @@ class BaseStorageAuthTests:
     #     """Test connection arguments generation"""
     #     args = storage_auth.get_connection_args()
     #     assert isinstance(args, dict)
-        
+
     #     # Check credential handling
-    #     if storage_auth.AUTH_METHOD == CONST_STORAGE_AUTH_METHOD.KEY.value:
+    #     if storage_auth.AUTH_METHOD == CONST_STORAGE_AUTH_METHOD.KEY:
     #         assert "access_key" in args
 
     # def test_permission_validation(self, storage_auth):
     #     """Test permission validation"""
     #     # Set up test permissions for read-only access
-    #     storage_auth.ACCESS_TYPE = CONST_STORAGE_ACCESS_TYPE.READ_ONLY.value
+    #     storage_auth.ACCESS_TYPE = CONST_STORAGE_ACCESS_TYPE.READ_ONLY
     #     storage_auth.REQUIRED_PERMISSIONS = {"read"}
-        
+
     #     # Should pass validation
     #     storage_auth._validate_permissions()
-        
+
     #     # Test insufficient permissions
-    #     storage_auth.ACCESS_TYPE = CONST_STORAGE_ACCESS_TYPE.READ_WRITE.value
+    #     storage_auth.ACCESS_TYPE = CONST_STORAGE_ACCESS_TYPE.READ_WRITE
     #     with pytest.raises(StorageValidationError) as exc_info:
     #         storage_auth._validate_permissions()
     #     assert "Missing required permissions" in str(exc_info.value)
@@ -201,5 +201,3 @@ class BaseStorageAuthTests:
     #     """Benchmark connection URL generation"""
     #     result = benchmark(storage_auth.get_connection_url)
     #     assert isinstance(result, str)
-
-

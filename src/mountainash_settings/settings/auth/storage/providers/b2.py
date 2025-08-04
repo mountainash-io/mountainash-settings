@@ -43,58 +43,58 @@ class B2ServerSideEncryption(str, Enum):
 class BackblazeB2StorageAuthSettings(StorageAuthBase):
     """
     Backblaze B2 storage authentication settings.
-    
+
     Handles authentication configuration for Backblaze B2 cloud storage.
     Does not perform actual authentication or connection.
     """
-    
+
     PROVIDER_TYPE: str = Field(default=CONST_STORAGE_PROVIDER_TYPE.B2)
-    
+
     # Authentication Settings
     APPLICATION_KEY_ID: str = Field(...)  # Required
     APPLICATION_KEY: SecretStr = Field(...)  # Required
-    
+
     # Bucket Settings
     BUCKET_NAME: str = Field(...)  # Required
     BUCKET_ID: Optional[str] = Field(default=None)  # Optional, can be looked up
     BUCKET_TYPE: str = Field(default=B2BucketType.PRIVATE)
-    
+
     # Endpoint Settings
     API_ENDPOINT: Optional[str] = Field(default="api.backblazeb2.com")
     DOWNLOAD_ENDPOINT: Optional[str] = Field(default=None)  # Set by auth response
-    
+
     # Encryption Settings
     SERVER_SIDE_ENCRYPTION: str = Field(default=B2ServerSideEncryption.SSE_B2)
     CUSTOMER_KEY: Optional[SecretStr] = Field(default=None)  # For SSE-C
     KEY_ID: Optional[str] = Field(default=None)  # For key identification
-    
+
     # Lifecycle Settings
     FILE_RETENTION_DAYS: Optional[int] = Field(default=None)
     FILE_PREFIX: Optional[str] = Field(default=None)
     DELETE_OLD_VERSIONS: bool = Field(default=False)
     KEEP_LAST_N_VERSIONS: Optional[int] = Field(default=None)
-    
+
     # Performance Settings
     # RECOMMENDED_PART_SIZE: int = Field(default=100 * 1024 * 1024)  # 100MB
     # MIN_PART_SIZE: int = Field(default=5 * 1024 * 1024)  # 5MB
     # MAX_CONNECTIONS: int = Field(default=4)
-    
+
     # # Cache Settings
     # AUTH_CACHE_TTL: int = Field(default=86400)  # 24 hours
     # UPLOAD_URL_CACHE_TTL: int = Field(default=1800)  # 30 minutes
-    
+
     # # Rate Limiting
     # MAX_RETRIES: int = Field(default=5)
     # RETRY_BACKOFF_FACTOR: float = Field(default=1.5)
     # MIN_RETRY_DELAY: float = Field(default=1.0)
     # MAX_RETRY_DELAY: float = Field(default=60.0)
-    
+
     # # CORS Settings
     # ALLOWED_ORIGINS: Optional[List[str]] = Field(default=None)
     # ALLOWED_OPERATIONS: Optional[List[str]] = Field(default=None)
     # EXPOSE_HEADERS: Optional[List[str]] = Field(default=None)
     # MAX_AGE_SECONDS: int = Field(default=3600)
-    
+
     # Capabilities
     CAPABILITIES: Set[str] = Field(
         default={
@@ -104,16 +104,16 @@ class BackblazeB2StorageAuthSettings(StorageAuthBase):
         }
     )
 
-    def __init__(self, 
+    def __init__(self,
                  config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
                  settings_parameters:   Optional[SettingsParameters] = None,
                 #  _dummy: Optional[bool] = False,
-                 **kwargs) -> None:  
-        
+                 **kwargs) -> None:
 
-        super().__init__(config_files=config_files, 
+
+        super().__init__(config_files=config_files,
                          settings_parameters=settings_parameters,
-                        #  _dummy=_dummy, 
+                        #  _dummy=_dummy,
                          **kwargs)
 
 
@@ -127,13 +127,13 @@ class BackblazeB2StorageAuthSettings(StorageAuthBase):
                 "Application key ID is required",
                 validation_type="application_key_id"
             )
-            
+
         if not re.match(r'^[a-zA-Z0-9]{24}$', v):
             raise StorageValidationError(
                 "Invalid application key ID format",
                 validation_type="application_key_id"
             )
-            
+
         return v
 
     @field_validator("BUCKET_NAME")
@@ -144,19 +144,19 @@ class BackblazeB2StorageAuthSettings(StorageAuthBase):
                 "Bucket name is required",
                 validation_type="bucket_name"
             )
-            
+
         if not (6 <= len(v) <= 50):
             raise StorageValidationError(
                 "Bucket name must be between 6 and 50 characters",
                 validation_type="bucket_name"
             )
-            
+
         if not re.match(r'^[a-z0-9-]+$', v):
             raise StorageValidationError(
                 "Bucket name can only contain lowercase letters, numbers, and hyphens",
                 validation_type="bucket_name"
             )
-            
+
         return v
 
     @field_validator("BUCKET_ID")
@@ -168,7 +168,7 @@ class BackblazeB2StorageAuthSettings(StorageAuthBase):
                     "Invalid bucket ID format",
                     validation_type="bucket_id"
                 )
-                
+
         return v
 
     @field_validator("BUCKET_TYPE")
@@ -240,7 +240,7 @@ class BackblazeB2StorageAuthSettings(StorageAuthBase):
 
         # Validate capabilities for bucket type
         if self.BUCKET_TYPE == B2BucketType.PUBLIC:
-            if B2CapabilityType.WRITE_FILES.value in self.CAPABILITIES:
+            if B2CapabilityType.WRITE_FILES in self.CAPABILITIES:
                 raise StorageConfigError(
                     "Public buckets cannot have write capabilities",
                     provider=self.PROVIDER_TYPE
@@ -261,7 +261,7 @@ class BackblazeB2StorageAuthSettings(StorageAuthBase):
     def get_connection_args(self) -> Dict[str, Any]:
         """Get connection arguments as dictionary"""
         args = super().get_connection_args()
-        
+
         # Add B2-specific arguments
         args.update({
             "application_key_id": self.APPLICATION_KEY_ID,
@@ -272,29 +272,29 @@ class BackblazeB2StorageAuthSettings(StorageAuthBase):
             "api_endpoint": self.API_ENDPOINT,
             "download_endpoint": self.DOWNLOAD_ENDPOINT
         })
-        
+
         # Add encryption settings
         args.update({
             "server_side_encryption": self.SERVER_SIDE_ENCRYPTION,
             "key_id": self.KEY_ID
         })
-        
+
         if self.SERVER_SIDE_ENCRYPTION == B2ServerSideEncryption.SSE_C:
             args["customer_key"] = self.CUSTOMER_KEY
-            
+
         # Add lifecycle settings
         if self.FILE_RETENTION_DAYS:
             args["lifecycle_rules"] = {
                 "daysFromHiding": self.FILE_RETENTION_DAYS,
                 "fileNamePrefix": self.FILE_PREFIX or ""
             }
-            
+
         if self.DELETE_OLD_VERSIONS:
             args.update({
                 "delete_old_versions": True,
                 "keep_versions": self.KEEP_LAST_N_VERSIONS
             })
-            
+
         # # Add performance settings
         # args.update({
         #     "recommended_part_size": self.RECOMMENDED_PART_SIZE,
@@ -303,7 +303,7 @@ class BackblazeB2StorageAuthSettings(StorageAuthBase):
         #     "auth_cache_ttl": self.AUTH_CACHE_TTL,
         #     "upload_url_cache_ttl": self.UPLOAD_URL_CACHE_TTL
         # })
-        
+
         # # Add retry settings
         # args.update({
         #     "max_retries": self.MAX_RETRIES,
@@ -311,7 +311,7 @@ class BackblazeB2StorageAuthSettings(StorageAuthBase):
         #     "min_retry_delay": self.MIN_RETRY_DELAY,
         #     "max_retry_delay": self.MAX_RETRY_DELAY
         # })
-        
+
         # # Add CORS settings if configured
         # if self.ALLOWED_ORIGINS:
         #     args["cors_rules"] = {
@@ -322,7 +322,7 @@ class BackblazeB2StorageAuthSettings(StorageAuthBase):
         #             "maxAgeSeconds": self.MAX_AGE_SECONDS
         #         }]
         #     }
-            
+
         return {k: v for k, v in args.items() if v is not None}
 
     # def _validate_permissions(self) -> None:
@@ -330,22 +330,22 @@ class BackblazeB2StorageAuthSettings(StorageAuthBase):
     #     # Convert access type to required capabilities
     #     if self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_ONLY:
     #         required_caps = {
-    #             B2CapabilityType.LIST_FILES.value,
-    #             B2CapabilityType.READ_FILES.value
+    #             B2CapabilityType.LIST_FILES,
+    #             B2CapabilityType.READ_FILES
     #         }
     #     elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.WRITE_ONLY:
     #         required_caps = {
-    #             B2CapabilityType.WRITE_FILES.value
+    #             B2CapabilityType.WRITE_FILES
     #         }
     #     elif self.ACCESS_TYPE == CONST_STORAGE_ACCESS_TYPE.READ_WRITE:
     #         required_caps = {
-    #             B2CapabilityType.LIST_FILES.value,
-    #             B2CapabilityType.READ_FILES.value,
-    #             B2CapabilityType.WRITE_FILES.value
+    #             B2CapabilityType.LIST_FILES,
+    #             B2CapabilityType.READ_FILES,
+    #             B2CapabilityType.WRITE_FILES
     #         }
     #     else:  # ADMIN
     #         required_caps = {cap.value for cap in B2CapabilityType}
-            
+
     #     # Validate against required capabilities
     #     if not required_caps.issubset(self.CAPABILITIES):
     #         raise StorageValidationError(
@@ -356,7 +356,7 @@ class BackblazeB2StorageAuthSettings(StorageAuthBase):
     # def _test_connection(self) -> bool:
     #     """
     #     Validate connection parameters without making actual connection
-        
+
     #     Returns:
     #         bool: True if configuration is valid
     #     """
@@ -368,14 +368,14 @@ class BackblazeB2StorageAuthSettings(StorageAuthBase):
     #             required_parts={'netloc'}
     #         ):
     #             return False
-                
+
     #         # Validate part sizes
     #         if not (5 * 1024 * 1024 <= self.MIN_PART_SIZE <= self.RECOMMENDED_PART_SIZE):
     #             return False
-                
+
     #         if not (self.RECOMMENDED_PART_SIZE <= 5 * 1024 * 1024 * 1024):  # 5GB max
     #             return False
-                
+
     #         # Validate retry settings
     #         if not StorageValidator.validate_retry_settings(
     #             max_retries=self.MAX_RETRIES,
@@ -383,9 +383,9 @@ class BackblazeB2StorageAuthSettings(StorageAuthBase):
     #             max_delay=self.MAX_RETRY_DELAY
     #         ):
     #             return False
-                
+
     #         return True
-            
+
     #     except Exception as e:
     #         if isinstance(e, StorageValidationError):
     #             raise

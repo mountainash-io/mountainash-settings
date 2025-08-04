@@ -32,9 +32,9 @@ class TestS3StorageAuth(BaseStorageAuthTests):
     Test cases for S3 storage authentication.
     Inherits common test cases from BaseStorageAuthTests.
     """
-    
+
     # provider_class = S3StorageAuthSettings
-    provider_type = CONST_STORAGE_PROVIDER_TYPE.S3.value
+    provider_type = CONST_STORAGE_PROVIDER_TYPE.S3
     # settings_namespace = "TestS3StorageAuth"
 
     @pytest.fixture
@@ -73,13 +73,13 @@ class TestS3StorageAuth(BaseStorageAuthTests):
 
     @pytest.fixture
     def settings_parameters(self, provider_class, config_file_path, settings_namespace) -> SettingsParameters:
-        
+
         # config_files: List[Any] = str(config_file_path)
         kwargs = {}
-        
-        settings_parameters = SettingsParameters.create(settings_class=provider_class, 
-                                                        namespace=settings_namespace, 
-                                                        config_files=config_file_path, 
+
+        settings_parameters = SettingsParameters.create(settings_class=provider_class,
+                                                        namespace=settings_namespace,
+                                                        config_files=config_file_path,
                                                         kwargs=kwargs)
         print(f"settings_parameters: {settings_parameters}")
 
@@ -93,10 +93,10 @@ class TestS3StorageAuth(BaseStorageAuthTests):
 
         settings_namespace  = f"{settings_namespace}.{time.time_ns()}"
 
-        storage_auth: Any = get_settings(settings_parameters=settings_parameters, 
+        storage_auth: Any = get_settings(settings_parameters=settings_parameters,
                                         settings_namespace=settings_namespace
                                         )
-        
+
         print(storage_auth)
         return storage_auth
         # return self.provider_class(**base_config)
@@ -120,11 +120,11 @@ class TestS3StorageAuth(BaseStorageAuthTests):
     #     # Check security defaults
     #     assert base_config.get("USE_SSL", False)
     #     assert base_config.get("VERIFY_SSL", False)
-        
+
     #     # Check transfer settings
     #     assert base_config.get("MAX_POOL_CONNECTIONS", 10) > 0
     #     assert base_config.get("MULTIPART_THRESHOLD", 8 * 1024 * 1024) >= 5 * 1024 * 1024
-        
+
     #     # Check addressing style
     #     assert base_config.get("ADDRESSING_STYLE", "auto") in ["auto", "path", "virtual"]
 
@@ -135,7 +135,7 @@ class TestS3StorageAuth(BaseStorageAuthTests):
     #     """Test S3-specific region validation"""
     #     region = storage_auth.REGION
     #     assert re.match(r'^[a-z]{2}-[a-z]+-\d{1}$', region)
-        
+
     #     # Test invalid regions
     #     invalid_regions = ["invalid", "us_west_2", "EU-WEST-1"]
     #     for invalid_region in invalid_regions:
@@ -148,7 +148,7 @@ class TestS3StorageAuth(BaseStorageAuthTests):
     #     bucket = storage_auth.BUCKET
     #     assert 3 <= len(bucket) <= 63
     #     assert re.match(r'^[a-z0-9][a-z0-9.-]*[a-z0-9]$', bucket)
-        
+
     #     # Test invalid bucket names
     #     invalid_buckets = [
     #         "My-Bucket",  # uppercase not allowed
@@ -176,7 +176,7 @@ class TestS3StorageAuth(BaseStorageAuthTests):
     #     # Check SSL settings
     #     # assert storage_auth.USE_SSL == base_config.get("USE_SSL", True)
     #     # assert storage_auth.VERIFY_SSL == base_config.get("VERIFY_SSL", True)
-        
+
     #     # Check if CA bundle is properly configured when specified
     #     if "CA_BUNDLE" in base_config:
     #         assert storage_auth.CA_BUNDLE == base_config["CA_BUNDLE"]
@@ -187,7 +187,7 @@ class TestS3StorageAuth(BaseStorageAuthTests):
     #     threshold = int(base_config.get("MULTIPART_THRESHOLD", 8 * 1024 * 1024))
     #     assert threshold >= 5 * 1024 * 1024  # At least 5 MB
     #     assert storage_auth.MULTIPART_THRESHOLD == threshold
-        
+
     #     chunksize = int(base_config.get("MULTIPART_CHUNKSIZE", 8 * 1024 * 1024))
     #     assert chunksize >= 5 * 1024 * 1024  # At least 5 MB
     #     assert storage_auth.MULTIPART_CHUNKSIZE == chunksize
@@ -197,16 +197,16 @@ class TestS3StorageAuth(BaseStorageAuthTests):
     #     # Test IAM role authentication
     #     iam_config = base_config.copy()
     #     iam_config.update({
-    #         "AUTH_METHOD": CONST_STORAGE_AUTH_METHOD.IAM.value,
+    #         "AUTH_METHOD": CONST_STORAGE_AUTH_METHOD.IAM,
     #         "ROLE_ARN": "arn:aws:iam::123456789012:role/S3Access"
     #     })
     #     iam_auth = provider_class(**iam_config)
     #     assert iam_auth.AUTH_METHOD == CONST_STORAGE_AUTH_METHOD.IAM
-        
+
     #     # Test key authentication
     #     key_config = base_config.copy()
     #     key_config.update({
-    #         "AUTH_METHOD": CONST_STORAGE_AUTH_METHOD.KEY.value,
+    #         "AUTH_METHOD": CONST_STORAGE_AUTH_METHOD.KEY,
     #         "ACCESS_KEY_ID": "test_key",
     #         "SECRET_ACCESS_KEY": "test_secret"
     #     })
@@ -217,7 +217,7 @@ class TestS3StorageAuth(BaseStorageAuthTests):
     #     """Test S3 transfer acceleration settings"""
     #     accelerate = bool(base_config.get("ACCELERATE_ENDPOINT", False))
     #     assert storage_auth.ACCELERATE_ENDPOINT == accelerate
-        
+
     #     if accelerate:
     #         assert not storage_auth.PATH_STYLE  # Cannot use path style with acceleration
     #         url = storage_auth.get_connection_url()
@@ -226,11 +226,11 @@ class TestS3StorageAuth(BaseStorageAuthTests):
     def test_connection_url_generation(self, storage_auth: S3StorageAuthSettings, base_config):
         """Test URL generation based on config settings"""
         url = storage_auth.get_connection_url()
-        
+
         # Basic URL validation
         assert url.startswith("https://" if base_config.get("USE_SSL", True) else "http://")
         assert storage_auth.REGION in url
-        
+
         # Check addressing style impact
         addressing_style = base_config.get("ADDRESSING_STYLE", "auto")
         if addressing_style == "path":
@@ -242,13 +242,13 @@ class TestS3StorageAuth(BaseStorageAuthTests):
 
         """Test connection arguments from config"""
         args = storage_auth.get_connection_args()
-      
+
         print(f"test_s3_connection_args: {args}")
 
         # Check basic args
         assert args["region_name"] == base_config["REGION"]
         assert args["bucket"] == base_config["BUCKET"]
-        
+
         # Check config section
         config = args.get("config", {}).get("s3", {})
         # assert config.get("addressing_style") == base_config.get("ADDRESSING_STYLE", "auto")
@@ -265,7 +265,7 @@ class TestS3StorageAuth(BaseStorageAuthTests):
     #         },
     #         CONST_STORAGE_ACCESS_TYPE.ADMIN.value: {"s3:*"}
     #     }
-        
+
     #     for access_type, required_perms in permissions_map.items():
     #         storage_auth.ACCESS_TYPE = access_type
     #         storage_auth.REQUIRED_PERMISSIONS = required_perms
@@ -288,7 +288,7 @@ class TestS3StorageAuth(BaseStorageAuthTests):
     #     """Test timeout settings from config"""
     #     timeout = float(base_config.get("CONNECT_TIMEOUT", 30.0))
     #     assert storage_auth.CONNECT_TIMEOUT == timeout
-        
+
     #     read_timeout = float(base_config.get("READ_TIMEOUT", 60.0))
     #     assert storage_auth.READ_TIMEOUT == read_timeout
 
@@ -310,10 +310,10 @@ class TestS3StorageAuth(BaseStorageAuthTests):
 #     Test cases for S3 storage authentication.
 #     Inherits common test cases from BaseStorageAuthTests.
 #     """
-    
+
 #     provider_class = S3StorageAuthSettings
 #     provider_type = CONST_STORAGE_PROVIDER_TYPE.S3
-    
+
 #     # Override valid config for S3
 #     valid_config: Dict[str, Any] = {
 #         "PROVIDER_TYPE": CONST_STORAGE_PROVIDER_TYPE.S3,
@@ -331,7 +331,7 @@ class TestS3StorageAuth(BaseStorageAuthTests):
 #         for region in valid_regions:
 #             storage_auth.REGION = region
 #             assert storage_auth.REGION == region
-        
+
 #         # Invalid regions
 #         invalid_regions = ["invalid", "us_west_2", "EU-WEST-1"]
 #         for region in invalid_regions:
@@ -346,7 +346,7 @@ class TestS3StorageAuth(BaseStorageAuthTests):
 #         for bucket in valid_buckets:
 #             storage_auth.BUCKET = bucket
 #             assert storage_auth.BUCKET == bucket
-        
+
 #         # Invalid bucket names
 #         invalid_buckets = [
 #             "My-Bucket",  # uppercase not allowed
@@ -372,7 +372,7 @@ class TestS3StorageAuth(BaseStorageAuthTests):
 #         for endpoint in valid_endpoints:
 #             storage_auth.ENDPOINT_URL = f"https://{endpoint}"
 #             assert storage_auth.ENDPOINT_URL.startswith("https://")
-        
+
 #         # Invalid endpoints
 #         invalid_endpoints = [
 #             "not-a-url",
@@ -391,7 +391,7 @@ class TestS3StorageAuth(BaseStorageAuthTests):
 #         for style in valid_styles:
 #             storage_auth.ADDRESSING_STYLE = style
 #             assert storage_auth.ADDRESSING_STYLE == style
-        
+
 #         # Invalid styles
 #         with pytest.raises(StorageValidationError) as exc_info:
 #             storage_auth.ADDRESSING_STYLE = "invalid"
@@ -400,7 +400,7 @@ class TestS3StorageAuth(BaseStorageAuthTests):
 #     def test_s3_connection_url(self, storage_auth):
 #         """Test S3-specific connection URL generation"""
 #         url = storage_auth.get_connection_url()
-        
+
 #         # Basic URL validation
 #         assert url.startswith("https://")
 #         assert "amazonaws.com" in url
@@ -410,11 +410,11 @@ class TestS3StorageAuth(BaseStorageAuthTests):
 #     # def test_s3_connection_args(self, storage_auth):
 #     #     """Test S3-specific connection arguments"""
 #     #     args = storage_auth.get_connection_args()
-        
+
 #     #     # Check required S3 args
 #     #     assert "region_name" in args
 #     #     assert "bucket" in args
 #     #     assert args["region_name"] == storage_auth.REGION
 #     #     assert args["bucket"] == storage_auth.BUCKET
-        
+
 #         #

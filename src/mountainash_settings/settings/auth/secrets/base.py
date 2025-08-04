@@ -11,56 +11,56 @@ from mountainash_settings import SettingsParameters
 
 class SecretsAuthBase(MountainAshBaseSettings):
     """Base class for secret storage authentication settings"""
-    
+
     # Provider Configuration
     PROVIDER_TYPE: str = Field(default=None)
     AUTH_METHOD: str = Field(default=None)
-    
+
     # Connection Settings
     ENDPOINT_URL: Optional[str] = Field(default=None)
     API_VERSION: Optional[str] = Field(default=None)
     TIMEOUT: int = Field(default=30)
-    
+
     # Authentication
     TENANT_ID: Optional[str] = Field(default=None)
     CLIENT_ID: Optional[str] = Field(default=None)
     CLIENT_SECRET: Optional[SecretStr] = Field(default=None)
-    
+
     # Secret Management
     SECRET_NAMESPACE: Optional[str] = Field(default=None)
-    VERSION_HANDLING: str = Field(default=CONST_SECRET_VERSION_HANDLING.LATEST.value)
-    ROTATION_POLICY: str = Field(default=CONST_SECRET_ROTATION_POLICY.MANUAL.value)
-    
+    VERSION_HANDLING: str = Field(default=CONST_SECRET_VERSION_HANDLING.LATEST)
+    ROTATION_POLICY: str = Field(default=CONST_SECRET_ROTATION_POLICY.MANUAL)
+
     # Caching and Performance
     CACHE_TTL: Optional[int] = Field(default=300)  # 5 minutes
     MAX_RETRIES: int = Field(default=3)
     RETRY_DELAY: int = Field(default=1)
-    
+
     # Security
     ENCRYPTION_KEY_PATH: Optional[str] = Field(default=None)
     ENCRYPTION_TYPE: Optional[str] = Field(default=None)
-    
+
 
     # Caching and Performance
     ENABLE_CACHE: bool = Field(default=True)
     CACHE_TTL: Optional[int] = Field(default=300)  # 5 minutes
     MAX_RETRIES: int = Field(default=3)
     RETRY_DELAY: int = Field(default=1)
-    
+
     # Internal state
     # _fernet: Optional[Fernet] = None
     # _cache: Dict[str, Dict[str, Any]] = {}
 
-    def __init__(self, 
+    def __init__(self,
                  config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
                  settings_parameters:   Optional[SettingsParameters] = None,
                 #  _dummy: Optional[bool] = False,
-                 **kwargs) -> None:  
-        
+                 **kwargs) -> None:
 
-        super().__init__(config_files=config_files, 
+
+        super().__init__(config_files=config_files,
                          settings_parameters=settings_parameters,
-                        #  _dummy=_dummy, 
+                        #  _dummy=_dummy,
                          **kwargs)
 
 
@@ -72,7 +72,7 @@ class SecretsAuthBase(MountainAshBaseSettings):
         self._init_dynamic_settings(reinitialise)
         # self._init_encryption(reinitialise)
         # self._init_provider_specific(reinitialise)
-   
+
 
 
     # @field_validator("ENCODING_TYPE")
@@ -104,7 +104,7 @@ class SecretsAuthBase(MountainAshBaseSettings):
     #             raise SecretConfigurationError(
     #                 "Either ENCRYPTION_KEY or ENCRYPTION_KEY_FILE must be provided for Fernet encryption"
     #             )
-            
+
     #         try:
     #             self._fernet = Fernet(base64.urlsafe_b64encode(key))
     #         except Exception as e:
@@ -112,7 +112,7 @@ class SecretsAuthBase(MountainAshBaseSettings):
     #                 f"Failed to initialize Fernet: {str(e)}",
     #                 operation="init"
     #             )
- 
+
     # @abstractmethod
     # def _init_provider_specific(self, reinitialise: bool = False):
     #     """Initialize provider-specific settings and connections"""
@@ -131,7 +131,7 @@ class SecretsAuthBase(MountainAshBaseSettings):
     #                 operation="encode"
     #             )
     #         return self._fernet.encrypt(value.encode()).decode()
-        
+
     #     raise SecretEncryptionError(
     #         f"Unsupported encoding type: {self.ENCODING_TYPE}",
     #         operation="encode"
@@ -156,7 +156,7 @@ class SecretsAuthBase(MountainAshBaseSettings):
     #             f"Failed to decode value: {str(e)}",
     #             operation="decode"
     #         )
-        
+
     #     raise SecretEncryptionError(
     #         f"Unsupported encoding type: {self.ENCODING_TYPE}",
     #         operation="decode"
@@ -166,16 +166,16 @@ class SecretsAuthBase(MountainAshBaseSettings):
     #     """Get a value from the cache"""
     #     if not self.ENABLE_CACHE:
     #         return None
-        
+
     #     cached = self._cache.get(key)
     #     if cached is None:
     #         return None
-        
+
     #     # Check if cached value is expired
     #     if (datetime.now() - cached['timestamp']).total_seconds() > self.CACHE_TTL:
     #         del self._cache[key]
     #         return None
-        
+
     #     return cached['value']
 
     # def _cache_set(self, key: str, value: Any):
@@ -197,14 +197,14 @@ class SecretsAuthBase(MountainAshBaseSettings):
     # def get_secret(self, name: str, version: Optional[str] = None) -> SecretStr:
     #     """
     #     Get a secret value
-        
+
     #     Args:
     #         name: Name of the secret
     #         version: Optional version of the secret
-            
+
     #     Returns:
     #         SecretStr containing the secret value
-            
+
     #     Raises:
     #         SecretNotFoundError: If the secret doesn't exist
     #         SecretAccessError: If there's an error accessing the secret
@@ -216,13 +216,13 @@ class SecretsAuthBase(MountainAshBaseSettings):
     # def list_secrets(self, prefix: Optional[str] = None) -> List[str]:
     #     """
     #     List available secrets
-        
+
     #     Args:
     #         prefix: Optional prefix to filter secrets
-            
+
     #     Returns:
     #         List of secret names
-            
+
     #     Raises:
     #         SecretAccessError: If there's an error listing secrets
     #     """
@@ -232,13 +232,13 @@ class SecretsAuthBase(MountainAshBaseSettings):
     # def get_secret_metadata(self, name: str) -> Dict[str, Any]:
     #     """
     #     Get metadata about a secret
-        
+
     #     Args:
     #         name: Name of the secret
-            
+
     #     Returns:
     #         Dictionary containing secret metadata
-            
+
     #     Raises:
     #         SecretNotFoundError: If the secret doesn't exist
     #         SecretAccessError: If there's an error accessing the secret
@@ -248,13 +248,13 @@ class SecretsAuthBase(MountainAshBaseSettings):
     # def get_secret_versions(self, name: str) -> List[str]:
     #     """
     #     Get available versions of a secret
-        
+
     #     Args:
     #         name: Name of the secret
-            
+
     #     Returns:
     #         List of version identifiers
-            
+
     #     Raises:
     #         SecretNotFoundError: If the secret doesn't exist
     #         SecretAccessError: If there's an error accessing the secret
@@ -265,14 +265,14 @@ class SecretsAuthBase(MountainAshBaseSettings):
     # def validate_secret(self, name: str, validation_func: callable) -> bool:
     #     """
     #     Validate a secret using a custom validation function
-        
+
     #     Args:
     #         name: Name of the secret to validate
     #         validation_func: Function that takes a SecretStr and returns bool
-            
+
     #     Returns:
     #         True if validation passes, False otherwise
-            
+
     #     Raises:
     #         SecretNotFoundError: If the secret doesn't exist
     #         SecretValidationError: If there's an error during validation
@@ -284,4 +284,4 @@ class SecretsAuthBase(MountainAshBaseSettings):
     #         raise SecretValidationError(
     #             f"Validation failed: {str(e)}",
     #             validation_type="custom"
-    #         )    
+    #         )
