@@ -53,7 +53,7 @@ class TestAppSettings:
     def test_runtime_fields_set_correctly(self):
         # Use the auto-mocked datetime from conftest.py
         settings = AppSettings()
-        
+
         # Check that date fields are strings of correct format
         assert len(settings.RUNDATE) == 8  # YYYYMMDD format
         assert len(settings.RUNTIME) == 6   # HHMMSS format
@@ -74,10 +74,10 @@ class TestAppSettings:
 
     def test_post_init_initializes_rundatetime_from_template(self):
         settings = AppSettings(RUNDATE="20240115", RUNTIME="143045")
-        
+
         # Call post_init and verify RUNDATETIME is set
         settings.post_init()
-        
+
         # RUNDATETIME should be initialized after post_init
         assert hasattr(settings, 'RUNDATETIME')
         assert settings.RUNDATETIME is not None

@@ -23,7 +23,7 @@ class TestSettings(MountainAshBaseSettings):
     def __init__(
         self,
         config_files: Optional[List[UPath|str]] = None,
-        settings_parameters:   Optional[SettingsParameters] = None,        
+        settings_parameters:   Optional[SettingsParameters] = None,
         # _dummy=False,
         **kwargs
     ) -> None:
@@ -41,22 +41,22 @@ class TestSettings(MountainAshBaseSettings):
 
 
 def get_test_settings(settings_parameters: SettingsParameters,
-                     settings_class:     Optional[Type[TestSettings]] = TestSettings, 
+                     settings_class:     Optional[Type[TestSettings]] = TestSettings,
                      settings_namespace: Optional[str] = None,
                      config_files: Optional[Union[UPath, str, List[UPath|str]]]  = None,
                      **kwargs
                      ) -> TestSettings:
-    
-    
-    test_settings: MountainAshBaseSettings = get_settings(settings_parameters=settings_parameters, 
-                                                          settings_class=settings_class, 
-                                                          settings_namespace=settings_namespace, 
+
+
+    test_settings: TestSettings = TestSettings.get_settings(settings_parameters=settings_parameters,
+                                                          settings_class=settings_class,
+                                                          settings_namespace=settings_namespace,
                                                           config_files=config_files,
                                                           **kwargs)
     if isinstance(test_settings, TestSettings):
         return test_settings
     else:
-        raise ValueError("The settings object retrieved is not of type AppSettings.")
+        raise ValueError("The settings object retrieved is not of type TestSettings.")
 
 
 ################
@@ -82,7 +82,7 @@ def test_init_sets_env_file():
     sp = SettingsParameters.create(settings_class=TestSettings, config_files= env_file)
 
     settings = TestSettings(settings_parameters=sp)
-   
+
     for file in env_file:
         assert file in settings.SETTINGS_SOURCE_ENV_FILES
 
@@ -115,7 +115,7 @@ def test_init_no_file(settings_manager: SettingsManager):
     namespace = "test_init_no_file"
     config_files: List[Any] = []#"./tests/config_testing1.env"]
     kwargs = {}
-    
+
     settings_parameters = SettingsParameters.create( settings_class=TestSettings,namespace=namespace, config_files=config_files, kwargs=kwargs)
 
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
@@ -128,7 +128,7 @@ def test_init_no_file_kwarg(settings_manager: SettingsManager):
     namespace = "test_init_no_file_kwarg"
     config_files: List[Any] = []#"./tests/config_testing1.env"]
     kwargs = {"TEST_VAL_1": "ABC", "TEST_VAL_2": "XYZ"}
-    
+
     settings_parameters = SettingsParameters.create(settings_class=TestSettings, namespace=namespace, config_files=config_files, kwargs=kwargs)
 
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
@@ -143,7 +143,7 @@ def test_init_file(settings_manager: SettingsManager):
     namespace = "test_init_file"
     config_files: List[Any] = ["./tests/config_testing1.env"]
     kwargs = {}
-    
+
     settings_parameters = SettingsParameters.create(settings_class=TestSettings, namespace=namespace, config_files=config_files, kwargs=kwargs)
 
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
@@ -157,7 +157,7 @@ def test_init_file_and_kwarg(settings_manager: SettingsManager):
     namespace = "test_init_file_and_kwarg"
     config_files: List[Any] = ["./tests/config_testing1.env"]
     kwargs = {"TEST_VAL_1": "ABC"}
-    
+
     settings_parameters = SettingsParameters.create(settings_class=TestSettings, namespace=namespace, config_files=config_files, kwargs=kwargs)
 
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
@@ -171,7 +171,7 @@ def test_init_file_and_kwarg2(settings_manager: SettingsManager):
     namespace = "test_init_file_and_kwarg2"
     config_files: List[Any] = ["./tests/config_testing1.env"]
     kwargs = {"TEST_VAL_2": "XYZ"}
-    
+
     settings_parameters = SettingsParameters.create(settings_class=TestSettings, namespace=namespace, config_files=config_files, kwargs=kwargs)
 
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
@@ -187,10 +187,10 @@ def test_init_file_prefix1(settings_manager: SettingsManager):
     namespace = "test_init_file_prefix1"
     config_files: List[Any] = ["./tests/config_testing1.env"]
     kwargs = {}
-    
-    settings_parameters = SettingsParameters.create(settings_class=TestSettings, 
-                                                    namespace=namespace, 
-                                                    config_files=config_files, 
+
+    settings_parameters = SettingsParameters.create(settings_class=TestSettings,
+                                                    namespace=namespace,
+                                                    config_files=config_files,
                                                     env_prefix="PREFIX_",
                                                     kwargs=kwargs)
 
@@ -205,9 +205,9 @@ def test_init_file_prefix2(settings_manager: SettingsManager):
     namespace = "test_init_file_prefix2"
     config_files: List[Any] = ["./tests/config_testing_prefix1.env"]
     kwargs = {}
-    
+
     settings_parameters = SettingsParameters.create(settings_class=TestSettings,
-                                                    namespace=namespace, 
+                                                    namespace=namespace,
                                                     config_files=config_files,
                                                     env_prefix="PREFIX_",
                                                     kwargs=kwargs)
@@ -222,7 +222,7 @@ def test_init_file_prefix3(settings_manager: SettingsManager):
     namespace = "test_init_file_prefix3r"
     config_files: List[Any] = ["./tests/config_testing_prefix1.env"]
     kwargs = {}
-    
+
     settings_parameters = SettingsParameters.create(settings_class=TestSettings, namespace=namespace, config_files=config_files, kwargs=kwargs)
 
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
@@ -238,7 +238,7 @@ def test_init_file_prefix3(settings_manager: SettingsManager):
 #     namespace = "test_init_config_valid_init_file"
 #     config_files: List[Any] = ["./tests/config_testing1.env"]
 #     kwargs = {}
-    
+
 #     settings_parameters = SettingsParameters.create(namespace=namespace, settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
 
 #     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
@@ -251,7 +251,7 @@ def test_init_file_prefix3(settings_manager: SettingsManager):
 #     namespace = "test_init_config_valid_init_file_2"
 #     config_files: List[Any] = ["./tests/config_testing2.env"]
 #     kwargs = {}
-    
+
 #     settings_parameters = SettingsParameters.create(namespace=namespace, settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
 
 #     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
@@ -265,7 +265,7 @@ def test_init_file_prefix3(settings_manager: SettingsManager):
 #     namespace = "test_init_config_valid_init_file_prefix"
 #     config_files: List[str] = ["./tests/config_testing1.env"]
 #     kwargs = {"_env_prefix": "TESTING_PREFIX_"}
-    
+
 #     settings_parameters = SettingsParameters.create(namespace=namespace, settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
 
 #     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
@@ -278,7 +278,7 @@ def test_init_file_prefix3(settings_manager: SettingsManager):
 #     namespace = "test_init_config_valid_init_file_2_prefix"
 #     config_files: List[Any] = ["./tests/config_testing2.env"]
 #     kwargs = {"_env_prefix": "TESTING_PREFIX_"}
-    
+
 #     settings_parameters = SettingsParameters.create(namespace=namespace, settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
 
 #     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
