@@ -53,34 +53,48 @@ This document outlines the preparation needed for implementing the `@mountainash
   - `_mountainash_namespace`
   - `_mountainash_decorated` (internal recursion prevention)
 
-### Phase 2: Feature Integration
+### Phase 2: Feature Integration ✅
 
-#### 2.1 Template Resolution Integration ⏳
-- [ ] Port template logic from MountainAshBaseSettings
-- [ ] Implement `post_init()` equivalent for decorated classes
-- [ ] Add `format_template_from_settings()` method to decorated classes
-- [ ] Ensure template processing works with feature flag
+#### 2.1 Template Resolution Integration ✅
+- [x] Port template logic from MountainAshBaseSettings
+- [x] Implement `post_init()` equivalent for decorated classes
+- [x] Add `format_template_from_settings()` method to decorated classes
+- [x] Add `init_setting_from_template()` method for template initialization
+- [x] Add `update_settings_from_dict()` method for dynamic updates
+- [x] Ensure template processing works with feature flag
+- [x] Configure Pydantic model to allow extra fields for metadata
 
-#### 2.2 Multi-format Configuration Support ⏳
-- [ ] Integrate SettingsFileHandler for config file processing
-- [ ] Add support for YAML, TOML, JSON configuration files
-- [ ] Implement file validation logic
-- [ ] Add `settings_customise_sources()` method injection
+#### 2.2 Multi-format Configuration Support ✅
+- [x] Integrate SettingsFileHandler for config file processing
+- [x] Add support for YAML, TOML, JSON configuration files
+- [x] Implement file validation logic in enhanced `__init__`
+- [x] Add `settings_customise_sources()` method injection
+- [x] Handle env files separately in direct initialization path
+- [x] Update model_config for multi-format file sources
 
-#### 2.3 Caching Integration ⏳
-- [ ] Integrate with existing SettingsManager
-- [ ] Ensure decorated classes work with `_get_settings()` caching
-- [ ] Implement `apply_runtime_overrides()` support
-- [ ] Add cache bypass option for pure Pydantic behavior
+#### 2.3 Caching Integration ✅
+- [x] Integrate with existing SettingsManager via `get_settings_func`
+- [x] Ensure decorated classes work with smart caching (structural vs runtime parameters)
+- [x] Implement `apply_runtime_overrides()` support with cache preservation
+- [x] Add robust fallback mechanisms for recursion/import failures
+- [x] Add cache bypass option for pure Pydantic behavior (`cache=False`)
+- [x] Document smart caching behavior in code comments
 
-#### 2.4 Metadata Tracking ⏳
-- [ ] Port settings source tracking from MountainAshBaseSettings:
+#### 2.4 Metadata Tracking ✅
+- [x] Port settings source tracking from MountainAshBaseSettings:
   - `SETTINGS_NAMESPACE`
   - `SETTINGS_CLASS`
-  - `SETTINGS_CLASS_NAME` 
-  - `SETTINGS_SOURCE_*` fields
-- [ ] Implement `extract_settings_parameters()` method
-- [ ] Add `update_settings_from_dict()` method
+  - `SETTINGS_CLASS_NAME`
+  - `SETTINGS_SOURCE_ENV_PREFIX`
+  - `SETTINGS_SOURCE_ENV_FILES`
+  - `SETTINGS_SOURCE_YAML_FILES`
+  - `SETTINGS_SOURCE_TOML_FILES`
+  - `SETTINGS_SOURCE_JSON_FILES`
+  - `SETTINGS_SOURCE_KWARGS`
+  - `SETTINGS_SOURCE_SECRETS_DIR`
+- [x] Implement `extract_settings_parameters()` method for parameter reconstruction
+- [x] Add `update_settings_from_dict()` method for dynamic configuration updates
+- [x] Add `_set_metadata_tracking()` internal method with proper Pydantic field handling
 
 ### Phase 3: Testing Infrastructure
 

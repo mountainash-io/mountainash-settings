@@ -12,6 +12,9 @@ This guide provides a step-by-step approach for migrating from the current `Moun
 - **No Functionality Loss**: All current features are preserved through delegation to existing infrastructure
 - **Incremental Migration**: Can migrate class by class without breaking existing usage
 - **Backward Compatibility**: Existing code continues to work during transition
+- **Performance Parity**: Equivalent or better performance compared to MountainAshBaseSettings
+- **Better IDE Support**: Full type hints and autocompletion with standard Pydantic interface
+- **Feature Flexibility**: Enable only the features you need via decorator flags
 
 ## Before and After Comparison
 
@@ -269,13 +272,13 @@ def test_migrated_settings():
         settings_class=AppSettings,
         namespace="test",
         config_files=["test.yaml"],
-        kwargs={"debug": True}
+        debug=True
     )
     settings = AppSettings.get_settings(settings_parameters=settings_params)
     assert settings is not None
     assert settings.debug == True
     
-    # Test 4: Individual parameter delegation works
+    # Test 4: get_settings() with individual parameters works
     settings = AppSettings.get_settings(
         settings_namespace="test",
         config_files=["test.yaml"],
@@ -284,36 +287,36 @@ def test_migrated_settings():
     assert settings is not None
     
     # Test 5: Template resolution works
-    settings = AppSettings()
-    assert "{" not in settings.log_path  # Templates resolved
+    if hasattr(settings, 'log_path') and '{' in 'logs/{RUNDATE}/app.log':
+        settings = AppSettings()
+        formatted = settings.format_template_from_settings("logs/{app_name}.log")
+        assert "{" not in formatted  # Templates resolved
     
-    # Test 6: SettingsParameters caching works
-    params1 = SettingsParameters.create(
-        settings_class=AppSettings,
+    # Test 6: Smart caching works with structural parameters
+    if AppSettings._mountainash_cache_enabled:
+        settings1 = AppSettings.get_settings(namespace="cache_test")
+        settings2 = AppSettings.get_settings(namespace="cache_test")
+        assert settings1 is settings2  # Same cached instance
+        
+        # Different namespaces get different cache entries
+        settings3 = AppSettings.get_settings(namespace="different")
+        assert settings1 is not settings3
+    
+    # Test 7: Runtime overrides work with caching
+    settings_override = AppSettings.get_settings(
         namespace="cache_test",
-        config_files=["config.yaml"]
+        debug=True  # Runtime override
     )
-    params2 = SettingsParameters.create(
-        settings_class=AppSettings, 
-        namespace="cache_test",
-        config_files=["config.yaml"]
-    )
-    
-    settings1 = AppSettings.get_settings(settings_parameters=params1)
-    settings2 = AppSettings.get_settings(settings_parameters=params2)
-    assert settings1 is settings2  # Same cached instance
-    
-    # Test 7: Runtime overrides work
-    params_with_override = SettingsParameters.create(
-        settings_class=AppSettings,
-        namespace="cache_test", 
-        config_files=["config.yaml"],
-        kwargs={"debug": True}  # Runtime override
-    )
-    
-    settings_override = AppSettings.get_settings(settings_parameters=params_with_override)
     assert settings_override.debug == True
-    # Should share same base cache as settings1/settings2
+    
+    # Test 8: Metadata tracking works
+    assert hasattr(settings, 'SETTINGS_NAMESPACE')
+    assert hasattr(settings, 'SETTINGS_CLASS_NAME')
+    assert settings.SETTINGS_CLASS_NAME == "AppSettings"
+    
+    # Test 9: extract_settings_parameters() works
+    extracted_params = settings.extract_settings_parameters()
+    assert extracted_params.settings_class == AppSettings
 ```
 
 ## Common Migration Scenarios

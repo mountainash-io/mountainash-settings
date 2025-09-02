@@ -425,3 +425,13 @@ class BatchJobSettings(BaseSettings):
 - [ ] Long-term maintenance plan
 
 This approach preserves the technical excellence of mountainash-settings while making it feel like standard Pydantic to users.
+
+## Documentation
+
+### Available Guides
+
+- **[Decorator Usage Guide](decorator_usage_guide.md)** - Complete usage guide with examples
+- **[API Reference](api_reference.md)** - Detailed API documentation  
+- **[SettingsParameters Merging Guide](settings_parameters_merging.md)** - Deep dive into smart parameter merging
+- **[Backward Compatibility Plan](backward_compatibility_plan.md)** - Migration strategy
+- **[Feature Flags Reference](feature_flags_reference.md)** - Configuration options
