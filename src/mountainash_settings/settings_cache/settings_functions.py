@@ -105,7 +105,11 @@ def get_settings(    settings_parameters: Optional[SettingsParameters] = None,
             **kwargs
         )
 
-    return _get_settings(settings_parameters=final_settings_parameters )
+    # Get cached settings based on structural parameters only
+    cached_settings = _get_settings(settings_parameters=final_settings_parameters)
+    
+    # Apply runtime overrides to the cached instance
+    return final_settings_parameters.apply_runtime_overrides(cached_settings)
 
 
 # def get_app_settings(  settings_parameters: SettingsParameters,
