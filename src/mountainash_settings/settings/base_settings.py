@@ -67,7 +67,7 @@ class MountainAshBaseSettings(BaseSettings):
 
         # Handle attribute kwargs
         valid_pydantic_modelconfig_kwargs: Dict[str, Any] = local_settings_params.get_pydantic_modelconfig_kwargs()
-        valid_attribute_kwargs: Dict[str, Any] =            local_settings_params.get_attribute_settings_kwargs(settings_class=self.__class__) #this is causing infinite recursion
+        valid_attribute_kwargs: Dict[str, Any] =            local_settings_params.get_attribute_settings_kwargs(settings_class=self.__class__)
         valid_pydantic_kwargs: Dict[str, Any] =             local_settings_params.get_pydantic_settings_kwargs()
 
 
@@ -81,16 +81,16 @@ class MountainAshBaseSettings(BaseSettings):
 
 
         #Now we initialise the values!
-        super().__init__(   _case_sensitive=valid_pydantic_kwargs.get('_case_sensitive') or True,
-                            _nested_model_default_partial_update=valid_pydantic_kwargs.get('_nested_model_default_partial_update') or False,
-                            _env_prefix=            local_settings_params.env_prefix or valid_pydantic_kwargs.get('_env_prefix') or None,
-                            _env_file=              obj_config_files.env_files or valid_pydantic_kwargs.get('_env_file') or None,
-                            _env_file_encoding =    valid_pydantic_kwargs.get('_env_file_encoding') or 'utf-8',
-                            _env_ignore_empty =     valid_pydantic_kwargs.get('_env_ignore_empty') or True,
-                            _env_nested_delimiter = valid_pydantic_kwargs.get('_env_nested_delimiter') or None,
-                            _env_parse_none_str =   valid_pydantic_kwargs.get('_env_parse_none_str') or "None",
-                            _env_parse_enums =      valid_pydantic_kwargs.get('_env_parse_enums') or True,
-                            _secrets_dir=           local_settings_params.secrets_dir or valid_pydantic_kwargs.get('_secrets_dir') or None,
+        super().__init__(   _case_sensitive=valid_pydantic_kwargs.get('_case_sensitive', True),
+                            _nested_model_default_partial_update=valid_pydantic_kwargs.get('_nested_model_default_partial_update', False),
+                            _env_prefix=            local_settings_params.env_prefix or valid_pydantic_kwargs.get('_env_prefix', None),
+                            _env_file=              obj_config_files.env_files or valid_pydantic_kwargs.get('_env_file', None),
+                            _env_file_encoding =    valid_pydantic_kwargs.get('_env_file_encoding', 'utf-8'),
+                            _env_ignore_empty =     valid_pydantic_kwargs.get('_env_ignore_empty', True),
+                            _env_nested_delimiter = valid_pydantic_kwargs.get('_env_nested_delimiter', None),
+                            _env_parse_none_str =   valid_pydantic_kwargs.get('_env_parse_none_str', "None"),
+                            _env_parse_enums =      valid_pydantic_kwargs.get('_env_parse_enums', True),
+                            _secrets_dir=           local_settings_params.secrets_dir or valid_pydantic_kwargs.get('_secrets_dir', None),
                             **valid_attribute_kwargs
                         )
 
@@ -183,6 +183,18 @@ class MountainAshBaseSettings(BaseSettings):
                     #  self.SETTINGS_SOURCE_KWARGS
                      ))
 
+
+    def _build_template_mapping(self, template_str: str) -> Dict[str, Any]:
+        """Build field mapping for template formatting."""
+        mapping = {}
+        for _, field_name, _, _ in Formatter().parse(template_str):
+            if field_name:
+                if hasattr(self, field_name):
+                    mapping[field_name] = getattr(self, field_name)
+                else:
+                    raise AttributeError(f"The object does not have an attribute named '{field_name}'")
+        return mapping
+
     def init_setting_from_template(self, template_str:str, current_value: Optional[str] = None, reinitialise: bool = False):
 
         """Initializes a setting value from a template string,
@@ -204,14 +216,7 @@ class MountainAshBaseSettings(BaseSettings):
         if current_value is not None and reinitialise is False:
             return current_value
 
-        mapping = {}
-        for _, field_name, _, _ in Formatter().parse(template_str):
-
-            if field_name:
-                if hasattr(self, field_name):
-                    mapping[field_name] = getattr(self, field_name)
-                else:
-                    raise AttributeError(f"The object does not have an attribute named '{field_name}'")
+        mapping = self._build_template_mapping(template_str)
 
         return template_str.format(**mapping)
 
@@ -232,15 +237,7 @@ class MountainAshBaseSettings(BaseSettings):
             settings.format_template_from_settings(template)
             # Returns: "my_20230101_file.csv" if BATCH_ID is 20230101
         """
-        mapping = {}
-
-        for _, field_name, _, _ in Formatter().parse(format_string=template_str):
-
-            if field_name:
-                if hasattr(self, field_name):
-                    mapping[field_name] = getattr(self, field_name)
-                else:
-                    raise AttributeError(f"The object does not have an attribute named '{field_name}'")
+        mapping = self._build_template_mapping(template_str)
 
         return template_str.format(**mapping)
 
@@ -264,10 +261,17 @@ class MountainAshBaseSettings(BaseSettings):
 
         setattr(self, 'SETTINGS_SOURCE_KWARGS', settings_dict)
 
-    def post_init(self, reinitialise: bool = False):
-        """Post-initialization function to run after the settings object has been initialized."""
-        # Set the settings namespace to the class name if not
-        pass
+    def post_init(self, reinitialise: bool = False) -> None:
+        """
+        Hook for post-initialization processing.
+
+        Called after all settings have been loaded and processed.
+        Override in subclasses to add custom initialization logic.
+
+        Args:
+            reinitialise: Whether this is a re-initialization call
+        """
+        pass  # Intentionally empty - hook for subclasses to implement
 
 
     def extract_settings_parameters(self) -> SettingsParameters:

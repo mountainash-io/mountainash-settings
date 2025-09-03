@@ -17,8 +17,6 @@ class SettingsUtils:
     #Hashable format for settings parameters
     default_namespace: str = "DEFAULT"
 
-    ############################################################################################################
-    # SettingsParameters combination
 
     @classmethod
     def merge_settings_parameter_objects(cls,
@@ -28,7 +26,7 @@ class SettingsUtils:
                    ) -> SettingsParameters:
         """
         Merge two SettingsParameters objects using the generic merge framework.
-        
+
         Eliminates ~45 lines of duplicate prioritization logic by delegating
         to the generic merger with proper validation and field-specific strategies.
         """
@@ -51,7 +49,7 @@ class SettingsUtils:
                ) -> 'SettingsParameters':
         """
         Merge SettingsParameters with individual parameters using the generic merge framework.
-        
+
         Eliminates ~30 lines of duplicate prioritization logic by delegating
         to the generic merger with parameter-specific handling.
         """
@@ -130,89 +128,16 @@ class SettingsUtils:
                       kwargs2: Optional[Tuple[Tuple[str, Any], ...]] = None) -> Optional[Tuple[Tuple[str, Any], ...]]:
         """
         Merge kwargs using the generic merge framework.
-        
+
         Note: Converts tuple format to dict for processing, then back to maintain compatibility.
         """
         # Convert tuple format to dict format for processing
         dict1 = dict(kwargs1) if kwargs1 else None
         dict2 = dict(kwargs2) if kwargs2 else None
-        
+
         merged_dict = FieldMergeUtils.merge_kwargs_simple(dict1, dict2)
-        
+
         # Convert back to tuple format for compatibility
         if merged_dict:
             return tuple(merged_dict.items())
         return None
-
-
-
-    ############################################################################################################
-    # SettingsParameters extraction
-
-    # @classmethod
-    # def extract_namespace_from_settings_parameters(cls,
-    #                                                settings_parameters: SettingsParameters) -> Optional[str]:
-
-    #     """
-    #     Extracts the namespace from the SettingsParameters object.
-
-    #     Args:
-    #         settings_parameters (SettingsParameters): The settings parameters object.
-
-    #     Returns:
-    #         str: The namespace.
-    #     """
-
-    #     # mutable_parameters: dict[str, Any] = cls.extract_settings_parameters(settings_parameters=settings_parameters)
-
-    #     return settings_parameters.namespace
-
-    # @classmethod
-    # def extract_config_files_from_settings_parameters(cls,
-    #                                                   settings_parameters: SettingsParameters) -> Optional[List[UPath|str]]:
-    #     """
-    #     Extracts the config_files from the SettingsParameters object.
-
-    #     Args:
-    #         settings_parameters (SettingsParameters): The settings parameters object.
-
-    #     Returns:
-    #         List[UPath|str]: The configuration files.
-    #     """
-
-
-    #     mutable_parameters: dict[str, Any] = cls.extract_settings_parameters(settings_parameters=settings_parameters)
-
-    #     return mutable_parameters["config_files"]
-
-    # @classmethod
-    # def extract_kwargs_from_settings_parameters(cls, settings_parameters: SettingsParameters) -> Optional[dict[str, Any]]:
-
-    #     """
-    #     Extracts the keyword arguments from the SettingsParameters object.
-
-    #     Args:
-    #         settings_parameters (SettingsParameters): The settings parameters object.
-
-    #     Returns:
-    #         dict: The keyword arguments.
-    #     """
-
-    #     mutable_parameters: dict[str, Any] = cls.extract_settings_parameters(settings_parameters=settings_parameters)
-
-    #     return mutable_parameters["kwargs"]
-
-    # @classmethod
-    # def get_platform_slash(cls) -> str:
-
-    #     """
-    #     Returns the platform-specific slash.
-
-    #     Returns:
-    #         str: The platform-specific slash.
-    #     """
-
-    #     if platform.system() == "Windows":
-    #         return "\\"
-    #     else:
-    #         return "/"
