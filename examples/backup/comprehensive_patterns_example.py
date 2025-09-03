@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 """
-Comprehensive example demonstrating advanced SettingsParameters patterns with MountainAshBaseSettings.
-Shows different configuration patterns for enterprise applications.
+Comprehensive example demonstrating both advanced SettingsParameters patterns:
+1. Smart Merging (no settings_class needed)
+2. Dynamic Class Resolution (settings_class for type info)
+
+This shows how to use each pattern appropriately for different use cases.
 """
 
 from pydantic import Field
-from mountainash_settings import MountainAshBaseSettings, SettingsParameters, get_settings
+from pydantic_settings import BaseSettings
+from mountainash_settings import mountainash_settings, SettingsParameters, get_settings
 
 print("=== Comprehensive SettingsParameters Patterns Example ===\n")
 
-# Define our settings classes with MountainAshBaseSettings
-class DatabaseSettings(MountainAshBaseSettings):
+# Define our settings classes
+@mountainash_settings(cache=True, templates=True)
+class DatabaseSettings(BaseSettings):
     """Database configuration settings."""
     host: str = Field(default="localhost")
     port: int = Field(default=5432)
@@ -18,7 +23,8 @@ class DatabaseSettings(MountainAshBaseSettings):
     database: str = Field(default="myapp")
     connection_pool_size: int = Field(default=10)
 
-class RedisSettings(MountainAshBaseSettings):
+@mountainash_settings(cache=True, templates=True)
+class RedisSettings(BaseSettings):
     """Redis cache configuration."""
     host: str = Field(default="localhost")
     port: int = Field(default=6379)
@@ -26,23 +32,24 @@ class RedisSettings(MountainAshBaseSettings):
     db: int = Field(default=0)
     max_connections: int = Field(default=100)
 
-class ApiSettings(MountainAshBaseSettings):
+@mountainash_settings(cache=True, templates=True)
+class ApiSettings(BaseSettings):
     """External API configuration.""" 
     base_url: str = Field(default="https://api.example.com")
     api_key: str = Field(default="dev-key")
     timeout: int = Field(default=30)
     rate_limit: int = Field(default=100)
 
-print("=== Pattern 1: Direct Instantiation (for known target classes) ===")
+print("=== Pattern 1: Smart Merging (for known target classes) ===")
 print("Use when you know what settings class you're targeting\n")
 
-# Direct instantiation with SettingsParameters
+# Smart merging - no settings_class needed because we know the target class
 def setup_database_connection():
     """Setup function that knows it needs DatabaseSettings."""
-    # Create parameters with explicit settings class
+    # Library or config function creates params without knowing target class
     params = SettingsParameters.create(
         namespace="production_db",
-        settings_class=DatabaseSettings,
+        # settings_class not needed - we know we're using DatabaseSettings!
         host="prod-db.cluster.example.com",
         port=5432,
         username="prod_user",
@@ -50,7 +57,7 @@ def setup_database_connection():
         connection_pool_size=50
     )
     
-    # Direct instantiation with SettingsParameters
+    # Target class is known at instantiation - smart merging works!
     db_settings = DatabaseSettings(settings_parameters=params)
     
     print(f"1. Database Setup:")
@@ -58,16 +65,15 @@ def setup_database_connection():
     print(f"   Database: {db_settings.database}")
     print(f"   Pool Size: {db_settings.connection_pool_size}")
     print(f"   Settings Class: {db_settings.SETTINGS_CLASS.__name__}")
-    print(f"   Namespace: {db_settings.SETTINGS_NAMESPACE}")
     
     return db_settings
 
 def setup_redis_cache():
     """Setup function that knows it needs RedisSettings."""
-    # Create parameters with explicit settings class
+    # Config loaded from file/environment - no target class info
     params = SettingsParameters.create(
         namespace="production_cache",
-        settings_class=RedisSettings,
+        # No settings_class needed - RedisSettings will merge it
         host="redis-cluster.example.com", 
         port=6379,
         password="redis-secret",
@@ -75,7 +81,7 @@ def setup_redis_cache():
         max_connections=200
     )
     
-    # Direct instantiation with SettingsParameters
+    # Target class known - smart merging handles the rest
     redis_settings = RedisSettings(settings_parameters=params)
     
     print(f"2. Redis Setup:")
@@ -83,11 +89,10 @@ def setup_redis_cache():
     print(f"   DB: {redis_settings.db}")
     print(f"   Max Connections: {redis_settings.max_connections}")
     print(f"   Settings Class: {redis_settings.SETTINGS_CLASS.__name__}")
-    print(f"   Namespace: {redis_settings.SETTINGS_NAMESPACE}")
     
     return redis_settings
 
-# Execute direct instantiation examples
+# Execute smart merging examples
 db_settings = setup_database_connection()
 redis_settings = setup_redis_cache()
 
@@ -122,7 +127,7 @@ service_registry = {
     )
 }
 
-def initialize_service(service_name: str) -> MountainAshBaseSettings:
+def initialize_service(service_name: str) -> BaseSettings:
     """Generic service initializer - doesn't know what settings class it will get!"""
     if service_name not in service_registry:
         raise ValueError(f"Unknown service: {service_name}")
@@ -162,32 +167,42 @@ def create_tenant_config(tenant_id: str, service_type: str):
     if service_type not in service_classes:
         raise ValueError(f"Unknown service type: {service_type}")
     
-    # All patterns use explicit settings_class with MountainAshBaseSettings
-    return SettingsParameters.create(
-        namespace=f"tenant_{tenant_id}_{service_type}",
-        settings_class=service_classes[service_type],
-        host=f"{service_type}-{tenant_id}.example.com",
-        **({"database": f"tenant_{tenant_id}", "username": f"tenant_{tenant_id}_user"} if service_type == "database" else {})
-    )
+    # Pattern choice depends on use case:
+    if service_type == "database":
+        # Smart merging - we know the target (database config is standard)
+        return SettingsParameters.create(
+            namespace=f"tenant_{tenant_id}_db",
+            # No settings_class - DatabaseSettings will merge it
+            host=f"db-{tenant_id}.example.com", 
+            database=f"tenant_{tenant_id}",
+            username=f"tenant_{tenant_id}_user"
+        )
+    else:
+        # Dynamic resolution - service type varies (cache/api configs differ)
+        return SettingsParameters.create(
+            namespace=f"tenant_{tenant_id}_{service_type}",
+            settings_class=service_classes[service_type],  # Type info for resolution
+            host=f"{service_type}-{tenant_id}.example.com"
+        )
 
 def provision_tenant_services(tenant_id: str):
-    """Provision all services for a tenant using different instantiation patterns."""
+    """Provision all services for a tenant using appropriate patterns."""
     print(f"4. Provisioning services for tenant '{tenant_id}':")
     
-    # Database: Direct instantiation
+    # Database: Smart merging (known target)
     db_params = create_tenant_config(tenant_id, "database")
-    tenant_db = DatabaseSettings(settings_parameters=db_params)
+    tenant_db = DatabaseSettings(settings_parameters=db_params)  # Direct instantiation
     
-    # Cache & API: Dynamic resolution via get_settings
+    # Cache & API: Dynamic resolution (flexible targets) 
     cache_params = create_tenant_config(tenant_id, "cache")
     api_params = create_tenant_config(tenant_id, "api")
     
-    tenant_cache = get_settings(settings_parameters=cache_params)
-    tenant_api = get_settings(settings_parameters=api_params)
+    tenant_cache = get_settings(settings_parameters=cache_params)  # Dynamic resolution
+    tenant_api = get_settings(settings_parameters=api_params)      # Dynamic resolution
     
-    print(f"   Database: {tenant_db.host} (via direct instantiation)")
-    print(f"   Cache: {tenant_cache.host} (via get_settings)")
-    print(f"   API: {tenant_api.base_url} (via get_settings)")
+    print(f"   Database: {tenant_db.host} (via smart merging)")
+    print(f"   Cache: {tenant_cache.host} (via dynamic resolution)")
+    print(f"   API: {tenant_api.base_url} (via dynamic resolution)")
     
     return tenant_db, tenant_cache, tenant_api
 
@@ -197,19 +212,18 @@ globex_db, globex_cache, globex_api = provision_tenant_services("globex")
 
 print("\n=== Pattern Selection Guidelines ===")
 print()
-print("🎯 Use DIRECT INSTANTIATION when:")
+print("🎯 Use SMART MERGING when:")
 print("   ✅ Target settings class is known at compile time")
-print("   ✅ Direct instantiation pattern (MySettings(settings_parameters=...))")
-print("   ✅ Simple configuration loading for specific services")
-print("   ✅ Single-purpose configuration functions")
+print("   ✅ Direct instantiation pattern (MySettings(...))")
+print("   ✅ Library functions creating params for known consumers")
+print("   ✅ Configuration loading for specific services")
 print()
-print("🔄 Use DYNAMIC RESOLUTION (get_settings) when:")  
+print("🔄 Use DYNAMIC RESOLUTION when:")  
 print("   ✅ Target settings class determined at runtime")
 print("   ✅ Generic functions that work with multiple settings types")
 print("   ✅ Service registries and plugin architectures")
 print("   ✅ Multi-tenant systems with varying service types")
 print("   ✅ Configuration routing and dispatching")
-print("   ✅ Caching optimization is critical")
 print()
 print("🏗️ COMBINE PATTERNS for:")
 print("   ✅ Enterprise applications with mixed use cases")
@@ -226,27 +240,27 @@ print("5. Cache behavior verification:")
 test_db_params = create_tenant_config("test", "database")
 test_cache_params = create_tenant_config("test", "cache")
 
-# Direct instantiation caching
+# Smart merging instances should be cached properly
 db1 = DatabaseSettings(settings_parameters=test_db_params)
 db2 = DatabaseSettings(settings_parameters=test_db_params)
-print(f"   Direct instantiation cache hit: {db1 is db2}")
+print(f"   Smart merging cache hit: {db1 is db2}")
 
-# Dynamic resolution caching  
+# Dynamic resolution should also cache correctly  
 cache1 = get_settings(settings_parameters=test_cache_params)
 cache2 = get_settings(settings_parameters=test_cache_params)
 print(f"   Dynamic resolution cache hit: {cache1 is cache2}")
 
 # Different patterns, same result for compatible params
 compatible_db_params = SettingsParameters.create(
-    namespace=f"tenant_test_database",
-    settings_class=DatabaseSettings,
-    host="database-test.example.com",
-    database="tenant_test", 
-    username="tenant_test_user"
+    namespace=f"tenant_acme_db",
+    settings_class=DatabaseSettings,  # Add class for dynamic resolution
+    host="db-acme.example.com",
+    database="tenant_acme", 
+    username="tenant_acme_user"
 )
 
-db_via_direct = DatabaseSettings(settings_parameters=compatible_db_params)
-db_via_get_settings = get_settings(settings_parameters=compatible_db_params)
-print(f"   Cross-pattern cache hit: {db_via_direct is db_via_get_settings}")
+db_via_merging = DatabaseSettings(settings_parameters=compatible_db_params)
+db_via_resolution = get_settings(settings_parameters=compatible_db_params)
+print(f"   Cross-pattern cache hit: {db_via_merging is db_via_resolution}")
 
-print("\n=== MountainAshBaseSettings provides flexible, powerful configuration management! ===")
+print("\n=== Both patterns enable powerful, flexible configuration management! ===")

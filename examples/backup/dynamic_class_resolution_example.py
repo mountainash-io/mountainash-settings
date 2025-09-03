@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Example demonstrating dynamic settings class resolution pattern with MountainAshBaseSettings.
+Example demonstrating dynamic settings class resolution pattern.
 
 This pattern allows SettingsParameters to carry the class information
 throughout the application, enabling dynamic resolution at runtime without
@@ -8,12 +8,14 @@ the caller needing to know the specific settings class type.
 """
 
 from pydantic import Field
-from mountainash_settings import MountainAshBaseSettings, SettingsParameters, get_settings
+from pydantic_settings import BaseSettings
+from mountainash_settings import mountainash_settings, SettingsParameters, get_settings
 
 print("=== Dynamic Settings Class Resolution Pattern ===\n")
 
-# Step 1: Define different settings classes with MountainAshBaseSettings
-class DatabaseSettings(MountainAshBaseSettings):
+# Step 1: Define different settings classes with the decorator
+@mountainash_settings(cache=True, templates=True)
+class DatabaseSettings(BaseSettings):
     """Database configuration settings."""
     host: str = Field(default="localhost")
     port: int = Field(default=5432)
@@ -21,14 +23,16 @@ class DatabaseSettings(MountainAshBaseSettings):
     password: str = Field(default="password")
     database: str = Field(default="myapp")
 
-class RedisSettings(MountainAshBaseSettings):
+@mountainash_settings(cache=True, templates=True) 
+class RedisSettings(BaseSettings):
     """Redis configuration settings."""
     host: str = Field(default="localhost")
     port: int = Field(default=6379)
     password: str = Field(default="")
     db: int = Field(default=0)
 
-class ApiSettings(MountainAshBaseSettings):
+@mountainash_settings(cache=True, templates=True)
+class ApiSettings(BaseSettings):
     """API service configuration."""
     base_url: str = Field(default="http://localhost:8000")
     api_key: str = Field(default="dev-key")
@@ -144,7 +148,7 @@ application_layer()
 
 print("\n4. Advanced: Generic settings resolver function:")
 
-def get_settings_for_service(service_name: str, all_configs: dict) -> MountainAshBaseSettings:
+def get_settings_for_service(service_name: str, all_configs: dict) -> BaseSettings:
     """
     Generic function that can resolve any settings class dynamically.
     The caller doesn't need to know what specific settings class they'll get!

@@ -1,91 +1,94 @@
 #!/usr/bin/env python3
 """
-Example demonstrating the smart SettingsParameters merging feature.
+Example demonstrating SettingsParameters with MountainAshBaseSettings.
 
-This shows how the @mountainash_settings decorator can intelligently merge
-SettingsParameters even when settings_class is not specified.
+This shows how MountainAshBaseSettings works seamlessly with SettingsParameters
+for flexible configuration management patterns.
 """
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
-from mountainash_settings import mountainash_settings, SettingsParameters
+from mountainash_settings import MountainAshBaseSettings, SettingsParameters
 
-print("=== Smart SettingsParameters Merging Example ===\n")
+print("=== SettingsParameters with MountainAshBaseSettings Example ===\n")
 
-@mountainash_settings()
-class DatabaseSettings(BaseSettings):
-    """Database settings with smart parameter merging."""
+class DatabaseSettings(MountainAshBaseSettings):
+    """Database settings with SettingsParameters support."""
     host: str = Field(default="localhost")
     port: int = Field(default=5432)
     username: str = Field(default="user")
     password: str = Field(default="password")
     database: str = Field(default="myapp")
 
-# 1. Traditional approach - explicit settings_class
-print("1. Traditional Approach (explicit settings_class):")
-traditional_params = SettingsParameters.create(
+# 1. Basic SettingsParameters usage
+print("1. Basic SettingsParameters Usage:")
+basic_params = SettingsParameters.create(
     namespace="database_prod",
-    settings_class=DatabaseSettings,  # ← Explicitly specified
+    settings_class=DatabaseSettings,
     host="prod-db.example.com",
     port=5432,
     username="admin", 
     database="production_db"
 )
 
-traditional_settings = DatabaseSettings(settings_parameters=traditional_params)
-print(f"   Host: {traditional_settings.host}")
-print(f"   Database: {traditional_settings.database}")
-print(f"   Namespace: {traditional_settings.SETTINGS_NAMESPACE}")
-print(f"   Settings Class: {traditional_settings.SETTINGS_CLASS.__name__}")
+basic_settings = DatabaseSettings(settings_parameters=basic_params)
+print(f"   Host: {basic_settings.host}")
+print(f"   Database: {basic_settings.database}")
+print(f"   Namespace: {basic_settings.SETTINGS_NAMESPACE}")
+print(f"   Settings Class: {basic_settings.SETTINGS_CLASS.__name__}")
 
 print()
 
-# 2. Smart merging approach - no settings_class needed!
-print("2. Smart Merging Approach (no settings_class needed!):")
-smart_params = SettingsParameters.create(
-    namespace="database_staging", 
-    # settings_class=DatabaseSettings,  ← Not needed! 
+# 2. Runtime overrides with SettingsParameters
+print("2. Runtime Overrides with SettingsParameters:")
+override_params = SettingsParameters.create(
+    namespace="database_staging",
+    settings_class=DatabaseSettings,
     host="staging-db.example.com",
     port=5432,
     username="staging_user",
     database="staging_db"
 )
 
-# This works even though settings_class was not specified!
-smart_settings = DatabaseSettings(settings_parameters=smart_params)
-print(f"   Host: {smart_settings.host}")
-print(f"   Database: {smart_settings.database}")
-print(f"   Namespace: {smart_settings.SETTINGS_NAMESPACE}")
-print(f"   Settings Class: {smart_settings.SETTINGS_CLASS.__name__}")
+# Apply runtime overrides
+override_settings = DatabaseSettings(
+    settings_parameters=override_params,
+    password="runtime_password",  # Runtime override
+    port=3306  # Runtime override
+)
+print(f"   Host: {override_settings.host}")
+print(f"   Port: {override_settings.port} (overridden)")
+print(f"   Database: {override_settings.database}")
+print(f"   Password: {override_settings.password} (overridden)")
+print(f"   Namespace: {override_settings.SETTINGS_NAMESPACE}")
 
 print()
 
-# 3. Demonstrate the merging magic
-print("3. How The Magic Works:")
-print(f"   Original params.settings_class: {smart_params.settings_class}")
-print(f"   Original params.kwargs: {smart_params.kwargs}")
+# 3. Parameter extraction and reconstruction
+print("3. Parameter Extraction and Reconstruction:")
+print(f"   Original params namespace: {override_params.namespace}")
+print(f"   Original params settings_class: {override_params.settings_class.__name__}")
 
-# Extract the merged parameters from the final settings
-reconstructed = smart_settings.extract_settings_parameters()
-print(f"   Final params.settings_class: {reconstructed.settings_class.__name__}")
-print(f"   Final params.namespace: {reconstructed.namespace}")
+# Extract the parameters from the final settings
+reconstructed = override_settings.extract_settings_parameters()
+print(f"   Reconstructed namespace: {reconstructed.namespace}")
+print(f"   Reconstructed settings_class: {reconstructed.settings_class.__name__}")
 
 print()
 
-# 4. Show it works with all decorator features
-print("4. Works With All Decorator Features:")
+# 4. Advanced features with templates
+print("4. Advanced Features with Templates:")
 
-@mountainash_settings(cache=True, templates=True, multi_format=True)
-class AppSettings(BaseSettings):
-    """Full-featured settings class."""
+class AppSettings(MountainAshBaseSettings):
+    """Full-featured settings class with templates."""
     app_name: str = Field(default="MyApp")
     environment: str = Field(default="development")
     log_path: str = Field(default="logs/{app_name}-{environment}.log")
     debug: bool = Field(default=False)
 
-# No settings_class needed, templates work, caching works, metadata tracking works!
+# Templates work, caching works, metadata tracking works!
 app_params = SettingsParameters.create(
     namespace="production",
+    settings_class=AppSettings,
     app_name="SuperApp",
     environment="production", 
     debug=False
@@ -97,15 +100,15 @@ print(f"   Environment: {app_settings.environment}")
 print(f"   Log Path Template: {app_settings.log_path}")
 print(f"   Formatted Log Path: {app_settings.format_template_from_settings(app_settings.log_path)}")
 print(f"   Has Template Methods: {hasattr(app_settings, 'format_template_from_settings')}")
-print(f"   Cache Enabled: {AppSettings._mountainash_cache_enabled}")
+print(f"   Namespace: {app_settings.SETTINGS_NAMESPACE}")
 
 print()
 
-# 5. Library integration example
-print("5. Library Integration Example:")
+# 5. Environment-based configuration factory
+print("5. Environment-Based Configuration Factory:")
 
-def create_database_config(environment: str):
-    """Library function that creates SettingsParameters without knowing the target class."""
+def create_database_config(environment: str, settings_class=DatabaseSettings):
+    """Factory function that creates SettingsParameters for different environments."""
     config = {
         "development": {
             "host": "localhost",
@@ -121,14 +124,13 @@ def create_database_config(environment: str):
     
     env_config = config.get(environment, config["development"])
     
-    # Library doesn't know about DatabaseSettings class!
     return SettingsParameters.create(
         namespace=f"db_{environment}",
-        # No settings_class - works with any decorated class!
+        settings_class=settings_class,
         **env_config
     )
 
-# Use library function with our decorated class
+# Use factory function with our MountainAshBaseSettings class
 dev_params = create_database_config("development")
 prod_params = create_database_config("production")
 
@@ -136,6 +138,8 @@ dev_settings = DatabaseSettings(settings_parameters=dev_params)
 prod_settings = DatabaseSettings(settings_parameters=prod_params)
 
 print(f"   Dev Database: {dev_settings.database} @ {dev_settings.host}")
+print(f"   Dev Namespace: {dev_settings.SETTINGS_NAMESPACE}")
 print(f"   Prod Database: {prod_settings.database} @ {prod_settings.host}")
+print(f"   Prod Namespace: {prod_settings.SETTINGS_NAMESPACE}")
 
-print("\n=== Smart merging makes SettingsParameters more flexible and user-friendly! ===")
+print("\n=== SettingsParameters provides flexible configuration patterns with MountainAshBaseSettings! ===")
