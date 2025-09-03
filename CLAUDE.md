@@ -11,10 +11,10 @@ mountainash-settings is a Python package for advanced configuration management w
 ### Core Components
 
 - **MountainAshBaseSettings**: Extended BaseSettings class with template support, multiple file format handling, and settings caching
-- **SettingsParameters**: Dataclass for configuration parameters and validation
-- **SettingsManager**: Caching layer for settings instances with namespace support
+- **SettingsParameters**: Dataclass for configuration parameters, validation, and smart caching with runtime override support
+- **SettingsManager**: Caching layer for settings instances with namespace support and hash-based instance management
 - **Authentication System**: Modular authentication for databases, storage, and secrets
-- **Settings Cache**: Efficient caching with hash-based instance management
+- **Settings Cache**: Efficient caching with LRU cache integration and structural parameter differentiation
 
 ### Package Structure
 
@@ -33,10 +33,58 @@ src/mountainash_settings/
 │       ├── encryption/            # GPG encryption support
 │       ├── secrets/               # Secret management providers
 │       └── storage/               # Storage authentication
-├── settings_cache/                # Settings caching system
-├── settings_parameters/           # Parameter handling and validation
+├── settings_cache/                # Settings caching system with get_settings function
+├── settings_parameters/           # Parameter handling, validation, and smart merging
 ```
 
+## MountainAshBaseSettings Architecture
+
+### Primary Interface
+
+MountainAshBaseSettings is the primary interface for using mountainash-settings. It extends standard Pydantic BaseSettings with advanced configuration management features.
+
+#### Basic Usage Pattern
+```python
+from pydantic import Field
+from mountainash_settings import MountainAshBaseSettings
+
+class AppSettings(MountainAshBaseSettings):
+    debug: bool = Field(default=False)
+    app_name: str = Field(default="MyApp")
+    log_file: str = Field(default="logs/{app_name}.log")  # Template support
+```
+
+#### Core Features
+- **Template Support**: Dynamic field substitution using other field values
+- **Multi-Format Configuration**: Support for YAML, TOML, JSON configuration files
+- **Smart Caching**: Efficient instance caching with hash-based invalidation
+- **Authentication Integration**: Built-in support for database, storage, and secret management authentication
+- **Runtime Override Support**: Apply runtime parameters without affecting cache
+
+#### Advanced Configuration
+```python
+from mountainash_settings import SettingsParameters, get_settings
+
+# Create parameters for complex configurations
+params = SettingsParameters.create(
+    namespace="production",
+    config_files=["config.yaml"],
+    settings_class=AppSettings,
+    host="prod-server.com"
+)
+
+# Use with get_settings function for dynamic resolution
+settings = get_settings(settings_parameters=params)
+```
+
+### Key Architectural Benefits
+
+1. **SettingsParameters Integration**: Comprehensive parameter handling and validation
+2. **Smart Caching**: Hash-based caching with structural vs runtime parameter separation
+3. **Template Resolution**: Dynamic template processing with field substitution
+4. **Authentication System**: Modular authentication for various providers
+5. **Multi-Source Configuration**: Environment variables, configuration files, and secret management
+6. **Namespace Support**: Isolation and organization of different configuration contexts
 
 ## Build/Test/Lint Commands
 - Build: `hatch build`
@@ -112,15 +160,10 @@ src/mountainash_settings/
 ### Test Organization
 ```
 tests/
-├── secrets/                       # Secret management tests
-│   ├── test_aws.py               # AWS Secrets Manager tests
-│   ├── test_azure.py             # Azure Key Vault tests
-│   ├── test_gcp.py               # GCP Secret Manager tests
-│   └── test_hashicorp.py         # HashiCorp Vault tests
-├── storage/                      # Storage authentication tests
-│   ├── test_auth_storage_base.py # Base storage auth tests
-│   └── test_auth_storage_s3.py   # S3 storage auth tests
-├── test_base_settings.py         # Core settings functionality
+├── config/                       # Test configuration files
+│   ├── simple_base.yaml         # Base configuration for file-based tests
+│   └── simple_production.yaml   # Production configuration for file-based tests
+├── test_base_settings.py         # Core MountainAshBaseSettings functionality
 ├── test_config_files.py          # Configuration file handling
 ├── test_settings_manager.py      # Settings caching and management
 └── test_settings_utils.py        # Utility functions
@@ -134,10 +177,6 @@ tests/
 ## Documentation
 
 ### Available Documentation
-- `docs/database-auth-architecture.md` - Database authentication architecture
-- `docs/database-auth-requirements.md` - Database authentication requirements
-- `docs/storage-auth-spec.md` - Storage authentication specification
-- `docs/secrets-implementation-comparison.md` - Secret management comparison
 - `README.md` - Package overview and usage
 - `CONTRIBUTING.md` - Contribution guidelines
 - `TESTING.md` - Testing guidelines and procedures
@@ -147,6 +186,13 @@ tests/
   - Database authentication (BigQuery, Redshift, Snowflake, PostgreSQL, MySQL, etc.)
   - Storage authentication (S3, Azure Blob, GCS, MinIO, etc.)
   - Network storage (FTP, SFTP, NFS, SMB)
+
+### Code Examples
+- `examples/` directory contains comprehensive usage examples:
+  - Basic MountainAshBaseSettings usage with all features
+  - SettingsParameters merging patterns
+  - Runtime type resolution patterns
+  - Enterprise configuration scenarios
 
 ## Versioning Strategy
 
