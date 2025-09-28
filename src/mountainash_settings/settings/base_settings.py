@@ -79,7 +79,7 @@ class MountainAshBaseSettings(BaseSettings):
         # Handle model_config kwargs
         self.model_config.update(**valid_pydantic_modelconfig_kwargs)
 
-
+        # NOTE: All that has happened before now is prior to calling the init on Base Settings!
         #Now we initialise the values!
         super().__init__(   _case_sensitive=valid_pydantic_kwargs.get('_case_sensitive', True),
                             _nested_model_default_partial_update=valid_pydantic_kwargs.get('_nested_model_default_partial_update', False),

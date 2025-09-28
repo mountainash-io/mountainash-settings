@@ -4,7 +4,7 @@ from importlib import import_module
 from pydantic_settings import BaseSettings
 
 from ..settings_parameters import SettingsParameters, SettingsUtils
-# from ..settings.base import MountainAshBaseSettings
+from ..settings import MountainAshBaseSettings
 
 class SettingsManager:
     """
@@ -27,11 +27,11 @@ class SettingsManager:
     def __init__(self
                  ) -> None:
 
-        self.settings_object_cache: Dict[Any, BaseSettings] = {}
+        self.settings_object_cache: Dict[Any, MountainAshBaseSettings] = {}
 
 
     # @classmethod
-    def get_settings_object(self, settings_parameters: SettingsParameters) -> BaseSettings:
+    def get_settings_object(self, settings_parameters: SettingsParameters) -> MountainAshBaseSettings:
         """
         Gets the configuration object for a given namespace.
         Args:
@@ -49,10 +49,10 @@ class SettingsManager:
         if override_kwargs:
             obj_settings.update_settings_from_dict(settings_dict=override_kwargs)
 
-        if isinstance(obj_settings, BaseSettings):
+        if isinstance(obj_settings, MountainAshBaseSettings):
             return obj_settings
         else:
-            raise ValueError(f"Configuration for namespace '{settings_parameters}' found, but is not an BaseSettings object. Received a {type(obj_settings)}")
+            raise ValueError(f"Configuration for namespace '{settings_parameters}' found, but is not an MountainAshBaseSettings object. Received a {type(obj_settings)}")
 
     # @classmethod
     def is_namespace_initialised(self, settings_parameters: SettingsParameters) -> bool:
@@ -72,7 +72,7 @@ class SettingsManager:
 
     # @classmethod
     def get_or_create_settings(self,
-                    settings_parameters: SettingsParameters) -> BaseSettings:
+                    settings_parameters: SettingsParameters) -> MountainAshBaseSettings:
         """
         Initializes the settings for a given set of parameters.
 
@@ -95,9 +95,9 @@ class SettingsManager:
             # #Create the Settings object
             class_module = settings_parameters.settings_class.__module__
             class_name = settings_parameters.settings_class.__name__
-            settings_class_ref: Type[BaseSettings] = getattr(import_module(name=class_module), class_name)
+            settings_class_ref: Type[MountainAshBaseSettings] = getattr(import_module(name=class_module), class_name)
 
-            if issubclass(settings_class_ref, BaseSettings):
+            if issubclass(settings_class_ref, MountainAshBaseSettings):
                 obj_settings = settings_class_ref(settings_parameters = settings_parameters)
 
             else:

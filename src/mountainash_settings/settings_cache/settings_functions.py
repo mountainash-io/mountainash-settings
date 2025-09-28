@@ -6,7 +6,7 @@ from upath import UPath
 
 from ..settings_parameters.utils import SettingsUtils, SettingsParameters
 from .settings_manager import SettingsManager
-# from ..settings.base import MountainAshBaseSettings
+from ..settings import MountainAshBaseSettings
 # from mountainash_settings.app.app_settings import AppSettings
 
 
@@ -30,7 +30,7 @@ def get_settings_manager(
 @lru_cache(maxsize=None)
 def _get_settings(settings_parameters: SettingsParameters,
                   #settings_class:     Optional[Type[BaseSettings]] = BaseSettings,
-                    ) -> BaseSettings:
+                    ) -> MountainAshBaseSettings:
     """
     Retrieves the AppSettings object for a given namespace.
 
@@ -41,16 +41,15 @@ def _get_settings(settings_parameters: SettingsParameters,
         AppSettings: The AppSettings object for the given namespace.
     """
 
-    objSettingsManager: SettingsManager = get_settings_manager(#settings_class=settings_class
-                                                               )
-    settings: BaseSettings =  objSettingsManager.get_or_create_settings(settings_parameters=settings_parameters)
+    objSettingsManager: SettingsManager = get_settings_manager()
+    settings: MountainAshBaseSettings =  objSettingsManager.get_or_create_settings(settings_parameters=settings_parameters)
 
     return settings
 
 
 
 def get_settings(    settings_parameters: Optional[SettingsParameters] = None,
-                     settings_class:        Optional[Type[BaseSettings]] = None,
+                     settings_class:        Optional[Type[MountainAshBaseSettings]] = None,
                      settings_namespace:    Optional[str] = None,
                      config_files:          Optional[Union[UPath, str, List[UPath|str]]]  = None,
                      env_prefix:            Optional[str] = None,
@@ -107,7 +106,7 @@ def get_settings(    settings_parameters: Optional[SettingsParameters] = None,
 
     # Get cached settings based on structural parameters only
     cached_settings = _get_settings(settings_parameters=final_settings_parameters)
-    
+
     # Apply runtime overrides to the cached instance
     return final_settings_parameters.apply_runtime_overrides(cached_settings)
 

@@ -5,9 +5,12 @@ from dataclasses import dataclass
 from pydantic_settings import BaseSettings
 from upath import UPath
 
+from mountainash_settings.settings.base_settings import MountainAshBaseSettings
+
 from .filehandler import SettingsFileHandler
 from .kwargshandler import SettingsKwargsHandler
 
+from ..settings_cache import get_settings #as func_get_settings
 
 @dataclass(frozen=True)
 class SettingsParameters():
@@ -155,6 +158,13 @@ class SettingsParameters():
             self.env_prefix == other.env_prefix
             # Deliberately exclude: kwargs, secrets_dir comparison
         )
+
+
+    def get_settings(self, **kwargs) -> MountainAshBaseSettings:
+        if self.settings_class is None:
+            raise ValueError("Settings class is required to get settings.")
+
+        return get_settings(settings_parameters=self, **kwargs)
 
 
     # Creation methods
