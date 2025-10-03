@@ -26,13 +26,14 @@ def _merge_config_files(first: Optional[Tuple], second: Optional[Tuple], first_w
     """Merge configuration file tuples with deduplication."""
     if first is None and second is None:
         return None
-    
+
     if first_wins:
         return first or second
-    
-    # Default behavior: combine and deduplicate  
+
+    # Default behavior: combine and deduplicate
+    # Convert all paths to strings to handle mix of UPath and str types
     merged = set(first or ()) | set(second or ())
-    return tuple(sorted(merged)) if merged else None
+    return tuple(sorted(str(p) for p in merged)) if merged else None
 
 
 def _merge_kwargs(first: Optional[Dict], second: Optional[Dict], first_wins: bool = False) -> Optional[Dict]:

@@ -67,7 +67,7 @@ class SettingsManager:
         """
 
         #check if the namespace is already initialised by looking at the keys in the settings_object_cache dict
-        return settings_parameters.__hash__() in self.settings_object_cache.keys()
+        return settings_parameters in self.settings_object_cache
 
 
     # @classmethod
@@ -112,7 +112,7 @@ class SettingsManager:
             # if not isinstance(obj_settings, BaseSettings):
             #     raise ValueError(f"Configuration for namespace '{settings_parameters.namespace}' found, but obj_settings is not an BaseSettings object. It is of type {type(obj_settings)}")
 
-        self.settings_object_cache[settings_parameters.namespace] = obj_settings
+        self.settings_object_cache[settings_parameters] = obj_settings
         return obj_settings
 
 
