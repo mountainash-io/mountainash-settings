@@ -1,135 +1,72 @@
+"""
+Centralized pytest configuration and fixtures.
+
+This module imports all fixtures from the fixtures package and makes them
+available to all tests. It also configures pytest markers and session-level
+settings.
+"""
+
 import pytest
-import tempfile
-from pathlib import Path
-from typing import Dict, Any
-from unittest.mock import MagicMock, patch
-from pydantic_settings import BaseSettings
-from upath import UPath
 
-from mountainash_settings import SettingsParameters
-from mountainash_settings.settings.app.app_settings import AppSettings
+# Import all settings classes for test use
+from fixtures.settings_classes import (
+    MockBaseSettings,
+    MockSettings,
+    TestSettings,
+    TemplateTestSettings,
+    MultiFieldTestSettings,
+    MinimalSettings
+)
 
-
-class MockBaseSettings(BaseSettings):
-    """Mock settings class for testing."""
-    test_field: str = "default_value"
-    test_int: int = 42
-    test_bool: bool = True
-
-
-@pytest.fixture
-def mock_settings_class():
-    """Provides a mock settings class for testing."""
-    return MockBaseSettings
+# Import all fixtures from fixture modules
+# Pytest automatically discovers fixtures when imported
+from fixtures.config_files import *
+from fixtures.parameters import *
+from fixtures.instances import *
 
 
-@pytest.fixture
-def sample_settings_parameters():
-    """Provides sample settings parameters for testing."""
-    return SettingsParameters.create(
-        namespace="test",
-        config_files="test_config.yaml",
-        env_prefix="TEST_"
-    )
-
-
-@pytest.fixture
-def sample_kwargs():
-    """Provides sample kwargs for testing."""
-    return {
-        "DEBUG": True,
-        "VERBOSE": False,
-        "_env_prefix": "TEST_",
-        "custom_field": "value"
-    }
-
-
-@pytest.fixture
-def temp_config_file():
-    """Creates a temporary config file for testing."""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
-        f.write("""
-DEBUG: true
-LOCALE_TIMEZONE: "EST"
-CUSTOM_SETTING: "test_value"
-""")
-        temp_path = f.name
-    
-    yield temp_path
-    
-    # Cleanup
-    Path(temp_path).unlink(missing_ok=True)
-
-
-@pytest.fixture
-def temp_config_files():
-    """Creates multiple temporary config files for testing."""
-    files = []
-    
-    # Primary config
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
-        f.write("""
-DEBUG: true
-PRIMARY_SETTING: "primary_value"
-""")
-        files.append(f.name)
-    
-    # Secondary config
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
-        f.write("""
-SECONDARY_SETTING: "secondary_value"
-OVERRIDE_SETTING: "overridden"
-""")
-        files.append(f.name)
-    
-    yield files
-    
-    # Cleanup
-    for file_path in files:
-        Path(file_path).unlink(missing_ok=True)
-
-
-@pytest.fixture
-def app_settings_instance():
-    """Provides an AppSettings instance for testing."""
-    return AppSettings()
-
-
-@pytest.fixture
-def mock_get_platform_slash():
-    """Mock the get_platform_slash function."""
-    with patch('mountainash_settings.settings.app.app_settings.get_platform_slash') as mock:
-        mock.return_value = "/"
-        yield mock
-
-
-@pytest.fixture(autouse=True)
-def mock_datetime_for_tests():
-    """Auto-use fixture to mock datetime for consistent test results."""
-    from datetime import datetime
-    with patch('mountainash_settings.settings.app.app_settings.datetime') as mock_datetime:
-        # Set a fixed datetime for predictable testing
-        mock_datetime.now.return_value = datetime(2024, 1, 15, 14, 30, 45)
-        yield mock_datetime
-
-
-# Test markers for categorizing tests
+# Configure custom pytest markers
 def pytest_configure(config):
     """Configure custom pytest markers."""
     config.addinivalue_line("markers", "unit: marks tests as unit tests")
-    config.addinivalue_line("markers", "integration: marks tests as integration tests") 
+    config.addinivalue_line("markers", "integration: marks tests as integration tests")
     config.addinivalue_line("markers", "performance: marks tests as performance tests")
     config.addinivalue_line("markers", "slow: marks tests as slow running")
+    config.addinivalue_line("markers", "edge_case: marks tests covering edge cases")
+    config.addinivalue_line("markers", "parametrize: marks parametrized tests")
 
 
-@pytest.fixture(scope="session")
-def test_data_dir():
-    """Provides path to test data directory."""
-    return Path(__file__).parent / "data"
+# Session-level configuration
+@pytest.fixture(scope="session", autouse=True)
+def session_setup():
+    """
+    Session-level setup and teardown.
+
+    This runs once at the start of the test session and once at the end.
+    """
+    # Setup: runs before all tests
+    print("\n=== Starting test session ===")
+
+    yield
+
+    # Teardown: runs after all tests
+    print("\n=== Test session complete ===")
 
 
+# Additional helper fixtures
 @pytest.fixture
-def temp_dir():
-    """Provides a temporary directory for test files."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        yield Path(tmp_dir)
+def isolated_cache():
+    """
+    Provides an isolated cache environment for tests.
+
+    Note: This doesn't fully clear the global LRU cache, but uses
+    unique namespaces to ensure test isolation.
+    """
+    from mountainash_settings import SettingsManager
+
+    # Create a fresh manager instance
+    manager = SettingsManager()
+    yield manager
+
+    # Cleanup: clear the cache for this manager
+    manager.settings_object_cache.clear()
