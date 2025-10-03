@@ -1,16 +1,16 @@
+from __future__ import annotations
 
-from typing import Optional, Any, Tuple, Type, List, Dict
+from typing import Optional, Any, Tuple, Type, List, Dict, TYPE_CHECKING
 from dataclasses import dataclass
 
 from pydantic_settings import BaseSettings
 from upath import UPath
 
-from mountainash_settings.settings.base_settings import MountainAshBaseSettings
+if TYPE_CHECKING:
+    from mountainash_settings.settings.base_settings import MountainAshBaseSettings
 
 from .filehandler import SettingsFileHandler
 from .kwargshandler import SettingsKwargsHandler
-
-from ..settings_cache import get_settings #as func_get_settings
 
 @dataclass(frozen=True)
 class SettingsParameters():
@@ -161,6 +161,9 @@ class SettingsParameters():
 
 
     def get_settings(self, **kwargs) -> MountainAshBaseSettings:
+        # Lazy import to avoid circular dependency
+        from ..settings_cache import get_settings
+
         if self.settings_class is None:
             raise ValueError("Settings class is required to get settings.")
 

@@ -7,7 +7,6 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource, TomlConfigSettingsSource, YamlConfigSettingsSource, JsonConfigSettingsSource
 
 from mountainash_settings.settings_parameters import SettingsFileHandler, SettingsParameters, SettingsUtils, SettingsFiles
-from mountainash_settings.settings_cache import get_settings #as func_get_settings
 
 # T = TypeVar('T', bound='BaseSettings')
 T = TypeVar('T', BaseSettings, 'MountainAshBaseSettings')
@@ -141,7 +140,8 @@ class MountainAshBaseSettings(BaseSettings):
                     **kwargs
 
                      ) -> Any:
-        pass
+        # Lazy import to avoid circular dependency
+        from mountainash_settings.settings_cache import get_settings
 
         if settings_class is None:
             class_module = cls.__module__
