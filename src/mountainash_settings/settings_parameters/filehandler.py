@@ -36,9 +36,23 @@ class FileTypeRegistry:
         cls._registry[extension] = file_type
 
     @classmethod
+    # def identify(cls, file_path: Union[UPath, str]) -> Optional[str]:
+    #     ext = UPath(file_path).suffix.lower().lstrip('.')
+    #     return cls._registry.get(ext)
     def identify(cls, file_path: Union[UPath, str]) -> Optional[str]:
-        ext = UPath(file_path).suffix.lower().lstrip('.')
+        path = UPath(file_path)
+
+        # Handle dotfiles (like .env, .bashrc, etc.)
+        if path.name.startswith('.') and '.' not in path.name[1:]:
+            # It's a dotfile - use the name without the leading dot as the type
+            potential_type = path.name[1:]  # Remove leading dot
+            if potential_type in cls._registry:
+                return cls._registry.get(potential_type)
+
+        # Handle regular files with extensions
+        ext = path.suffix.lower().lstrip('.')
         return cls._registry.get(ext)
+
 
 
 class SettingsFileHandler:
