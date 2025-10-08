@@ -109,6 +109,38 @@ class TestFileTypeRegistry:
         # Cleanup
         del FileTypeRegistry._registry["ini"]
 
+    @pytest.mark.unit
+    def test_identify_dotenv_file(self):
+        """Test identifying .env dotfile (no extension)."""
+        result = FileTypeRegistry.identify(".env")
+        assert result == "env"
+
+    @pytest.mark.unit
+    def test_identify_dotenv_with_path(self):
+        """Test identifying .env dotfile with full path."""
+        result = FileTypeRegistry.identify("/path/to/.env")
+        assert result == "env"
+
+    @pytest.mark.unit
+    def test_identify_dotfile_not_in_registry(self):
+        """Test that dotfiles not in registry return None."""
+        result = FileTypeRegistry.identify(".bashrc")
+        assert result is None
+
+    @pytest.mark.unit
+    def test_identify_dotenv_local(self):
+        """Test identifying .env.local (dotfile with extension)."""
+        # .env.local should be treated as a regular file with .local extension
+        # which is not in the registry
+        result = FileTypeRegistry.identify(".env.local")
+        assert result is None
+
+    @pytest.mark.unit
+    def test_identify_dotfile_with_upath(self):
+        """Test identifying dotfile with UPath object."""
+        result = FileTypeRegistry.identify(UPath(".env"))
+        assert result == "env"
+
 
 class TestSettingsFiles:
     """Test SettingsFiles NamedTuple."""
@@ -236,6 +268,32 @@ class TestSeparateConfigFiles:
         result = SettingsFileHandler.separate_config_files([str(yaml_file)])
         assert result.yaml_files is not None
 
+    @pytest.mark.unit
+    def test_separate_dotenv_file(self, temp_dotenv_file):
+        """Test separating .env dotfile."""
+        result = SettingsFileHandler.separate_config_files(temp_dotenv_file)
+        assert result.env_files is not None
+        assert len(result.env_files) == 1
+        assert result.yaml_files is None
+        assert result.toml_files is None
+        assert result.json_files is None
+
+    @pytest.mark.unit
+    def test_separate_dotenv_with_other_files(
+        self, temp_dotenv_file, temp_yaml_file, temp_toml_file
+    ):
+        """Test separating dotenv file along with other config files."""
+        files = [temp_dotenv_file, temp_yaml_file, temp_toml_file]
+        result = SettingsFileHandler.separate_config_files(files)
+
+        assert result.env_files is not None
+        assert len(result.env_files) == 1
+        assert result.yaml_files is not None
+        assert len(result.yaml_files) == 1
+        assert result.toml_files is not None
+        assert len(result.toml_files) == 1
+        assert result.json_files is None
+
 
 class TestMergeConfigFiles:
     """Test merge_config_files method."""
@@ -328,6 +386,18 @@ class TestIdentifyFileExtension:
         # Check that warning was printed
         captured = capsys.readouterr()
         assert "Invalid file type" in captured.out
+
+    @pytest.mark.unit
+    def test_identify_dotenv_file_extension(self):
+        """Test identifying .env dotfile."""
+        result = SettingsFileHandler.identify_file_extension(".env")
+        assert result == "env"
+
+    @pytest.mark.unit
+    def test_identify_dotenv_with_path_extension(self):
+        """Test identifying .env dotfile with full path."""
+        result = SettingsFileHandler.identify_file_extension("/tmp/project/.env")
+        assert result == "env"
 
 
 class TestValidateConfigFilesExist:
@@ -422,6 +492,27 @@ class TestGroupFilesByType:
         assert len(result["yaml"]) == 1
         assert len(result["toml"]) == 1
         assert len(result["json"]) == 1
+
+    @pytest.mark.unit
+    def test_group_dotenv_file(self, temp_dotenv_file):
+        """Test grouping .env dotfile."""
+        result = SettingsFileHandler.group_files_by_type([temp_dotenv_file])
+        assert "env" in result
+        assert len(result["env"]) == 1
+
+    @pytest.mark.unit
+    def test_group_dotenv_with_other_files(
+        self, temp_dotenv_file, temp_yaml_file, temp_env_file
+    ):
+        """Test grouping dotenv file with regular .env extension file."""
+        files = [temp_dotenv_file, temp_yaml_file, temp_env_file]
+        result = SettingsFileHandler.group_files_by_type(files)
+
+        assert "env" in result
+        assert "yaml" in result
+        # Both .env dotfile and .env extension file should be grouped together
+        assert len(result["env"]) == 2
+        assert len(result["yaml"]) == 1
 
 
 class TestDeduplicateFiles:
@@ -603,3 +694,60 @@ class TestIntegration:
         files_tuple = SettingsFileHandler.format_config_file_tuple(files)
         assert isinstance(files_tuple, tuple)
         assert len(files_tuple) == 2
+
+    @pytest.mark.integration
+    def test_dotenv_complete_workflow(
+        self, temp_dotenv_file, temp_yaml_file, temp_toml_file, temp_json_file
+    ):
+        """Test complete workflow with dotenv file and other config files."""
+        files = [temp_dotenv_file, temp_yaml_file, temp_toml_file, temp_json_file]
+
+        # Validate all files exist
+        SettingsFileHandler.validate_config_files_exist(files)
+
+        # Separate files by type
+        separated = SettingsFileHandler.separate_config_files(files)
+        assert separated.env_files is not None
+        assert len(separated.env_files) == 1
+        assert separated.yaml_files is not None
+        assert len(separated.yaml_files) == 1
+        assert separated.toml_files is not None
+        assert len(separated.toml_files) == 1
+        assert separated.json_files is not None
+        assert len(separated.json_files) == 1
+
+        # Group files by type
+        grouped = SettingsFileHandler.group_files_by_type(files)
+        assert "env" in grouped
+        assert "yaml" in grouped
+        assert "toml" in grouped
+        assert "json" in grouped
+
+        # Format as tuple
+        files_tuple = SettingsFileHandler.format_config_file_tuple(files)
+        assert isinstance(files_tuple, tuple)
+        assert len(files_tuple) == 4
+
+        # Verify dotenv file is correctly identified
+        dotenv_type = SettingsFileHandler.identify_file_extension(temp_dotenv_file)
+        assert dotenv_type == "env"
+
+    @pytest.mark.integration
+    def test_dotenv_and_env_extension_together(
+        self, temp_dotenv_file, temp_env_file
+    ):
+        """Test that both .env dotfile and .env extension file work together."""
+        files = [temp_dotenv_file, temp_env_file]
+
+        # Validate both files exist
+        SettingsFileHandler.validate_config_files_exist(files)
+
+        # Separate files - both should be in env_files
+        separated = SettingsFileHandler.separate_config_files(files)
+        assert separated.env_files is not None
+        assert len(separated.env_files) == 2
+
+        # Group files - both should be in 'env' group
+        grouped = SettingsFileHandler.group_files_by_type(files)
+        assert "env" in grouped
+        assert len(grouped["env"]) == 2

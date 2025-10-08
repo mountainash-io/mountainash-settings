@@ -72,7 +72,7 @@ def temp_json_file():
 
 @pytest.fixture
 def temp_env_file():
-    """Creates a temporary .env file for testing."""
+    """Creates a temporary .env file for testing (with .env extension)."""
     with tempfile.NamedTemporaryFile(mode='w', suffix='.env', delete=False) as f:
         f.write("""DEBUG=true
 LOCALE_TIMEZONE=EST
@@ -86,6 +86,21 @@ TEST_VAL_2=env_value_2
 
     # Cleanup
     Path(temp_path).unlink(missing_ok=True)
+
+
+@pytest.fixture
+def temp_dotenv_file(temp_dir):
+    """Creates an actual .env dotfile (no extension) for testing."""
+    dotenv_path = temp_dir / ".env"
+    dotenv_path.write_text("""DEBUG=true
+LOCALE_TIMEZONE=EST
+CUSTOM_SETTING=dotenv_value
+TEST_VAL_1=dotenv_value_1
+TEST_VAL_2=dotenv_value_2
+""")
+    yield str(dotenv_path)
+
+    # Cleanup happens automatically with temp_dir
 
 
 @pytest.fixture
