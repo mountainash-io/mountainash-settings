@@ -1,58 +1,54 @@
 [build-system]
 requires = ["hatchling"]
-build-backend = "hatchling.build" 
-   
-[project]      
-name = "mountainash_settings"             
-dynamic = ["version"]         
-description = 'Mountain Ash - Settings'                 
-readme = "README.md"                
-requires-python = ">=3.10"                        
-license = "MIT"                    
-keywords = []                
-authors = [               
-  { name = "Nathaniel Ramm", email = "nathaniel.ramm@discretedatascience.com" },          
-]        
-classifiers = [       
-  "Development Status :: 4 - Beta",                
-  "Programming Language :: Python",           
-  "Programming Language :: Python :: 3.10",       
-  "Programming Language :: Python :: 3.11",      
-  "Programming Language :: Python :: 3.12",       
-  "Programming Language :: Python :: Implementation :: CPython",   
-  "Programming Language :: Python :: Implementation :: PyPy",  
-]   
-dependencies = [    
-  "pydantic==2.9.2",     
-  "pydantic-settings==2.6.1",      
-  "universal_pathlib==0.2.2",       
-  "pyaml",     
-]    
-  
-[project.urls]  
-Documentation = "https://github.com/mountainash-io/mountainash-settings#readme"  
-Issues = "https://github.com/mountainash-io/mountainash-settings/issues"
-Source = "https://github.com/mountainash-io/mountainash-settings" 
-   
-#================    
-# Tool: Coverage   
-#================    
-[tool.coverage.run] 
-source_pkgs = ["mountainash_settings", "tests"] 
-branch = true
-parallel = true 
-omit = [
-  "src/mountainash_settings/__version__.py",
+build-backend = "hatchling.build"
+
+[project]
+name = "mountainash_settings"
+dynamic = ["version"]
+description = 'Mountain Ash - Settings'
+readme = "README.md"
+requires-python = ">=3.10"
+# license = "Proprietary"
+keywords = []
+authors = [
+    { name = "Nathaniel Ramm", email = "nathaniel.ramm@discretedatascience.com" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = [
+    "pydantic==2.9.2",
+    "pydantic-settings==2.6.1",
+    "universal_pathlib==0.2.2",
+    "pyaml",
 ]
 
+[project.urls]
+Documentation = "https://github.com/mountainash-io/mountainash-settings#readme"
+Issues = "https://github.com/mountainash-io/mountainash-settings/issues"
+Source = "https://github.com/mountainash-io/mountainash-settings"
+
+#================
+# Tool: Coverage
+#================
+[tool.coverage.run]
+source_pkgs = ["mountainash_settings", "tests"]
+branch = true
+parallel = true
+omit = ["src/mountainash_settings/__version__.py"]
+
 [tool.coverage.paths]
-mountainash_settings = ["src/mountainash_settings", "*/mountainash-settings/src/mountainash_settings"]
+mountainash_settings = [
+    "src/mountainash_settings",
+    "*/mountainash-settings/src/mountainash_settings",
+]
 tests = ["tests", "*/mountainash-settings/tests"]
 
 [tool.coverage.report]
-exclude_lines = [
-  "no cov", 
-  "if __name__ == .__main__:",
-  "if TYPE_CHECKING:"  
-]
- 
+exclude_lines = ["no cov", "if __name__ == .__main__:", "if TYPE_CHECKING:"]

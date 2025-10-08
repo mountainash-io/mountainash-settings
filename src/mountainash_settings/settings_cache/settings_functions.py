@@ -1,11 +1,12 @@
 from typing import Optional, Union, List, Type
 from functools import lru_cache
-from upath import UPath
 
 from pydantic_settings import BaseSettings
+from upath import UPath
+
 from ..settings_parameters.utils import SettingsUtils, SettingsParameters
 from .settings_manager import SettingsManager
-# from ..settings.base import MountainAshBaseSettings
+from ..settings import MountainAshBaseSettings
 # from mountainash_settings.app.app_settings import AppSettings
 
 
@@ -14,7 +15,7 @@ def get_settings_manager(
         # settings_class: Optional[Type[BaseSettings]] = None
     ) -> SettingsManager:
     """
-    Retrieves the SettingsManager instance. 
+    Retrieves the SettingsManager instance.
 
     Returns:
         SettingsManager: The singleton instance of SettingsManager - per settings_class
@@ -28,8 +29,8 @@ def get_settings_manager(
 
 @lru_cache(maxsize=None)
 def _get_settings(settings_parameters: SettingsParameters,
-                  #settings_class:     Optional[Type[BaseSettings]] = BaseSettings, 
-                    ) -> BaseSettings:
+                  #settings_class:     Optional[Type[BaseSettings]] = BaseSettings,
+                    ) -> MountainAshBaseSettings:
     """
     Retrieves the AppSettings object for a given namespace.
 
@@ -40,21 +41,20 @@ def _get_settings(settings_parameters: SettingsParameters,
         AppSettings: The AppSettings object for the given namespace.
     """
 
-    objSettingsManager: SettingsManager = get_settings_manager(#settings_class=settings_class
-                                                               )
-    settings: BaseSettings =  objSettingsManager.get_or_create_settings(settings_parameters=settings_parameters)
+    objSettingsManager: SettingsManager = get_settings_manager()
+    settings: MountainAshBaseSettings =  objSettingsManager.get_or_create_settings(settings_parameters=settings_parameters)
 
     return settings
 
 
 
 def get_settings(    settings_parameters: Optional[SettingsParameters] = None,
-                     settings_class:        Optional[Type[BaseSettings]] = None, 
+                     settings_class:        Optional[Type[MountainAshBaseSettings]] = None,
                      settings_namespace:    Optional[str] = None,
                      config_files:          Optional[Union[UPath, str, List[UPath|str]]]  = None,
                      env_prefix:            Optional[str] = None,
                      **kwargs
-                     ) -> BaseSettings: 
+                     ) -> BaseSettings:
     """
     The main function to be called to retrieve the application settings for a given namespace.
     This function is exported from the module!
@@ -104,7 +104,11 @@ def get_settings(    settings_parameters: Optional[SettingsParameters] = None,
             **kwargs
         )
 
-    return _get_settings(settings_parameters=final_settings_parameters )
+    # Get cached settings based on structural parameters only
+    cached_settings = _get_settings(settings_parameters=final_settings_parameters)
+
+    # Apply runtime overrides to the cached instance
+    return final_settings_parameters.apply_runtime_overrides(cached_settings)
 
 
 # def get_app_settings(  settings_parameters: SettingsParameters,
@@ -113,11 +117,11 @@ def get_settings(    settings_parameters: Optional[SettingsParameters] = None,
 #                         env_prefix:         Optional[str] = None,
 #                         **kwargs
 #                      ) -> AppSettings:
-  
+
 #     """
 #     The main function to be called to retrieve the application settings for a given namespace.
 
-    
+
 #     Args:
 #         settings_namespace (str, optional): The namespace for the configuration. Defaults to None, which retrieves the default namespace.
 #         config_files (Optional[Union[UPath, str, List[UPath|str]]]): The configuration files that the settings object will use to load settings.
@@ -132,9 +136,9 @@ def get_settings(    settings_parameters: Optional[SettingsParameters] = None,
 
 #     settings_class = AppSettings
 
-#     auth_settings: MountainAshBaseSettings = get_settings(settings_parameters=settings_parameters, 
-#                                                settings_class=settings_class, 
-#                                                settings_namespace=settings_namespace, 
+#     auth_settings: MountainAshBaseSettings = get_settings(settings_parameters=settings_parameters,
+#                                                settings_class=settings_class,
+#                                                settings_namespace=settings_namespace,
 #                                                config_files=config_files,
 #                                                env_prefix=env_prefix
 #                                                  **kwargs)
@@ -143,4 +147,3 @@ def get_settings(    settings_parameters: Optional[SettingsParameters] = None,
 #         return auth_settings
 #     else:
 #         raise ValueError("The settings object retrieved is not of type AppSettings.")
-    

@@ -1,5 +1,6 @@
-from datetime import datetime
 from typing import Optional, List, Tuple
+from datetime import datetime
+
 from pydantic import Field
 from upath import UPath
 
@@ -21,16 +22,14 @@ Parameters:
 
 class AppSettings(MountainAshBaseSettings):
 
-    def __init__(self, 
+    def __init__(self,
                  config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
                  settings_parameters:   Optional[SettingsParameters] = None,
-                #  _dummy: Optional[bool] = False,
-                 **kwargs) -> None:  
-        
+                 **kwargs) -> None:
 
-        super().__init__(config_files=config_files, 
+
+        super().__init__(config_files=config_files,
                          settings_parameters=settings_parameters,
-                        #  _dummy=_dummy, 
                          **kwargs)
 
     # General App Settings
@@ -43,23 +42,20 @@ class AppSettings(MountainAshBaseSettings):
     RUNDATETIME: str =                       Field(default=None)
 
 
-    PANDERA_DATAFRAME_FRAMEWORK: str =              Field(default='pandas')
-
-
 
     def post_init(self, reinitialise: bool = False):
         """Initializes dynamic settings from template strings.
 
-        This method sets attribute values that need to be dynamically 
+        This method sets attribute values that need to be dynamically
         generated or formatted, such as file paths with batch IDs.
         It parses template strings containing placeholders like {BATCH_ID}
         and formats them using values from existing attributes.
 
-        The order of the 
+        The order of the
 
         The updated attributes include:
         - File paths for reports, responses, metadata
-        - Field mapping files 
+        - Field mapping files
         - Data and validation data paths
         - Batch ID value
         - Report and response data filenames
@@ -69,7 +65,7 @@ class AppSettings(MountainAshBaseSettings):
         Returns: None
 
         Example usage:
-            
+
             settings = AppSettings()
             settings.load_from_config()
             settings.post_init() # Dynamically initialize settings
@@ -77,6 +73,3 @@ class AppSettings(MountainAshBaseSettings):
         super().post_init(reinitialise=reinitialise)
 
         self.RUNDATETIME = self.init_setting_from_template(template_str=get_app_settings_templates().RUNDATETIME_TEMPLATE, current_value=self.RUNDATETIME, reinitialise=reinitialise)
-
-
-
