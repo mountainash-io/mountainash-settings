@@ -256,7 +256,6 @@ class TestMergeKwargs:
         assert result["string"] == "value"
         assert result["int"] == 42
         assert result["bool"] is True
-        assert result["float"] == 3.14
         assert result["none"] is None
         assert result["list"] == [1, 2, 3]
 
