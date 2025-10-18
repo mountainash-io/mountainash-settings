@@ -111,6 +111,14 @@ def get_settings(    settings_parameters: Optional[SettingsParameters] = None,
     return final_settings_parameters.apply_runtime_overrides(cached_settings)
 
 
+    def build_path_template(*parts: str) -> str:
+        """Build cross-platform path template from parts."""
+        path = UPath(parts[0])
+        for part in parts[1:]:
+            path = path / part
+        return str(path)
+
+
 # def get_app_settings(  settings_parameters: SettingsParameters,
 #                         settings_namespace: Optional[str] = None,
 #                         config_files:       Optional[Union[UPath, str, List[UPath|str]]]  = None,

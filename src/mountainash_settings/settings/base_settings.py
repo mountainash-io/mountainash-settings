@@ -43,6 +43,7 @@ class MountainAshBaseSettings(BaseSettings):
     def __init__(self,
                  config_files:          Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
                  settings_parameters:   Optional[SettingsParameters] = None,
+                 template_settings_parameters:   Optional[SettingsParameters] = None,
                  **kwargs) -> None:
 
 
@@ -195,7 +196,7 @@ class MountainAshBaseSettings(BaseSettings):
                     raise AttributeError(f"The object does not have an attribute named '{field_name}'")
         return mapping
 
-    def init_setting_from_template(self, template_str:str, current_value: Optional[str] = None, reinitialise: bool = False):
+    def init_setting_from_template(self, template_str:str, current_value: Optional[str] = None, reinitialise: Optional[bool] = False):
 
         """Initializes a setting value from a template string,
         replacing placeholders with  values from the settings object.
@@ -261,7 +262,10 @@ class MountainAshBaseSettings(BaseSettings):
 
         setattr(self, 'SETTINGS_SOURCE_KWARGS', settings_dict)
 
-    def post_init(self, reinitialise: bool = False) -> None:
+    def post_init(self,
+                template_settings_parameters: Optional[SettingsParameters] = None,
+                reinitialise: Optional[bool] = False
+    ) -> None:
         """
         Hook for post-initialization processing.
 
