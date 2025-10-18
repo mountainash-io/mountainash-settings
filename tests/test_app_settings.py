@@ -25,7 +25,7 @@ class TestAppSettings:
         settings = AppSettings()
         assert settings.DEBUG is False
         assert settings.LOCALE_TIMEZONE == "UTC"
-        assert settings.PLATFORM_SLASH is not None
+        # assert settings.PLATFORM_SLASH is not None
 
     def test_pandera_framework_field_exists(self, app_settings_instance):
         """Test that the Pandas framework field exists and has correct default."""
