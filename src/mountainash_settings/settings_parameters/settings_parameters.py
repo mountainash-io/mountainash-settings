@@ -178,7 +178,7 @@ class SettingsParameters():
                settings_class: Optional[Type[BaseSettings]] = None,
                env_prefix: Optional[str] = None,
                secrets_dir: Optional[str] = None,
-               **kwargs: Optional[Dict[str, Any]]
+               **kwargs: Any
                ) -> 'SettingsParameters':
 
 
