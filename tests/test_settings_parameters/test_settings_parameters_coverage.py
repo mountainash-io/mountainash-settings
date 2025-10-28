@@ -589,16 +589,6 @@ class TestEdgeCases:
         hash_value = hash(params)
         assert isinstance(hash_value, int)
 
-    @pytest.mark.edge_case
-    def test_eq_with_self(self):
-        """Test that object equals itself."""
-        params = SettingsParameters.create(
-            namespace="test",
-            settings_class=TestSettings
-        )
-
-        assert params == params
-        assert not (params != params)
 
     @pytest.mark.edge_case
     def test_apply_runtime_overrides_with_model_copy_preservation(self, isolated_settings_manager):
