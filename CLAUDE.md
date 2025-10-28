@@ -86,6 +86,81 @@ settings = get_settings(settings_parameters=params)
 5. **Multi-Source Configuration**: Environment variables, configuration files, and secret management
 6. **Namespace Support**: Isolation and organization of different configuration contexts
 
+## Path Templating with UPath
+
+**IMPORTANT**: Always use UPath for cross-platform path templates. Do NOT use PLATFORM_SLASH.
+
+### Correct Pattern
+
+```python
+from pydantic import Field
+from upath import UPath
+from mountainash_settings import MountainAshBaseSettings
+
+class MySettings(MountainAshBaseSettings):
+    ORG_NAME: str = Field(default="acme")
+
+    # ✓ CORRECT: Use UPath's / operator, then convert to string
+    DATA_PATH_TEMPLATE: str = Field(
+        default=str(UPath("~") / "data" / "{ORG_NAME}" / "reports")
+    )
+
+    DATA_PATH: str = Field(default=None)
+
+    def post_init(self, reinitialise: bool = False):
+        super().post_init(reinitialise=reinitialise)
+        self.DATA_PATH = self.init_setting_from_template(
+            template_str=self.DATA_PATH_TEMPLATE,
+            current_value=self.DATA_PATH,
+            reinitialise=reinitialise
+        )
+```
+
+### Why This Works
+
+1. **UPath's `/` operator** handles cross-platform paths automatically (POSIX `/`, Windows `\`)
+2. **Template placeholders** like `{ORG_NAME}` are preserved in the string
+3. **String formatting** happens in `init_setting_from_template()` during `post_init()`
+4. **No PLATFORM_SLASH needed** - UPath abstracts platform differences
+
+### Common Mistakes to Avoid
+
+```python
+# ✗ WRONG: Using backslash operator (syntax error)
+WRONG1 = UPath("~" \ "data" \ "{ORG}")
+
+# ✗ WRONG: Using f-strings with PLATFORM_SLASH (old pattern, deprecated)
+from mountainash_utils_os import get_platform_slash
+PLATFORM_SLASH = get_platform_slash()
+WRONG2: str = Field(default=f"~{PLATFORM_SLASH}data{PLATFORM_SLASH}{{ORG}}")
+
+# ✓ CORRECT: Use UPath with / operator
+CORRECT: str = Field(default=str(UPath("~") / "data" / "{ORG}"))
+```
+
+### Helper Function Pattern
+
+For cleaner code with many path components:
+
+```python
+def build_path_template(*parts: str) -> str:
+    """Build cross-platform path template from parts."""
+    path = UPath(parts[0])
+    for part in parts[1:]:
+        path = path / part
+    return str(path)
+
+# Usage
+REPORT_PATH_TEMPLATE: str = Field(
+    default=build_path_template("~", "data", "{ORG}", "{DATE}", "reports")
+)
+```
+
+### See Also
+
+- `examples/path_templating_with_upath.py` - Comprehensive examples and migration guide
+- `settings/base_settings.py:187-221` - Template resolution implementation
+
 ## Build/Test/Lint Commands
 - Build: `hatch build`
 - Lint: `hatch run ruff:check` or `hatch run ruff:fix` to auto-fix
@@ -193,6 +268,7 @@ tests/
   - SettingsParameters merging patterns
   - Runtime type resolution patterns
   - Enterprise configuration scenarios
+  - **Path templating with UPath** - Cross-platform path templates without PLATFORM_SLASH
 
 ## Versioning Strategy
 
