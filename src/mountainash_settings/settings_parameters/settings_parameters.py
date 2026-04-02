@@ -193,6 +193,85 @@ class SettingsParameters():
 
 
 
+    @classmethod
+    def merge(cls,
+              base: 'SettingsParameters',
+              other: Optional['SettingsParameters'] = None,
+              prioritise_base: bool = False
+              ) -> 'SettingsParameters':
+        """
+        Merge two SettingsParameters objects.
+
+        Per-field strategies:
+        - config_files: combined and deduplicated
+        - settings_class: must match if both provided (raises ValueError)
+        - scalars (env_prefix, secrets_dir): last wins (or first if prioritise_base)
+        - kwargs: merged dict, second takes precedence (or first if prioritise_base)
+
+        Args:
+            base: The base parameters.
+            other: Parameters to merge in. If None, returns base.
+            prioritise_base: If True, base values win over other values.
+
+        Returns:
+            A new SettingsParameters with merged values.
+
+        Raises:
+            ValueError: If base is None or settings_class values conflict.
+        """
+        if base is None:
+            raise ValueError("Base SettingsParameters cannot be None")
+        if other is None:
+            return base
+
+        # Config files: combine and deduplicate
+        if base.config_files is None and other.config_files is None:
+            merged_config_files = None
+        elif prioritise_base:
+            merged_config_files = base.config_files or other.config_files
+        else:
+            merged = set(base.config_files or ()) | set(other.config_files or ())
+            merged_config_files = tuple(sorted(str(p) for p in merged)) if merged else None
+
+        # Settings class: validate compatibility
+        if base.settings_class is not None and other.settings_class is not None:
+            if base.settings_class != other.settings_class:
+                raise ValueError(
+                    f"Settings class must match for merging. "
+                    f"base: {base.settings_class} != other: {other.settings_class}"
+                )
+        if prioritise_base:
+            merged_class = base.settings_class or other.settings_class
+        else:
+            merged_class = other.settings_class or base.settings_class
+
+        # Scalars: simple priority
+        if prioritise_base:
+            merged_env_prefix = base.env_prefix or other.env_prefix
+            merged_secrets_dir = base.secrets_dir or other.secrets_dir
+        else:
+            merged_env_prefix = other.env_prefix or base.env_prefix
+            merged_secrets_dir = other.secrets_dir or base.secrets_dir
+
+        # Kwargs: merge dicts
+        if base.kwargs is None and other.kwargs is None:
+            merged_kwargs = None
+        elif prioritise_base:
+            merged_kwargs = base.kwargs or other.kwargs
+        else:
+            merged_kwargs = dict(base.kwargs or {}) | dict(other.kwargs or {})
+            merged_kwargs = merged_kwargs.get("kwargs", merged_kwargs)
+            merged_kwargs = merged_kwargs if merged_kwargs else None
+
+        return cls.create(
+            settings_class=merged_class,
+            config_files=merged_config_files,
+            env_prefix=merged_env_prefix,
+            secrets_dir=merged_secrets_dir,
+            **(merged_kwargs or {})
+        )
+
+
     #Export / retrieve values
     def to_dict(self) -> Dict[str, Any]:
         return {

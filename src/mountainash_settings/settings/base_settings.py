@@ -54,7 +54,7 @@ class MountainAshBaseSettings(BaseSettings):
         )
 
         if settings_parameters is not None:
-            local_settings_params = SettingsUtils.merge_settings_parameter_objects(settings_parameters, local_settings_params)
+            local_settings_params = SettingsParameters.merge(settings_parameters, local_settings_params)
 
         obj_config_files: SettingsFiles = SettingsFileHandler.separate_config_files(local_settings_params.config_files)
 

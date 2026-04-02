@@ -4,7 +4,7 @@ from functools import lru_cache
 from pydantic_settings import BaseSettings
 from upath import UPath
 
-from ..settings_parameters.utils import SettingsUtils, SettingsParameters
+from ..settings_parameters.settings_parameters import SettingsParameters
 from .settings_manager import SettingsManager
 from ..settings import MountainAshBaseSettings
 # from mountainash_settings.app.app_settings import AppSettings
@@ -89,7 +89,7 @@ def get_settings(    settings_parameters: Optional[SettingsParameters] = None,
         )
 
 
-        final_settings_parameters = SettingsUtils.merge_settings_parameter_objects(settings_parameters, local_settings_parameters)
+        final_settings_parameters = SettingsParameters.merge(settings_parameters, local_settings_parameters)
 
     else:
 

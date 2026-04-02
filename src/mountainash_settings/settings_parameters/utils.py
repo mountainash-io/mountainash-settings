@@ -6,7 +6,6 @@ from upath import UPath
 from .settings_parameters import SettingsParameters
 from .filehandler import SettingsFileHandler
 from .kwargshandler import SettingsKwargsHandler
-from .merge_framework import get_merger, FieldMergeUtils
 
 class SettingsUtils:
 
@@ -21,13 +20,11 @@ class SettingsUtils:
                         prioritise_self: bool = False
                    ) -> SettingsParameters:
         """
-        Merge two SettingsParameters objects using the generic merge framework.
+        Merge two SettingsParameters objects.
 
-        Eliminates ~45 lines of duplicate prioritization logic by delegating
-        to the generic merger with proper validation and field-specific strategies.
+        Delegates to SettingsParameters.merge() classmethod.
         """
-        merger = get_merger()
-        return merger.merge_with_object(
+        return SettingsParameters.merge(
             base=base,
             other=other,
             prioritise_base=prioritise_self
@@ -43,18 +40,20 @@ class SettingsUtils:
                             prioritise_self: Optional[bool] = False
                ) -> 'SettingsParameters':
         """
-        Merge SettingsParameters with individual parameters using the generic merge framework.
+        Merge SettingsParameters with individual parameters.
 
-        Eliminates ~30 lines of duplicate prioritization logic by delegating
-        to the generic merger with parameter-specific handling.
+        Creates a SettingsParameters from the individual params and delegates
+        to SettingsParameters.merge().
         """
-        merger = get_merger()
-        return merger.merge_with_params(
-            base=base,
+        other = SettingsParameters.create(
             config_files=config_files,
-            kwargs=kwargs,
             env_prefix=env_prefix,
             secrets_dir=secrets_dir,
+            **(kwargs or {})
+        )
+        return SettingsParameters.merge(
+            base=base,
+            other=other,
             prioritise_base=prioritise_self
         )
 
@@ -98,34 +97,38 @@ class SettingsUtils:
         return SettingsFileHandler.format_config_file_tuple(config_files=config_files)
 
 
-    # Resolve / Merge values - simplified using FieldMergeUtils
+    # Resolve / Merge values
+
     @staticmethod
     def merge_env_prefix(env_prefix1: Optional[str] = None,
                          env_prefix2: Optional[str] = None) -> Optional[str]:
-        """Merge environment prefix strings using the generic merge framework."""
-        return FieldMergeUtils.merge_env_prefixes(env_prefix1, env_prefix2)
+        """Merge environment prefix strings. First non-None wins."""
+        return env_prefix1 or env_prefix2
 
     @staticmethod
     def merge_config_files(config_files1: Optional[Tuple[Union[UPath, str], ...]] = None,
                             config_files2: Optional[Tuple[Union[UPath, str], ...]] = None) -> Optional[Tuple[Union[UPath, str], ...]]:
-        """Merge config files using the generic merge framework with proper deduplication."""
-        return FieldMergeUtils.merge_config_files_simple(config_files1, config_files2)
+        """Merge config files with deduplication."""
+        if config_files1 is None and config_files2 is None:
+            return None
+        merged = set(config_files1 or ()) | set(config_files2 or ())
+        return tuple(sorted(str(p) for p in merged)) if merged else None
 
     @staticmethod
     def merge_kwargs(kwargs1: Optional[Tuple[Tuple[str, Any], ...]] = None,
                       kwargs2: Optional[Tuple[Tuple[str, Any], ...]] = None) -> Optional[Tuple[Tuple[str, Any], ...]]:
         """
-        Merge kwargs using the generic merge framework.
-
-        Note: Converts tuple format to dict for processing, then back to maintain compatibility.
+        Merge kwargs tuples. Second takes precedence for shared keys.
         """
-        # Convert tuple format to dict format for processing
         dict1 = dict(kwargs1) if kwargs1 else None
         dict2 = dict(kwargs2) if kwargs2 else None
 
-        merged_dict = FieldMergeUtils.merge_kwargs_simple(dict1, dict2)
+        if dict1 is None and dict2 is None:
+            return None
 
-        # Convert back to tuple format for compatibility
+        merged_dict = dict(dict1 or {}) | dict(dict2 or {})
+        merged_dict = merged_dict.get("kwargs", merged_dict)
+
         if merged_dict:
             return tuple(merged_dict.items())
         return None
