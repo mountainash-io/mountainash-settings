@@ -6,7 +6,7 @@ from importlib import import_module
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource, TomlConfigSettingsSource, YamlConfigSettingsSource, JsonConfigSettingsSource
 
-from mountainash_settings.settings_parameters import SettingsFileHandler, SettingsParameters, SettingsUtils, SettingsFiles
+from mountainash_settings.settings_parameters import SettingsFileHandler, SettingsParameters, SettingsKwargsHandler, SettingsFiles
 
 # T = TypeVar('T', bound='BaseSettings')
 T = TypeVar('T', BaseSettings, 'MountainAshBaseSettings')
@@ -244,7 +244,7 @@ class MountainAshBaseSettings(BaseSettings):
             settings_dict: The dictionary of settings to update.
         """
 
-        settings_dict = SettingsUtils.format_kwargs_dict(p_kwargs=settings_dict)
+        settings_dict = SettingsKwargsHandler.format_kwargs_dict(p_kwargs=settings_dict)
 
         if settings_dict is None:
             return None
@@ -296,8 +296,8 @@ class MountainAshBaseSettings(BaseSettings):
             config_files += self.SETTINGS_SOURCE_JSON_FILES
 
 
-        existing_config_files =     SettingsUtils.format_config_file_list(config_files=config_files)
-        existing_kwargs =           SettingsUtils.format_kwargs_dict(p_kwargs=self.SETTINGS_SOURCE_KWARGS)
+        existing_config_files =     SettingsFileHandler.format_config_file_list(config_files=config_files)
+        existing_kwargs =           SettingsKwargsHandler.format_kwargs_dict(p_kwargs=self.SETTINGS_SOURCE_KWARGS)
         existing_settings_class =   self.SETTINGS_CLASS or None
         existing_env_prefix =       self.SETTINGS_SOURCE_ENV_PREFIX or None
 

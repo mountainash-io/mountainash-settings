@@ -3,7 +3,7 @@ from importlib import import_module
 
 from pydantic_settings import BaseSettings
 
-from ..settings_parameters import SettingsParameters, SettingsUtils
+from ..settings_parameters import SettingsParameters, SettingsKwargsHandler
 from ..settings import MountainAshBaseSettings
 
 class SettingsManager:
@@ -106,7 +106,7 @@ class SettingsManager:
 
             else:
 
-                settings_kwargs: Dict[str, Any]|None = SettingsUtils.format_kwargs_dict(p_kwargs=settings_parameters.kwargs)
+                settings_kwargs: Dict[str, Any]|None = SettingsKwargsHandler.format_kwargs_dict(p_kwargs=settings_parameters.kwargs)
                 #Create the settings object with no settings_parameters, but kwargs if they are provided
                 if settings_kwargs:
                     obj_settings = settings_class_ref(**settings_kwargs)
@@ -301,7 +301,7 @@ class SettingsManager:
     #     existing_env_prefix = obj_settings.SETTINGS_SOURCE_ENV_PREFIX
 
     #     new_config_files = SettingsUtils.format_config_file_list(config_files=config_files)
-    #     new_kwargs = SettingsUtils.format_kwargs_dict(p_kwargs=kwargs)
+    #     new_kwargs = SettingsKwargsHandler.format_kwargs_dict(p_kwargs=kwargs)
 
     #     if (config_files and new_config_files != existing_config_files)  or (new_kwargs and new_kwargs != existing_kwargs) or (env_prefix and env_prefix != existing_env_prefix):
     #         config_file_message = f" Config files {new_config_files} were provided. Previously initialised with config files {existing_config_files}."
