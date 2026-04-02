@@ -260,7 +260,6 @@ class SettingsParameters():
             merged_kwargs = base.kwargs or other.kwargs
         else:
             merged_kwargs = dict(base.kwargs or {}) | dict(other.kwargs or {})
-            merged_kwargs = merged_kwargs.get("kwargs", merged_kwargs)
             merged_kwargs = merged_kwargs if merged_kwargs else None
 
         return cls.create(
