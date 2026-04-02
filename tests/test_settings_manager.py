@@ -224,32 +224,50 @@ class TestGetSettingsObject:
         # Manually add non-MountainAshBaseSettings to cache
         isolated_settings_manager.settings_object_cache[params] = MockBaseSettings()
 
-        with pytest.raises(ValueError, match="is not an MountainAshBaseSettings object"):
+        with pytest.raises(ValueError, match="is not a MountainAshBaseSettings object"):
             isolated_settings_manager.get_settings_object(params)
 
     @pytest.mark.unit
     def test_applies_runtime_override_kwargs(self, isolated_settings_manager):
-        """Test that runtime override kwargs are applied."""
-        # Create settings without override
+        """Test that runtime override kwargs are applied to a copy, not the cached instance."""
         params_create = SettingsParameters.create(
-            namespace="override_test",
             settings_class=TestSettings,
             TEST_VAL_1="original_value"
         )
         created_settings = isolated_settings_manager.get_or_create_settings(params_create)
         assert created_settings.TEST_VAL_1 == "original_value"
 
-        # Retrieve with override kwargs
         params_override = SettingsParameters.create(
-            namespace="override_test",
             settings_class=TestSettings,
             TEST_VAL_1="overridden_value"
         )
-
         retrieved_settings = isolated_settings_manager.get_settings_object(params_override)
 
-        # Note: This tests current behavior - kwargs update the cached instance
+        # Retrieved copy has the override
         assert retrieved_settings.TEST_VAL_1 == "overridden_value"
+        # Original cached instance is untouched
+        assert created_settings.TEST_VAL_1 == "original_value"
+
+    @pytest.mark.unit
+    def test_runtime_overrides_do_not_mutate_cached_instance(self, isolated_settings_manager):
+        """Test that runtime override kwargs do NOT mutate the cached instance."""
+        params_create = SettingsParameters.create(
+            settings_class=TestSettings,
+            TEST_VAL_1="original_value"
+        )
+        created_settings = isolated_settings_manager.get_or_create_settings(params_create)
+        assert created_settings.TEST_VAL_1 == "original_value"
+
+        params_override = SettingsParameters.create(
+            settings_class=TestSettings,
+            TEST_VAL_1="overridden_value"
+        )
+        retrieved_settings = isolated_settings_manager.get_settings_object(params_override)
+        assert retrieved_settings.TEST_VAL_1 == "overridden_value"
+
+        # The CACHED instance must NOT have been mutated
+        cached_directly = isolated_settings_manager.settings_object_cache[params_create]
+        assert cached_directly.TEST_VAL_1 == "original_value"
 
 
 class TestCacheBehavior:
@@ -277,10 +295,15 @@ class TestCacheBehavior:
         settings1 = isolated_settings_manager.get_or_create_settings(params1)
 
         # Second call with different kwargs but same structural params
-        # Should return cached instance
+        # Should return from cache (as a copy since override kwargs differ)
         settings2 = isolated_settings_manager.get_or_create_settings(params2)
 
-        assert settings1 is settings2
+        # Both resolve to the same cache entry (same structural hash)
+        assert len(isolated_settings_manager.settings_object_cache) == 1
+        # But the returned object has the override applied
+        assert settings2.TEST_VAL_1 == "value2"
+        # Original cached instance is untouched
+        assert settings1.TEST_VAL_1 == "value1"
 
     @pytest.mark.unit
     def test_cache_stores_by_settings_parameters(self, isolated_settings_manager):
@@ -351,13 +374,16 @@ class TestIntegration:
         # Should now be initialized
         assert isolated_settings_manager.is_namespace_initialised(params)
 
-        # Step 2: Retrieve cached settings
+        # Step 2: Retrieve cached settings (returns copy when kwargs present)
         settings2 = isolated_settings_manager.get_or_create_settings(params)
-        assert settings2 is settings1
+        assert settings2.TEST_VAL_1 == "initial_value"
 
-        # Step 3: Get settings object directly
+        # Step 3: Get settings object directly (returns copy when kwargs present)
         settings3 = isolated_settings_manager.get_settings_object(params)
-        assert settings3 is settings1
+        assert settings3.TEST_VAL_1 == "initial_value"
+
+        # Cache should still have only one entry
+        assert len(isolated_settings_manager.settings_object_cache) == 1
 
     @pytest.mark.integration
     def test_with_config_files(self, isolated_settings_manager, temp_yaml_file):

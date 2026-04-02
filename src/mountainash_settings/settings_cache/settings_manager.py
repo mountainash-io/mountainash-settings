@@ -30,29 +30,35 @@ class SettingsManager:
         self.settings_object_cache: Dict[Any, MountainAshBaseSettings] = {}
 
 
-    # @classmethod
     def get_settings_object(self, settings_parameters: SettingsParameters) -> MountainAshBaseSettings:
         """
-        Gets the configuration object for a given namespace.
+        Gets the configuration object for a given set of parameters.
+
+        If the parameters contain runtime override kwargs, returns a copy
+        with overrides applied. The cached instance is never mutated.
+
         Args:
-            settings_namespace (str): The namespace for the configuration.
+            settings_parameters (SettingsParameters): The parameters for the configuration.
         Returns:
-            BaseSettings: The configuration object for the given namespace.
+            MountainAshBaseSettings: The configuration object for the given parameters.
         Raises:
-            ValueError: If the configuration object is is not an BaseSettings object.
+            ValueError: If the configuration object is not a MountainAshBaseSettings object.
         """
 
-        obj_settings: Optional[BaseSettings] = self.settings_object_cache.get(settings_parameters, None)
+        obj_settings: Optional[MountainAshBaseSettings] = self.settings_object_cache.get(settings_parameters, None)
+
+        if not isinstance(obj_settings, MountainAshBaseSettings):
+            raise ValueError(
+                f"Configuration for '{settings_parameters}' found, but is not a "
+                f"MountainAshBaseSettings object. Received a {type(obj_settings)}"
+            )
 
         override_kwargs = settings_parameters.get_attribute_settings_kwargs()
-
         if override_kwargs:
+            obj_settings = obj_settings.model_copy()
             obj_settings.update_settings_from_dict(settings_dict=override_kwargs)
 
-        if isinstance(obj_settings, MountainAshBaseSettings):
-            return obj_settings
-        else:
-            raise ValueError(f"Configuration for namespace '{settings_parameters}' found, but is not an MountainAshBaseSettings object. Received a {type(obj_settings)}")
+        return obj_settings
 
     # @classmethod
     def is_namespace_initialised(self, settings_parameters: SettingsParameters) -> bool:
