@@ -48,7 +48,7 @@ __all__ = [
 
     # # Parameters Fixtures (from parameters.py)
     # "basic_settings_parameters",
-    # "settings_parameters_with_namespace",
+    # (removed: settings_parameters_with_namespace)
     # "settings_parameters_with_prefix",
     # "settings_parameters_with_config_file",
     # "settings_parameters_with_multiple_files",
@@ -59,7 +59,7 @@ __all__ = [
     # "sample_kwargs",
     # "create_settings_parameters",
     # "parametrized_settings_class",
-    # "parametrized_namespace",
+    # (removed: parametrized_namespace)
     # "parametrized_env_prefix",
     # "parametrized_kwargs",
 

@@ -60,7 +60,7 @@ def isolated_cache():
     Provides an isolated cache environment for tests.
 
     Note: This doesn't fully clear the global LRU cache, but uses
-    unique namespaces to ensure test isolation.
+    unique parameter combinations to ensure test isolation.
     """
     from mountainash_settings import SettingsManager
 

@@ -276,7 +276,7 @@ class TestSettingsParameterMergerObject:
     def test_merge_raises_error_if_base_none(self):
         """Test that None base raises ValidationError."""
         merger = SettingsParameterMerger()
-        other = SettingsParameters.create(namespace="other", settings_class=TestSettings)
+        other = SettingsParameters.create(settings_class=TestSettings)
 
         with pytest.raises(ValidationError, match="Base SettingsParameters cannot be None"):
             merger.merge_with_object(None, other)
@@ -285,42 +285,20 @@ class TestSettingsParameterMergerObject:
     def test_merge_with_none_other_returns_base(self):
         """Test that None other returns base unchanged."""
         merger = SettingsParameterMerger()
-        base = SettingsParameters.create(namespace="base", settings_class=TestSettings)
+        base = SettingsParameters.create(settings_class=TestSettings, env_prefix="BASE_")
 
         result = merger.merge_with_object(base, None)
-        assert result.namespace == "base"
-
-    @pytest.mark.unit
-    def test_merge_namespaces_second_wins(self):
-        """Test that second namespace wins by default."""
-        merger = SettingsParameterMerger()
-        base = SettingsParameters.create(namespace="base_ns", settings_class=TestSettings)
-        other = SettingsParameters.create(namespace="other_ns", settings_class=TestSettings)
-
-        result = merger.merge_with_object(base, other)
-        assert result.namespace == "other_ns"
-
-    @pytest.mark.unit
-    def test_merge_namespaces_first_wins(self):
-        """Test that first namespace wins with prioritise_base=True."""
-        merger = SettingsParameterMerger()
-        base = SettingsParameters.create(namespace="base_ns", settings_class=TestSettings)
-        other = SettingsParameters.create(namespace="other_ns", settings_class=TestSettings)
-
-        result = merger.merge_with_object(base, other, prioritise_base=True)
-        assert result.namespace == "base_ns"
+        assert result.env_prefix == "BASE_"
 
     @pytest.mark.unit
     def test_merge_config_files_combines(self):
         """Test that config files are combined and deduplicated."""
         merger = SettingsParameterMerger()
         base = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             config_files=["config1.yaml", "config2.yaml"]
         )
         other = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             config_files=["config2.yaml", "config3.yaml"]
         )
@@ -335,12 +313,10 @@ class TestSettingsParameterMergerObject:
         """Test that second kwargs take precedence."""
         merger = SettingsParameterMerger()
         base = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             TEST_VAL_1="base_value"
         )
         other = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             TEST_VAL_1="other_value"
         )
@@ -353,12 +329,10 @@ class TestSettingsParameterMergerObject:
         """Test that second env_prefix wins by default."""
         merger = SettingsParameterMerger()
         base = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             env_prefix="BASE_"
         )
         other = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             env_prefix="OTHER_"
         )
@@ -371,28 +345,16 @@ class TestSettingsParameterMergerObject:
         """Test that second secrets_dir wins by default."""
         merger = SettingsParameterMerger()
         base = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             secrets_dir="/base/secrets"
         )
         other = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             secrets_dir="/other/secrets"
         )
 
         result = merger.merge_with_object(base, other)
         assert result.secrets_dir == "/other/secrets"
-
-    @pytest.mark.unit
-    def test_merge_namespace_none_fallback_to_default(self):
-        """Test that None namespace falls back to DEFAULT."""
-        merger = SettingsParameterMerger()
-        base = SettingsParameters.create(namespace=None, settings_class=TestSettings)
-        other = SettingsParameters.create(namespace=None, settings_class=TestSettings)
-
-        result = merger.merge_with_object(base, other)
-        assert result.namespace == "DEFAULT"
 
 
 class TestSettingsParameterMergerParams:
@@ -404,33 +366,23 @@ class TestSettingsParameterMergerParams:
         merger = SettingsParameterMerger()
 
         with pytest.raises(ValidationError, match="Base SettingsParameters cannot be None"):
-            merger.merge_with_params(None, namespace="test")
+            merger.merge_with_params(None)
 
     @pytest.mark.unit
     def test_merge_with_no_params_returns_base(self):
         """Test that merging with no params returns base."""
         merger = SettingsParameterMerger()
-        base = SettingsParameters.create(namespace="base", settings_class=TestSettings)
+        base = SettingsParameters.create(settings_class=TestSettings, env_prefix="BASE_")
 
         result = merger.merge_with_params(base)
-        assert result.namespace == "base"
+        assert result.env_prefix == "BASE_"
         assert result.settings_class is TestSettings
-
-    @pytest.mark.unit
-    def test_merge_namespace_param(self):
-        """Test merging with namespace parameter."""
-        merger = SettingsParameterMerger()
-        base = SettingsParameters.create(namespace="base", settings_class=TestSettings)
-
-        result = merger.merge_with_params(base, namespace="new_namespace")
-        assert result.namespace == "new_namespace"
 
     @pytest.mark.unit
     def test_merge_config_files_param(self):
         """Test merging with config_files parameter."""
         merger = SettingsParameterMerger()
         base = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             config_files=["config1.yaml"]
         )
@@ -445,7 +397,6 @@ class TestSettingsParameterMergerParams:
         """Test merging with kwargs parameter."""
         merger = SettingsParameterMerger()
         base = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             TEST_VAL_1="base_value"
         )
@@ -459,7 +410,6 @@ class TestSettingsParameterMergerParams:
         """Test merging with env_prefix parameter."""
         merger = SettingsParameterMerger()
         base = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             env_prefix="BASE_"
         )
@@ -472,7 +422,6 @@ class TestSettingsParameterMergerParams:
         """Test merging with secrets_dir parameter."""
         merger = SettingsParameterMerger()
         base = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             secrets_dir="/base/secrets"
         )
@@ -485,35 +434,30 @@ class TestSettingsParameterMergerParams:
         """Test that prioritise_base=True keeps base values."""
         merger = SettingsParameterMerger()
         base = SettingsParameters.create(
-            namespace="base_ns",
             settings_class=TestSettings,
             env_prefix="BASE_"
         )
 
         result = merger.merge_with_params(
             base,
-            namespace="new_ns",
             env_prefix="NEW_",
             prioritise_base=True
         )
-        assert result.namespace == "base_ns"
         assert result.env_prefix == "BASE_"
 
     @pytest.mark.unit
     def test_merge_multiple_params_at_once(self):
         """Test merging multiple parameters simultaneously."""
         merger = SettingsParameterMerger()
-        base = SettingsParameters.create(namespace="base", settings_class=TestSettings)
+        base = SettingsParameters.create(settings_class=TestSettings)
 
         result = merger.merge_with_params(
             base,
-            namespace="new_namespace",
             config_files=["config.yaml"],
             kwargs={"TEST_VAL_1": "value"},
             env_prefix="NEW_",
             secrets_dir="/secrets"
         )
-        assert result.namespace == "new_namespace"
         assert result.config_files == ("config.yaml",)
         assert result.kwargs["TEST_VAL_1"] == "value"
         assert result.env_prefix == "NEW_"
@@ -523,32 +467,14 @@ class TestSettingsParameterMergerParams:
     def test_merge_settings_class_preserved(self):
         """Test that settings_class is preserved from base."""
         merger = SettingsParameterMerger()
-        base = SettingsParameters.create(namespace="test", settings_class=TestSettings)
+        base = SettingsParameters.create(settings_class=TestSettings)
 
-        result = merger.merge_with_params(base, namespace="new")
+        result = merger.merge_with_params(base)
         assert result.settings_class is TestSettings
 
 
 class TestFieldMergeUtils:
     """Test FieldMergeUtils static methods."""
-
-    @pytest.mark.unit
-    def test_merge_namespaces_both_provided(self):
-        """Test merge_namespaces with both values."""
-        result = FieldMergeUtils.merge_namespaces("first", "second")
-        assert result == "first"
-
-    @pytest.mark.unit
-    def test_merge_namespaces_first_none(self):
-        """Test merge_namespaces with first None."""
-        result = FieldMergeUtils.merge_namespaces(None, "second")
-        assert result == "second"
-
-    @pytest.mark.unit
-    def test_merge_namespaces_both_none(self):
-        """Test merge_namespaces with both None defaults to DEFAULT."""
-        result = FieldMergeUtils.merge_namespaces(None, None)
-        assert result == "DEFAULT"
 
     @pytest.mark.unit
     def test_merge_env_prefixes_both_provided(self):
@@ -619,11 +545,11 @@ class TestGlobalMerger:
     def test_global_merger_functional(self):
         """Test that global merger works for merging."""
         merger = get_merger()
-        base = SettingsParameters.create(namespace="base", settings_class=TestSettings)
-        other = SettingsParameters.create(namespace="other", settings_class=TestSettings)
+        base = SettingsParameters.create(settings_class=TestSettings, env_prefix="BASE_")
+        other = SettingsParameters.create(settings_class=TestSettings, env_prefix="OTHER_")
 
         result = merger.merge_with_object(base, other)
-        assert result.namespace == "other"
+        assert result.env_prefix == "OTHER_"
 
 
 class TestLegacyCompatibility:
@@ -694,7 +620,6 @@ class TestIntegration:
 
         # Create base parameters
         base = SettingsParameters.create(
-            namespace="base",
             settings_class=TestSettings,
             config_files=["config1.yaml"],
             env_prefix="BASE_",
@@ -703,7 +628,6 @@ class TestIntegration:
 
         # Merge with object
         other = SettingsParameters.create(
-            namespace="other",
             settings_class=TestSettings,
             config_files=["config2.yaml"],
             TEST_VAL_2="other_value"
@@ -711,7 +635,6 @@ class TestIntegration:
         merged_obj = merger.merge_with_object(base, other)
 
         # Verify merged result
-        assert merged_obj.namespace == "other"
         # Convert UPath to strings for comparison
         config_files_str = set(str(f) for f in merged_obj.config_files)
         assert config_files_str == {"config1.yaml", "config2.yaml"}
@@ -721,13 +644,11 @@ class TestIntegration:
         # Merge again with params
         final = merger.merge_with_params(
             merged_obj,
-            namespace="final",
             config_files=["config3.yaml"],
             kwargs={"TEST_VAL_3": "final_value"}
         )
 
         # Verify final result
-        assert final.namespace == "final"
         # Convert UPath to strings for comparison
         final_config_files_str = set(str(f) for f in final.config_files)
         assert final_config_files_str == {"config1.yaml", "config2.yaml", "config3.yaml"}
@@ -741,14 +662,12 @@ class TestIntegration:
         merger = get_merger()
 
         base = SettingsParameters.create(
-            namespace="base",
             settings_class=TestSettings,
             env_prefix="BASE_",
             TEST_VAL_1="base_value"
         )
 
         other = SettingsParameters.create(
-            namespace="other",
             settings_class=TestSettings,
             env_prefix="OTHER_",
             TEST_VAL_1="other_value"
@@ -758,17 +677,12 @@ class TestIntegration:
         result = merger.merge_with_object(base, other, prioritise_base=True)
 
         # Base values should win
-        assert result.namespace == "base"
         assert result.env_prefix == "BASE_"
         assert result.kwargs["TEST_VAL_1"] == "base_value"
 
     @pytest.mark.integration
     def test_field_merge_utils_integration(self):
         """Test FieldMergeUtils with realistic data."""
-        # Merge namespaces
-        ns = FieldMergeUtils.merge_namespaces("production", "staging")
-        assert ns == "production"
-
         # Merge config files
         config_files = FieldMergeUtils.merge_config_files_simple(
             ("base.yaml", "prod.yaml"),
@@ -791,8 +705,8 @@ class TestEdgeCases:
     def test_merge_incompatible_settings_classes(self):
         """Test that merging incompatible settings classes raises error."""
         merger = SettingsParameterMerger()
-        base = SettingsParameters.create(namespace="test", settings_class=TestSettings)
-        other = SettingsParameters.create(namespace="test", settings_class=MockBaseSettings)
+        base = SettingsParameters.create(settings_class=TestSettings)
+        other = SettingsParameters.create(settings_class=MockBaseSettings)
 
         with pytest.raises(ValidationError, match="Settings class must match"):
             merger.merge_with_object(base, other)
@@ -802,12 +716,10 @@ class TestEdgeCases:
         """Test merging with empty config file tuples."""
         merger = SettingsParameterMerger()
         base = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             config_files=[]
         )
         other = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             config_files=[]
         )

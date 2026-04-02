@@ -61,18 +61,16 @@ class SettingsManager:
         return obj_settings
 
     # @classmethod
-    def is_namespace_initialised(self, settings_parameters: SettingsParameters) -> bool:
+    def is_initialised(self, settings_parameters: SettingsParameters) -> bool:
         """
-        Checks if the namespace is already initialised.
+        Checks if the settings parameters are already initialised in the cache.
         Args:
-            settings_namespace (str): The namespace for the configuration.
+            settings_parameters (SettingsParameters): The parameters for the configuration.
         Returns:
-            bool: True if the namespace is already initialised, False otherwise.
-        Raises:
-            ValueError: If the namespace is not found in the settings_object_cache dictionary.
+            bool: True if the settings are already initialised, False otherwise.
         """
 
-        #check if the namespace is already initialised by looking at the keys in the settings_object_cache dict
+        #check if the settings are already initialised by looking at the keys in the settings_object_cache dict
         return settings_parameters in self.settings_object_cache
 
 
@@ -88,7 +86,7 @@ class SettingsManager:
 
 
         #Check if the namespace is already initialised
-        if self.is_namespace_initialised(settings_parameters=settings_parameters):
+        if self.is_initialised(settings_parameters=settings_parameters):
             #Get the existing settings object
             return self.get_settings_object(settings_parameters=settings_parameters)
 
@@ -153,7 +151,7 @@ class SettingsManager:
     #     # First step is the namespace only
 
     #     # Check if the namespace is already initialised
-    #     if self.is_namespace_initialised(settings_parameters=settings_parameters):
+    #     if self.is_initialised(settings_parameters=settings_parameters):
 
     #         # Get the existing settings object
     #         obj_settings: BaseSettings = self.get_settings_object(settings_parameters=settings_parameters)
@@ -342,7 +340,7 @@ class SettingsManager:
 
 
     #     #Check if the namespace is already initialised
-    #     if self.is_namespace_initialised(settings_parameters=settings_parameters):
+    #     if self.is_initialised(settings_parameters=settings_parameters):
 
     #         #If it was already initialised, why are we trying to re-initialse it? Fail if parameters have changed. Pass if the same, but with a warning.
     #         # self.validate_init_existing_namespace(settings_namespace=settings_namespace, config_files=config_files, **kwargs)

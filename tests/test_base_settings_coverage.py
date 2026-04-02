@@ -51,7 +51,6 @@ class TestGetSettingsWithNoneClass:
         """Test that get_settings infers class when settings_class=None."""
         # Call get_settings from TestSettings class without specifying settings_class
         settings = TestSettings.get_settings(
-            settings_namespace="test_infer_class",
             settings_class=None
         )
 
@@ -63,7 +62,6 @@ class TestGetSettingsWithNoneClass:
     def test_get_settings_with_explicit_class(self, isolated_settings_manager):
         """Test that get_settings works with explicit class."""
         settings = TestSettings.get_settings(
-            settings_namespace="test_explicit_class",
             settings_class=TestSettings
         )
 
@@ -74,7 +72,6 @@ class TestGetSettingsWithNoneClass:
     def test_get_settings_type_validation_passes(self, isolated_settings_manager):
         """Test that get_settings validates instance type correctly."""
         settings = TestSettings.get_settings(
-            settings_namespace="test_type_valid",
             settings_class=TestSettings
         )
 
@@ -85,7 +82,6 @@ class TestGetSettingsWithNoneClass:
     def test_get_settings_with_parameters_object(self, isolated_settings_manager):
         """Test get_settings with SettingsParameters object."""
         params = SettingsParameters.create(
-            namespace="test_params_obj",
             settings_class=TestSettings,
             TEST_VAL_1="param_value"
         )
@@ -104,51 +100,29 @@ class TestHash:
         """Test hash of basic settings object."""
         settings1 = TestSettings(
             settings_parameters=SettingsParameters.create(
-                namespace="test_hash",
                 settings_class=TestSettings
             )
         )
         settings2 = TestSettings(
             settings_parameters=SettingsParameters.create(
-                namespace="test_hash",
                 settings_class=TestSettings
             )
         )
 
-        # Same namespace and class should produce same hash
+        # Same class should produce same hash
         assert hash(settings1) == hash(settings2)
-
-    @pytest.mark.unit
-    def test_hash_different_namespaces(self):
-        """Test that different namespaces produce different hashes."""
-        settings1 = TestSettings(
-            settings_parameters=SettingsParameters.create(
-                namespace="namespace1",
-                settings_class=TestSettings
-            )
-        )
-        settings2 = TestSettings(
-            settings_parameters=SettingsParameters.create(
-                namespace="namespace2",
-                settings_class=TestSettings
-            )
-        )
-
-        assert hash(settings1) != hash(settings2)
 
     @pytest.mark.unit
     def test_hash_with_config_files(self, temp_yaml_file, temp_toml_file):
         """Test hash includes config files."""
         settings1 = TestSettings(
             settings_parameters=SettingsParameters.create(
-                namespace="test_hash",
                 settings_class=TestSettings,
                 config_files=[temp_yaml_file]
             )
         )
         settings2 = TestSettings(
             settings_parameters=SettingsParameters.create(
-                namespace="test_hash",
                 settings_class=TestSettings,
                 config_files=[temp_toml_file]
             )
@@ -162,14 +136,12 @@ class TestHash:
         """Test hash includes env_prefix."""
         settings1 = TestSettings(
             settings_parameters=SettingsParameters.create(
-                namespace="test_hash",
                 settings_class=TestSettings,
                 env_prefix="PREFIX1_"
             )
         )
         settings2 = TestSettings(
             settings_parameters=SettingsParameters.create(
-                namespace="test_hash",
                 settings_class=TestSettings,
                 env_prefix="PREFIX2_"
             )
@@ -183,7 +155,6 @@ class TestHash:
         """Test hash handles None values correctly."""
         settings = TestSettings(
             settings_parameters=SettingsParameters.create(
-                namespace="test_hash_none",
                 settings_class=TestSettings
             )
         )
@@ -406,7 +377,6 @@ class TestExtractSettingsParameters:
     def test_extract_basic_parameters(self):
         """Test extracting basic parameters."""
         original_params = SettingsParameters.create(
-            namespace="test_extract",
             settings_class=TestSettings,
             TEST_VAL_1="value1"
         )
@@ -414,7 +384,6 @@ class TestExtractSettingsParameters:
 
         extracted = settings.extract_settings_parameters()
 
-        assert extracted.namespace == "test_extract"
         assert extracted.settings_class is TestSettings
         assert extracted.kwargs["TEST_VAL_1"] == "value1"
 
@@ -422,7 +391,6 @@ class TestExtractSettingsParameters:
     def test_extract_with_config_files(self, temp_yaml_file, temp_toml_file):
         """Test extracting parameters with config files."""
         original_params = SettingsParameters.create(
-            namespace="test_extract",
             settings_class=TestSettings,
             config_files=[temp_yaml_file, temp_toml_file]
         )
@@ -430,7 +398,6 @@ class TestExtractSettingsParameters:
 
         extracted = settings.extract_settings_parameters()
 
-        assert extracted.namespace == "test_extract"
         assert extracted.config_files is not None
         # Config files should be separated and included
         config_files_str = [str(f) for f in extracted.config_files]
@@ -441,7 +408,6 @@ class TestExtractSettingsParameters:
     def test_extract_with_env_prefix(self):
         """Test extracting parameters with env_prefix."""
         original_params = SettingsParameters.create(
-            namespace="test_extract",
             settings_class=TestSettings,
             env_prefix="TEST_"
         )
@@ -455,7 +421,6 @@ class TestExtractSettingsParameters:
     def test_extract_with_all_file_types(self, temp_env_file, temp_yaml_file, temp_toml_file, temp_json_file):
         """Test extracting parameters with multiple file types."""
         original_params = SettingsParameters.create(
-            namespace="test_extract_all",
             settings_class=TestSettings,
             config_files=[temp_env_file, temp_yaml_file, temp_toml_file, temp_json_file]
         )
@@ -471,14 +436,12 @@ class TestExtractSettingsParameters:
     def test_extract_with_none_values(self):
         """Test extracting parameters with None values."""
         original_params = SettingsParameters.create(
-            namespace="test_extract_none",
             settings_class=TestSettings
         )
         settings = TestSettings(settings_parameters=original_params)
 
         extracted = settings.extract_settings_parameters()
 
-        assert extracted.namespace == "test_extract_none"
         assert extracted.settings_class is TestSettings
         # None values should be handled gracefully
 
@@ -486,7 +449,6 @@ class TestExtractSettingsParameters:
     def test_extract_preserves_kwargs(self):
         """Test that extract preserves kwargs."""
         original_params = SettingsParameters.create(
-            namespace="test_extract_kwargs",
             settings_class=TestSettings,
             TEST_VAL_1="value1",
             TEST_VAL_2="value2"
@@ -509,9 +471,6 @@ class TestPostInit:
 
         # Should not raise error
         settings.post_init()
-
-        # Should not modify anything
-        assert hasattr(settings, "SETTINGS_NAMESPACE")
 
     @pytest.mark.unit
     def test_post_init_custom_implementation(self):
@@ -549,7 +508,6 @@ class TestIntegration:
     def test_full_workflow_with_templates(self):
         """Test complete workflow with template fields."""
         params_obj = SettingsParameters.create(
-            namespace="template_workflow",
             settings_class=TemplateSettings,
             APP_NAME="myapp",
             ENVIRONMENT="production"
@@ -562,7 +520,6 @@ class TestIntegration:
 
         # Extract parameters
         params = settings.extract_settings_parameters()
-        assert params.namespace == "template_workflow"
 
         # Hash should work
         hash_value = hash(settings)
@@ -573,7 +530,6 @@ class TestIntegration:
         """Test complete workflow with updates."""
         # Create initial settings
         params = SettingsParameters.create(
-            namespace="test_workflow",
             settings_class=TestSettings,
             TEST_VAL_1="initial"
         )
@@ -596,23 +552,23 @@ class TestIntegration:
         """Test that get_settings works correctly across multiple calls."""
         # First call - create settings
         params1 = SettingsParameters.create(
-            namespace="multi_call_test",
             settings_class=TestSettings,
             TEST_VAL_1="value1"
         )
         settings1 = isolated_settings_manager.get_or_create_settings(params1)
         assert settings1.TEST_VAL_1 == "value1"
 
-        # Second call with different kwargs - returns cached instance
+        # Second call with different kwargs but same structural params
         params2 = SettingsParameters.create(
-            namespace="multi_call_test",
             settings_class=TestSettings,
             TEST_VAL_1="value2"
         )
         settings2 = isolated_settings_manager.get_or_create_settings(params2)
 
-        # Should be same instance (cache key based on structural params)
-        assert settings1 is settings2
+        # Cache should have only one entry (same structural params)
+        assert len(isolated_settings_manager.settings_object_cache) == 1
+        # But returned values reflect the kwargs
+        assert settings2.TEST_VAL_1 == "value2"
 
 
 class TestEdgeCases:
@@ -632,7 +588,6 @@ class TestEdgeCases:
         """Test that hash is consistent across multiple calls."""
         settings = TestSettings(
             settings_parameters=SettingsParameters.create(
-                namespace="hash_test",
                 settings_class=TestSettings
             )
         )
@@ -659,7 +614,6 @@ class TestEdgeCases:
     def test_extract_parameters_idempotent(self):
         """Test that extract_settings_parameters is idempotent."""
         original_params = SettingsParameters.create(
-            namespace="idempotent_test",
             settings_class=TestSettings,
             TEST_VAL_1="value1"
         )
@@ -669,6 +623,5 @@ class TestEdgeCases:
         extracted2 = settings.extract_settings_parameters()
 
         # Should produce equivalent parameters
-        assert extracted1.namespace == extracted2.namespace
         assert extracted1.settings_class == extracted2.settings_class
         assert extracted1.kwargs == extracted2.kwargs

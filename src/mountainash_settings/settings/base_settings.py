@@ -23,7 +23,6 @@ class MountainAshBaseSettings(BaseSettings):
         )
 
     #Tracablility and repeatability
-    SETTINGS_NAMESPACE: str =                                         Field(default=None)
     SETTINGS_CLASS: Type =                                            Field(default=None)
     SETTINGS_CLASS_NAME: str =                                        Field(default=None)
 
@@ -98,7 +97,6 @@ class MountainAshBaseSettings(BaseSettings):
         #Update all vals from valid kwargs
         self.update_settings_from_dict(settings_dict=valid_attribute_kwargs)
 
-        setattr(self, "SETTINGS_NAMESPACE",             local_settings_params.namespace)
         setattr(self, "SETTINGS_CLASS",                 local_settings_params.settings_class or MountainAshBaseSettings)
         setattr(self, "SETTINGS_CLASS_NAME",            local_settings_params.settings_class.__name__ if local_settings_params.settings_class else "MountainAshBaseSettings")
         setattr(self, "SETTINGS_SOURCE_ENV_PREFIX",     local_settings_params.env_prefix)
@@ -135,7 +133,6 @@ class MountainAshBaseSettings(BaseSettings):
     def get_settings(cls,
                     settings_parameters:   Optional[SettingsParameters] = None,
                     settings_class:        Optional[Type[T]] = None,
-                    settings_namespace:    Optional[str] = None,
                     config_files:          Optional[Union[UPath, str, List[UPath|str]]]  = None,
                     env_prefix:            Optional[str] = None,
                     **kwargs
@@ -153,7 +150,6 @@ class MountainAshBaseSettings(BaseSettings):
         settings_instance: Any =  get_settings(
                                     settings_parameters = settings_parameters,
                                     settings_class = settings_class,
-                                    settings_namespace = settings_namespace,
                                     config_files = config_files,
                                     env_prefix=env_prefix,
                                     **kwargs
@@ -174,8 +170,7 @@ class MountainAshBaseSettings(BaseSettings):
 
         """
 
-        return hash((self.SETTINGS_NAMESPACE,
-                     self.SETTINGS_CLASS_NAME,
+        return hash((self.SETTINGS_CLASS_NAME,
                      tuple(self.SETTINGS_SOURCE_ENV_FILES) if self.SETTINGS_SOURCE_ENV_FILES else None,
                      tuple(self.SETTINGS_SOURCE_ENV_PREFIX) if self.SETTINGS_SOURCE_ENV_PREFIX else None,
                      tuple(self.SETTINGS_SOURCE_YAML_FILES) if self.SETTINGS_SOURCE_YAML_FILES else None,
@@ -301,14 +296,12 @@ class MountainAshBaseSettings(BaseSettings):
             config_files += self.SETTINGS_SOURCE_JSON_FILES
 
 
-        existing_namespace =        self.SETTINGS_NAMESPACE or None
         existing_config_files =     SettingsUtils.format_config_file_list(config_files=config_files)
         existing_kwargs =           SettingsUtils.format_kwargs_dict(p_kwargs=self.SETTINGS_SOURCE_KWARGS)
         existing_settings_class =   self.SETTINGS_CLASS or None
         existing_env_prefix =       self.SETTINGS_SOURCE_ENV_PREFIX or None
 
         params: SettingsParameters = SettingsParameters.create(
-            namespace= existing_namespace,
             settings_class=     existing_settings_class,
             config_files=       existing_config_files,
             kwargs=             existing_kwargs,

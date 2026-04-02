@@ -50,19 +50,17 @@ def _get_settings(settings_parameters: SettingsParameters,
 
 def get_settings(    settings_parameters: Optional[SettingsParameters] = None,
                      settings_class:        Optional[Type[MountainAshBaseSettings]] = None,
-                     settings_namespace:    Optional[str] = None,
                      config_files:          Optional[Union[UPath, str, List[UPath|str]]]  = None,
                      env_prefix:            Optional[str] = None,
                      **kwargs
                      ) -> BaseSettings:
     """
-    The main function to be called to retrieve the application settings for a given namespace.
+    The main function to be called to retrieve the application settings.
     This function is exported from the module!
 
     Args:
         settings_parameters (SettingsParameters): The settings parameters for the settings object.
         settings_class (Type[MountainAshBaseSettings]): The class of the settings object to be retrieved.
-        settings_namespace (str, optional): The namespace for the configuration. Defaults to None, which retrieves the default namespace.
         config_files (Optional[Union[UPath, str, List[UPath|str]]]): The configuration files that the settings object will use to load settings.
         kwargs (Dict[Any,Any]): Additional keyword arguments that will be passed to the settings object.
 
@@ -85,7 +83,6 @@ def get_settings(    settings_parameters: Optional[SettingsParameters] = None,
 
         local_settings_parameters = SettingsParameters.create(
             settings_class=settings_class,
-            namespace=settings_namespace,
             config_files=config_files,
             env_prefix=env_prefix,
             **kwargs
@@ -98,7 +95,6 @@ def get_settings(    settings_parameters: Optional[SettingsParameters] = None,
 
         final_settings_parameters = SettingsParameters.create(
             settings_class=settings_class,
-            namespace=settings_namespace,
             config_files=config_files,
             env_prefix=env_prefix,
             **kwargs

@@ -41,7 +41,7 @@ class TestAppSettings:
         assert settings is not None
 
     def test_initialization_with_settings_parameters_succeeds(self):
-        params = SettingsParameters.create(namespace="test")
+        params = SettingsParameters.create()
         settings = AppSettings(settings_parameters=params)
         assert settings is not None
 

@@ -14,10 +14,6 @@ class SettingsUtils:
     Utility class for handling settings parameters.
     """
 
-    #Hashable format for settings parameters
-    default_namespace: str = "DEFAULT"
-
-
     @classmethod
     def merge_settings_parameter_objects(cls,
                         base: SettingsParameters,
@@ -40,7 +36,6 @@ class SettingsUtils:
     @classmethod
     def merge_settings_parameters(cls,
                             base: SettingsParameters,
-                            namespace: Optional[str] = None,
                             config_files: Optional[Union[UPath, str, List[Union[UPath, str]]]] = None,
                             kwargs: Optional[Dict[str, Any]] = None,
                             env_prefix: Optional[str] = None,
@@ -56,7 +51,6 @@ class SettingsUtils:
         merger = get_merger()
         return merger.merge_with_params(
             base=base,
-            namespace=namespace,
             config_files=config_files,
             kwargs=kwargs,
             env_prefix=env_prefix,
@@ -105,12 +99,6 @@ class SettingsUtils:
 
 
     # Resolve / Merge values - simplified using FieldMergeUtils
-    @staticmethod
-    def merge_namespaces(namespace1: Optional[str] = None,
-                         namespace2: Optional[str] = None) -> str:
-        """Merge namespace strings using the generic merge framework."""
-        return FieldMergeUtils.merge_namespaces(namespace1, namespace2)
-
     @staticmethod
     def merge_env_prefix(env_prefix1: Optional[str] = None,
                          env_prefix2: Optional[str] = None) -> Optional[str]:

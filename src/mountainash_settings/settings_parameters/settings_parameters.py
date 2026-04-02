@@ -24,7 +24,6 @@ class SettingsParameters():
     parameters, enabling cache reuse when only runtime parameters differ.
 
     Structural Parameters (affect cache identity):
-        namespace:      The namespace of the settings object. Used to group settings together.
         config_files:   The configuration files that the settings object will use to load settings.
         settings_class: The class/type that will be used to create the settings object.
         env_prefix:     Environment variable prefix for this settings instance.
@@ -40,12 +39,11 @@ class SettingsParameters():
 
     Example:
         # These will use the same cached settings object:
-        params1 = SettingsParameters(namespace="app", config_files=["config.yaml"],
+        params1 = SettingsParameters(config_files=["config.yaml"],
                                    kwargs={"debug": True})
-        params2 = SettingsParameters(namespace="app", config_files=["config.yaml"],
+        params2 = SettingsParameters(config_files=["config.yaml"],
                                    kwargs={"log_level": "INFO"})
     """
-    namespace:      Optional[str] = None
     config_files:   Optional[List[str|UPath]|Tuple[str|UPath]] = None
     settings_class: Optional[Type[BaseSettings]] = None
     env_prefix:     Optional[str] = None
@@ -94,7 +92,6 @@ class SettingsParameters():
         Custom hash implementation for efficient settings caching strategy.
 
         Only includes 'structural' parameters that define the core configuration identity:
-        - namespace: Settings grouping identifier
         - config_files: Source configuration files
         - settings_class: Type of settings object
         - env_prefix: Environment variable prefix
@@ -109,10 +106,10 @@ class SettingsParameters():
         Example:
             These two parameter sets will have the same hash (same cached object):
 
-            params1 = SettingsParameters(namespace="app", config_files=["config.yaml"],
+            params1 = SettingsParameters(config_files=["config.yaml"],
                                        settings_class=AppSettings, kwargs={"debug": True})
 
-            params2 = SettingsParameters(namespace="app", config_files=["config.yaml"],
+            params2 = SettingsParameters(config_files=["config.yaml"],
                                        settings_class=AppSettings, kwargs={"log_level": "INFO"})
 
         Returns:
@@ -121,7 +118,6 @@ class SettingsParameters():
         hashable_config_files = SettingsFileHandler.format_config_file_tuple(self.config_files)
 
         hashable_attrs = tuple([
-            self.namespace,
             hashable_config_files,
             self.settings_class,
             self.env_prefix,
@@ -154,7 +150,6 @@ class SettingsParameters():
         other_hashable_config_files = SettingsFileHandler.format_config_file_tuple(other.config_files)
 
         return (
-            self.namespace == other.namespace and
             self_hashable_config_files == other_hashable_config_files and
             self.settings_class == other.settings_class and
             self.env_prefix == other.env_prefix and
@@ -176,7 +171,6 @@ class SettingsParameters():
     # Creation methods
     @classmethod
     def create(cls,
-               namespace: Optional[str] = None,
                config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
                settings_class: Optional[Type[BaseSettings]] = None,
                env_prefix: Optional[str] = None,
@@ -186,13 +180,10 @@ class SettingsParameters():
 
 
         #Combine the parameters into a single object
-        # resolved_namespace =     cls._init_namespace(namespace)
         resolved_config_files =  SettingsFileHandler.format_config_file_tuple(config_files)
-        # merged_kwargs =         SettingsKwargsHandler.merge_kwargs(kw_params, kwargs) if kwargs else kw_params
         resolved_kwargs =        SettingsKwargsHandler.format_kwargs_dict(kwargs) if kwargs else None
 
         return cls(
-            namespace=namespace,
             config_files=resolved_config_files,
             settings_class=settings_class,
             env_prefix=env_prefix,
@@ -202,15 +193,9 @@ class SettingsParameters():
 
 
 
-    @staticmethod
-    def _init_namespace(namespace: Optional[str]) -> str:
-        return namespace or "DEFAULT"
-
-
     #Export / retrieve values
     def to_dict(self) -> Dict[str, Any]:
         return {
-            'namespace': self.namespace,
             'config_files': list(self.config_files) if self.config_files else None,
             'kwargs': self.get_all_kwargs() if self.kwargs else None,
             'settings_class': self.settings_class,

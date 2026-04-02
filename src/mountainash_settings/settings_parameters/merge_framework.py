@@ -80,16 +80,6 @@ class SettingsParameterMerger:
             return base
         
         # Simple field-by-field merging
-        # For namespace, don't apply _init_namespace fallback until after merge
-        resolved_namespace = _merge_simple(
-            base.namespace,
-            other.namespace,
-            prioritise_base
-        )
-        # Apply the DEFAULT fallback only if result is None
-        if resolved_namespace is None:
-            resolved_namespace = base._init_namespace(None)
-        
         resolved_config_files = _merge_config_files(
             base.config_files, other.config_files, prioritise_base
         )
@@ -112,16 +102,14 @@ class SettingsParameterMerger:
         
         return SettingsParameters.create(
             settings_class=resolved_settings_class,
-            namespace=resolved_namespace,
             config_files=resolved_config_files,
             env_prefix=resolved_env_prefix,
             secrets_dir=resolved_secrets_dir,
             **(resolved_kwargs or {})
         )
-    
+
     def merge_with_params(self,
                          base: SettingsParameters,
-                         namespace: Optional[str] = None,
                          config_files: Optional[Union[UPath, str, List[Union[UPath, str]]]] = None,
                          kwargs: Optional[Dict[str, Any]] = None,
                          env_prefix: Optional[str] = None,
@@ -130,22 +118,12 @@ class SettingsParameterMerger:
         """Merge SettingsParameters with individual parameters."""
         if base is None:
             raise ValidationError("Base SettingsParameters cannot be None")
-        
+
         # Convert config_files to proper format
         from .filehandler import SettingsFileHandler
         formatted_config_files = SettingsFileHandler.format_config_file_tuple(config_files)
-        
+
         # Simple field-by-field merging
-        # For namespace, don't apply _init_namespace fallback until after merge
-        resolved_namespace = _merge_simple(
-            base.namespace,
-            namespace,
-            prioritise_base
-        )
-        # Apply the DEFAULT fallback only if result is None
-        if resolved_namespace is None:
-            resolved_namespace = base._init_namespace(None)
-        
         resolved_config_files = _merge_config_files(
             base.config_files, formatted_config_files, prioritise_base
         )
@@ -164,7 +142,6 @@ class SettingsParameterMerger:
         
         return SettingsParameters.create(
             settings_class=base.settings_class,
-            namespace=resolved_namespace,
             config_files=resolved_config_files,
             env_prefix=resolved_env_prefix,
             secrets_dir=resolved_secrets_dir,
@@ -174,13 +151,8 @@ class SettingsParameterMerger:
 
 class FieldMergeUtils:
     """Simple utility functions for merging specific field types."""
-    
+
     @staticmethod
-    def merge_namespaces(first: Optional[str] = None, second: Optional[str] = None) -> str:
-        """Merge namespace strings with default fallback."""
-        return first or second or "DEFAULT"
-    
-    @staticmethod  
     def merge_env_prefixes(first: Optional[str] = None, second: Optional[str] = None) -> Optional[str]:
         """Merge environment prefix strings."""
         return first or second
