@@ -84,22 +84,20 @@ class TestEquality:
         assert hash(params1) == hash(params2)
 
     @pytest.mark.unit
-    def test_eq_ignores_secrets_dir_differences(self):
-        """Test that equality ignores secrets_dir (runtime parameter)."""
+    def test_eq_differs_on_secrets_dir(self):
+        """Test that different secrets_dir values produce inequality (structural param)."""
         params1 = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             secrets_dir="/secrets1"
         )
         params2 = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             secrets_dir="/secrets2"
         )
 
-        # Should be equal despite different secrets_dir
-        assert params1 == params2
-        assert hash(params1) == hash(params2)
+        # secrets_dir is structural -- different values should NOT be equal
+        assert params1 != params2
+        assert hash(params1) != hash(params2)
 
     @pytest.mark.unit
     def test_eq_differs_on_namespace(self):

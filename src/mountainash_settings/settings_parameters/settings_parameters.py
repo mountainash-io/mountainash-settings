@@ -28,10 +28,10 @@ class SettingsParameters():
         config_files:   The configuration files that the settings object will use to load settings.
         settings_class: The class/type that will be used to create the settings object.
         env_prefix:     Environment variable prefix for this settings instance.
+        secrets_dir:    Directory for secrets storage (pydantic-settings reads from it).
 
     Runtime Parameters (don't affect cache identity):
         kwargs:         Additional keyword arguments for runtime overrides.
-        secrets_dir:    Directory for secrets storage (runtime configuration).
 
     Caching Strategy:
         Two SettingsParameters with identical structural parameters but different
@@ -98,8 +98,9 @@ class SettingsParameters():
         - config_files: Source configuration files
         - settings_class: Type of settings object
         - env_prefix: Environment variable prefix
+        - secrets_dir: Directory for pydantic-settings secrets files
 
-        Deliberately EXCLUDES runtime parameters (kwargs, secrets_dir) to enable
+        Deliberately EXCLUDES runtime parameters (kwargs) to enable
         cache reuse when only dynamic overrides differ.
 
         This allows efficient retrieval of cached settings objects when the core
@@ -124,7 +125,8 @@ class SettingsParameters():
             hashable_config_files,
             self.settings_class,
             self.env_prefix,
-            # Deliberately exclude: self.kwargs, self.secrets_dir
+            self.secrets_dir,
+            # Deliberately exclude: self.kwargs
         ])
 
         return hash(hashable_attrs)
@@ -134,7 +136,7 @@ class SettingsParameters():
         Equality based on the same structural parameters used in __hash__.
 
         Two SettingsParameters are equal if their core configuration identity
-        matches, regardless of runtime parameter differences.
+        matches, regardless of runtime parameter differences (kwargs).
 
         This supports the caching strategy where settings objects with the same
         structural configuration can be reused even when runtime overrides differ.
@@ -155,8 +157,9 @@ class SettingsParameters():
             self.namespace == other.namespace and
             self_hashable_config_files == other_hashable_config_files and
             self.settings_class == other.settings_class and
-            self.env_prefix == other.env_prefix
-            # Deliberately exclude: kwargs, secrets_dir comparison
+            self.env_prefix == other.env_prefix and
+            self.secrets_dir == other.secrets_dir
+            # Deliberately exclude: kwargs comparison
         )
 
 
