@@ -175,7 +175,7 @@ def isolated_settings_manager():
 
     Note: This doesn't fully isolate the global cache, but provides
     a fresh manager instance. For true isolation, tests should use
-    unique namespaces.
+    unique parameter combinations (e.g. different env_prefix values).
     """
     return SettingsManager()
 
@@ -188,7 +188,6 @@ def settings_with_runtime_override(basic_settings_parameters):
     This tests the runtime override functionality.
     """
     params_with_override = basic_settings_parameters.__class__.create(
-        namespace=basic_settings_parameters.namespace,
         settings_class=basic_settings_parameters.settings_class,
         TEST_VAL_1="runtime_override_value"
     )

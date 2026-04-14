@@ -3,7 +3,7 @@ Comprehensive tests for SettingsManager.
 
 Tests cover:
 - Settings creation and caching
-- Namespace initialization checks
+- Initialization checks
 - Settings retrieval
 - Runtime override application
 - MountainAshBaseSettings and non-MountainAshBaseSettings paths
@@ -39,21 +39,19 @@ class TestSettingsManagerInitialization:
         assert manager1 is manager2
 
 
-class TestIsNamespaceInitialised:
-    """Test is_namespace_initialised method."""
+class TestIsInitialised:
+    """Test is_initialised method."""
 
-    def test_returns_false_for_new_namespace(self, isolated_settings_manager):
-        """Test that new namespace returns False."""
+    def test_returns_false_for_new_params(self, isolated_settings_manager):
+        """Test that new params returns False."""
         params = SettingsParameters.create(
-            namespace="new_namespace",
             settings_class=TestSettings
         )
-        assert isolated_settings_manager.is_namespace_initialised(params) is False
+        assert isolated_settings_manager.is_initialised(params) is False
 
     def test_returns_true_after_initialization(self, isolated_settings_manager):
-        """Test that initialized namespace returns True."""
+        """Test that initialized params returns True."""
         params = SettingsParameters.create(
-            namespace="initialized_namespace",
             settings_class=TestSettings
         )
 
@@ -61,16 +59,14 @@ class TestIsNamespaceInitialised:
         isolated_settings_manager.get_or_create_settings(params)
 
         # Should now be initialized
-        assert isolated_settings_manager.is_namespace_initialised(params) is True
+        assert isolated_settings_manager.is_initialised(params) is True
 
     def test_uses_hash_for_cache_key(self, isolated_settings_manager):
         """Test that cache key is based on SettingsParameters hash."""
         params1 = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings
         )
         params2 = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings
         )
 
@@ -78,7 +74,7 @@ class TestIsNamespaceInitialised:
         isolated_settings_manager.get_or_create_settings(params1)
 
         # params2 has same hash, should also be initialized
-        assert isolated_settings_manager.is_namespace_initialised(params2) is True
+        assert isolated_settings_manager.is_initialised(params2) is True
 
 
 class TestGetOrCreateSettings:
@@ -88,7 +84,6 @@ class TestGetOrCreateSettings:
     def test_creates_new_settings_for_first_call(self, isolated_settings_manager):
         """Test that first call creates new settings instance."""
         params = SettingsParameters.create(
-            namespace="first_call",
             settings_class=TestSettings,
             TEST_VAL_1="value1"
         )
@@ -97,14 +92,12 @@ class TestGetOrCreateSettings:
 
         assert settings is not None
         assert isinstance(settings, TestSettings)
-        assert settings.SETTINGS_NAMESPACE == "first_call"
         assert settings.TEST_VAL_1 == "value1"
 
     @pytest.mark.unit
     def test_returns_cached_settings_for_second_call(self, isolated_settings_manager):
         """Test that second call returns cached instance."""
         params = SettingsParameters.create(
-            namespace="cached_test",
             settings_class=TestSettings
         )
 
@@ -120,7 +113,6 @@ class TestGetOrCreateSettings:
     def test_raises_error_if_settings_class_missing(self, isolated_settings_manager):
         """Test that missing settings_class raises ValueError."""
         params = SettingsParameters.create(
-            namespace="no_class",
             settings_class=None
         )
 
@@ -131,7 +123,6 @@ class TestGetOrCreateSettings:
     def test_creates_mountainash_base_settings_subclass(self, isolated_settings_manager):
         """Test MountainAshBaseSettings subclass creation path."""
         params = SettingsParameters.create(
-            namespace="mountainash_test",
             settings_class=TestSettings,
             TEST_VAL_1="mountainash_value"
         )
@@ -145,8 +136,8 @@ class TestGetOrCreateSettings:
     def test_creates_non_mountainash_settings_with_kwargs(self, isolated_settings_manager):
         """Test non-MountainAshBaseSettings class creation with kwargs."""
         params = SettingsParameters.create(
-            namespace="non_mountainash_with_kwargs",
             settings_class=MockBaseSettings,
+            env_prefix="NON_MA_WITH_KWARGS_",
             test_field="custom_value",
             test_int=100
         )
@@ -161,8 +152,8 @@ class TestGetOrCreateSettings:
     def test_creates_non_mountainash_settings_without_kwargs(self, isolated_settings_manager):
         """Test non-MountainAshBaseSettings class creation without kwargs."""
         params = SettingsParameters.create(
-            namespace="non_mountainash_no_kwargs",
-            settings_class=MockBaseSettings
+            settings_class=MockBaseSettings,
+            env_prefix="NON_MA_NO_KWARGS_"
         )
 
         settings = isolated_settings_manager.get_or_create_settings(params)
@@ -173,25 +164,25 @@ class TestGetOrCreateSettings:
         assert settings.test_int == 42
 
     @pytest.mark.unit
-    def test_different_namespaces_create_different_settings(self, isolated_settings_manager):
-        """Test that different namespaces create separate settings instances."""
+    def test_different_env_prefixes_create_different_settings(self, isolated_settings_manager):
+        """Test that different env_prefix values create separate settings instances."""
         params1 = SettingsParameters.create(
-            namespace="namespace1",
             settings_class=TestSettings,
-            TEST_VAL_1="value_ns1"
+            env_prefix="PREFIX1_",
+            TEST_VAL_1="value_p1"
         )
         params2 = SettingsParameters.create(
-            namespace="namespace2",
             settings_class=TestSettings,
-            TEST_VAL_1="value_ns2"
+            env_prefix="PREFIX2_",
+            TEST_VAL_1="value_p2"
         )
 
         settings1 = isolated_settings_manager.get_or_create_settings(params1)
         settings2 = isolated_settings_manager.get_or_create_settings(params2)
 
         assert settings1 is not settings2
-        assert settings1.TEST_VAL_1 == "value_ns1"
-        assert settings2.TEST_VAL_1 == "value_ns2"
+        assert settings1.TEST_VAL_1 == "value_p1"
+        assert settings2.TEST_VAL_1 == "value_p2"
 
 
 class TestGetSettingsObject:
@@ -201,7 +192,6 @@ class TestGetSettingsObject:
     def test_retrieves_cached_settings(self, isolated_settings_manager):
         """Test retrieving settings from cache."""
         params = SettingsParameters.create(
-            namespace="retrieve_test",
             settings_class=TestSettings
         )
 
@@ -217,39 +207,57 @@ class TestGetSettingsObject:
     def test_raises_error_for_non_mountainash_settings(self, isolated_settings_manager):
         """Test that non-MountainAshBaseSettings in cache raises ValueError."""
         params = SettingsParameters.create(
-            namespace="non_mountainash_error",
-            settings_class=MockBaseSettings
+            settings_class=MockBaseSettings,
+            env_prefix="NON_MA_ERR_"
         )
 
         # Manually add non-MountainAshBaseSettings to cache
         isolated_settings_manager.settings_object_cache[params] = MockBaseSettings()
 
-        with pytest.raises(ValueError, match="is not an MountainAshBaseSettings object"):
+        with pytest.raises(ValueError, match="is not a MountainAshBaseSettings object"):
             isolated_settings_manager.get_settings_object(params)
 
     @pytest.mark.unit
     def test_applies_runtime_override_kwargs(self, isolated_settings_manager):
-        """Test that runtime override kwargs are applied."""
-        # Create settings without override
+        """Test that runtime override kwargs are applied to a copy, not the cached instance."""
         params_create = SettingsParameters.create(
-            namespace="override_test",
             settings_class=TestSettings,
             TEST_VAL_1="original_value"
         )
         created_settings = isolated_settings_manager.get_or_create_settings(params_create)
         assert created_settings.TEST_VAL_1 == "original_value"
 
-        # Retrieve with override kwargs
         params_override = SettingsParameters.create(
-            namespace="override_test",
             settings_class=TestSettings,
             TEST_VAL_1="overridden_value"
         )
-
         retrieved_settings = isolated_settings_manager.get_settings_object(params_override)
 
-        # Note: This tests current behavior - kwargs update the cached instance
+        # Retrieved copy has the override
         assert retrieved_settings.TEST_VAL_1 == "overridden_value"
+        # Original cached instance is untouched
+        assert created_settings.TEST_VAL_1 == "original_value"
+
+    @pytest.mark.unit
+    def test_runtime_overrides_do_not_mutate_cached_instance(self, isolated_settings_manager):
+        """Test that runtime override kwargs do NOT mutate the cached instance."""
+        params_create = SettingsParameters.create(
+            settings_class=TestSettings,
+            TEST_VAL_1="original_value"
+        )
+        created_settings = isolated_settings_manager.get_or_create_settings(params_create)
+        assert created_settings.TEST_VAL_1 == "original_value"
+
+        params_override = SettingsParameters.create(
+            settings_class=TestSettings,
+            TEST_VAL_1="overridden_value"
+        )
+        retrieved_settings = isolated_settings_manager.get_settings_object(params_override)
+        assert retrieved_settings.TEST_VAL_1 == "overridden_value"
+
+        # The CACHED instance must NOT have been mutated
+        cached_directly = isolated_settings_manager.settings_object_cache[params_create]
+        assert cached_directly.TEST_VAL_1 == "original_value"
 
 
 class TestCacheBehavior:
@@ -258,14 +266,12 @@ class TestCacheBehavior:
     @pytest.mark.unit
     def test_cache_key_based_on_structural_params(self, isolated_settings_manager):
         """Test that cache key is based on structural parameters only."""
-        # Same structural params (namespace, class) but different kwargs
+        # Same structural params (class) but different kwargs
         params1 = SettingsParameters.create(
-            namespace="cache_test",
             settings_class=TestSettings,
             TEST_VAL_1="value1"
         )
         params2 = SettingsParameters.create(
-            namespace="cache_test",
             settings_class=TestSettings,
             TEST_VAL_1="value2"
         )
@@ -277,16 +283,20 @@ class TestCacheBehavior:
         settings1 = isolated_settings_manager.get_or_create_settings(params1)
 
         # Second call with different kwargs but same structural params
-        # Should return cached instance
+        # Should return from cache (as a copy since override kwargs differ)
         settings2 = isolated_settings_manager.get_or_create_settings(params2)
 
-        assert settings1 is settings2
+        # Both resolve to the same cache entry (same structural hash)
+        assert len(isolated_settings_manager.settings_object_cache) == 1
+        # But the returned object has the override applied
+        assert settings2.TEST_VAL_1 == "value2"
+        # Original cached instance is untouched
+        assert settings1.TEST_VAL_1 == "value1"
 
     @pytest.mark.unit
     def test_cache_stores_by_settings_parameters(self, isolated_settings_manager):
         """Test that cache uses SettingsParameters as key."""
         params = SettingsParameters.create(
-            namespace="namespace_key_test",
             settings_class=TestSettings
         )
 
@@ -301,16 +311,16 @@ class TestCacheBehavior:
     def test_multiple_settings_in_cache(self, isolated_settings_manager):
         """Test that cache can hold multiple settings instances."""
         params1 = SettingsParameters.create(
-            namespace="multi1",
-            settings_class=TestSettings
+            settings_class=TestSettings,
+            env_prefix="MULTI1_"
         )
         params2 = SettingsParameters.create(
-            namespace="multi2",
-            settings_class=TestSettings
+            settings_class=TestSettings,
+            env_prefix="MULTI2_"
         )
         params3 = SettingsParameters.create(
-            namespace="multi3",
-            settings_class=TestSettings
+            settings_class=TestSettings,
+            env_prefix="MULTI3_"
         )
 
         settings1 = isolated_settings_manager.get_or_create_settings(params1)
@@ -318,9 +328,9 @@ class TestCacheBehavior:
         settings3 = isolated_settings_manager.get_or_create_settings(params3)
 
         # All should be in cache
-        assert isolated_settings_manager.is_namespace_initialised(params1)
-        assert isolated_settings_manager.is_namespace_initialised(params2)
-        assert isolated_settings_manager.is_namespace_initialised(params3)
+        assert isolated_settings_manager.is_initialised(params1)
+        assert isolated_settings_manager.is_initialised(params2)
+        assert isolated_settings_manager.is_initialised(params3)
 
         # All should be different instances
         assert settings1 is not settings2
@@ -336,28 +346,30 @@ class TestIntegration:
         """Test complete workflow: create, retrieve, reuse."""
         # Step 1: Create new settings
         params = SettingsParameters.create(
-            namespace="workflow_test",
             settings_class=TestSettings,
             TEST_VAL_1="initial_value"
         )
 
         # Should not be initialized yet
-        assert not isolated_settings_manager.is_namespace_initialised(params)
+        assert not isolated_settings_manager.is_initialised(params)
 
         # Create settings
         settings1 = isolated_settings_manager.get_or_create_settings(params)
         assert settings1.TEST_VAL_1 == "initial_value"
 
         # Should now be initialized
-        assert isolated_settings_manager.is_namespace_initialised(params)
+        assert isolated_settings_manager.is_initialised(params)
 
-        # Step 2: Retrieve cached settings
+        # Step 2: Retrieve cached settings (returns copy when kwargs present)
         settings2 = isolated_settings_manager.get_or_create_settings(params)
-        assert settings2 is settings1
+        assert settings2.TEST_VAL_1 == "initial_value"
 
-        # Step 3: Get settings object directly
+        # Step 3: Get settings object directly (returns copy when kwargs present)
         settings3 = isolated_settings_manager.get_settings_object(params)
-        assert settings3 is settings1
+        assert settings3.TEST_VAL_1 == "initial_value"
+
+        # Cache should still have only one entry
+        assert len(isolated_settings_manager.settings_object_cache) == 1
 
     @pytest.mark.integration
     def test_with_config_files(self, isolated_settings_manager, temp_yaml_file):
@@ -365,7 +377,6 @@ class TestIntegration:
         from mountainash_settings.settings.app.app_settings import AppSettings
 
         params = SettingsParameters.create(
-            namespace="config_file_test",
             settings_class=AppSettings,
             config_files=temp_yaml_file
         )
@@ -388,15 +399,14 @@ class TestEdgeCases:
             )
 
     @pytest.mark.edge_case
-    def test_none_namespace_handled_correctly(self, isolated_settings_manager):
-        """Test that None namespace is handled correctly."""
+    def test_none_params_handled_correctly(self, isolated_settings_manager):
+        """Test that params with no namespace are handled correctly."""
         params = SettingsParameters.create(
-            namespace=None,
             settings_class=TestSettings
         )
 
         settings = isolated_settings_manager.get_or_create_settings(params)
 
-        # Should create successfully with None namespace
+        # Should create successfully
         assert settings is not None
         assert isinstance(settings, TestSettings)

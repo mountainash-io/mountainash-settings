@@ -24,14 +24,13 @@ class SettingsParameters():
     parameters, enabling cache reuse when only runtime parameters differ.
 
     Structural Parameters (affect cache identity):
-        namespace:      The namespace of the settings object. Used to group settings together.
         config_files:   The configuration files that the settings object will use to load settings.
         settings_class: The class/type that will be used to create the settings object.
         env_prefix:     Environment variable prefix for this settings instance.
+        secrets_dir:    Directory for secrets storage (pydantic-settings reads from it).
 
     Runtime Parameters (don't affect cache identity):
         kwargs:         Additional keyword arguments for runtime overrides.
-        secrets_dir:    Directory for secrets storage (runtime configuration).
 
     Caching Strategy:
         Two SettingsParameters with identical structural parameters but different
@@ -40,12 +39,11 @@ class SettingsParameters():
 
     Example:
         # These will use the same cached settings object:
-        params1 = SettingsParameters(namespace="app", config_files=["config.yaml"],
+        params1 = SettingsParameters(config_files=["config.yaml"],
                                    kwargs={"debug": True})
-        params2 = SettingsParameters(namespace="app", config_files=["config.yaml"],
+        params2 = SettingsParameters(config_files=["config.yaml"],
                                    kwargs={"log_level": "INFO"})
     """
-    namespace:      Optional[str] = None
     config_files:   Optional[List[str|UPath]|Tuple[str|UPath]] = None
     settings_class: Optional[Type[BaseSettings]] = None
     env_prefix:     Optional[str] = None
@@ -94,12 +92,12 @@ class SettingsParameters():
         Custom hash implementation for efficient settings caching strategy.
 
         Only includes 'structural' parameters that define the core configuration identity:
-        - namespace: Settings grouping identifier
         - config_files: Source configuration files
         - settings_class: Type of settings object
         - env_prefix: Environment variable prefix
+        - secrets_dir: Directory for pydantic-settings secrets files
 
-        Deliberately EXCLUDES runtime parameters (kwargs, secrets_dir) to enable
+        Deliberately EXCLUDES runtime parameters (kwargs) to enable
         cache reuse when only dynamic overrides differ.
 
         This allows efficient retrieval of cached settings objects when the core
@@ -108,10 +106,10 @@ class SettingsParameters():
         Example:
             These two parameter sets will have the same hash (same cached object):
 
-            params1 = SettingsParameters(namespace="app", config_files=["config.yaml"],
+            params1 = SettingsParameters(config_files=["config.yaml"],
                                        settings_class=AppSettings, kwargs={"debug": True})
 
-            params2 = SettingsParameters(namespace="app", config_files=["config.yaml"],
+            params2 = SettingsParameters(config_files=["config.yaml"],
                                        settings_class=AppSettings, kwargs={"log_level": "INFO"})
 
         Returns:
@@ -120,11 +118,11 @@ class SettingsParameters():
         hashable_config_files = SettingsFileHandler.format_config_file_tuple(self.config_files)
 
         hashable_attrs = tuple([
-            self.namespace,
             hashable_config_files,
             self.settings_class,
             self.env_prefix,
-            # Deliberately exclude: self.kwargs, self.secrets_dir
+            self.secrets_dir,
+            # Deliberately exclude: self.kwargs
         ])
 
         return hash(hashable_attrs)
@@ -134,7 +132,7 @@ class SettingsParameters():
         Equality based on the same structural parameters used in __hash__.
 
         Two SettingsParameters are equal if their core configuration identity
-        matches, regardless of runtime parameter differences.
+        matches, regardless of runtime parameter differences (kwargs).
 
         This supports the caching strategy where settings objects with the same
         structural configuration can be reused even when runtime overrides differ.
@@ -152,11 +150,11 @@ class SettingsParameters():
         other_hashable_config_files = SettingsFileHandler.format_config_file_tuple(other.config_files)
 
         return (
-            self.namespace == other.namespace and
             self_hashable_config_files == other_hashable_config_files and
             self.settings_class == other.settings_class and
-            self.env_prefix == other.env_prefix
-            # Deliberately exclude: kwargs, secrets_dir comparison
+            self.env_prefix == other.env_prefix and
+            self.secrets_dir == other.secrets_dir
+            # Deliberately exclude: kwargs comparison
         )
 
 
@@ -173,23 +171,19 @@ class SettingsParameters():
     # Creation methods
     @classmethod
     def create(cls,
-               namespace: Optional[str] = None,
                config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
                settings_class: Optional[Type[BaseSettings]] = None,
                env_prefix: Optional[str] = None,
                secrets_dir: Optional[str] = None,
-               **kwargs: Optional[Dict[str, Any]]
+               **kwargs: Any
                ) -> 'SettingsParameters':
 
 
         #Combine the parameters into a single object
-        # resolved_namespace =     cls._init_namespace(namespace)
         resolved_config_files =  SettingsFileHandler.format_config_file_tuple(config_files)
-        # merged_kwargs =         SettingsKwargsHandler.merge_kwargs(kw_params, kwargs) if kwargs else kw_params
         resolved_kwargs =        SettingsKwargsHandler.format_kwargs_dict(kwargs) if kwargs else None
 
         return cls(
-            namespace=namespace,
             config_files=resolved_config_files,
             settings_class=settings_class,
             env_prefix=env_prefix,
@@ -199,15 +193,87 @@ class SettingsParameters():
 
 
 
-    @staticmethod
-    def _init_namespace(namespace: Optional[str]) -> str:
-        return namespace or "DEFAULT"
+    @classmethod
+    def merge(cls,
+              base: 'SettingsParameters',
+              other: Optional['SettingsParameters'] = None,
+              prioritise_base: bool = False
+              ) -> 'SettingsParameters':
+        """
+        Merge two SettingsParameters objects.
+
+        Per-field strategies:
+        - config_files: combined and deduplicated
+        - settings_class: must match if both provided (raises ValueError)
+        - scalars (env_prefix, secrets_dir): last wins (or first if prioritise_base)
+        - kwargs: merged dict, second takes precedence (or first if prioritise_base)
+
+        Args:
+            base: The base parameters.
+            other: Parameters to merge in. If None, returns base.
+            prioritise_base: If True, base values win over other values.
+
+        Returns:
+            A new SettingsParameters with merged values.
+
+        Raises:
+            ValueError: If base is None or settings_class values conflict.
+        """
+        if base is None:
+            raise ValueError("Base SettingsParameters cannot be None")
+        if other is None:
+            return base
+
+        # Config files: combine and deduplicate
+        if base.config_files is None and other.config_files is None:
+            merged_config_files = None
+        elif prioritise_base:
+            merged_config_files = base.config_files or other.config_files
+        else:
+            merged = set(base.config_files or ()) | set(other.config_files or ())
+            merged_config_files = tuple(sorted(str(p) for p in merged)) if merged else None
+
+        # Settings class: validate compatibility
+        if base.settings_class is not None and other.settings_class is not None:
+            if base.settings_class != other.settings_class:
+                raise ValueError(
+                    f"Settings class must match for merging. "
+                    f"base: {base.settings_class} != other: {other.settings_class}"
+                )
+        if prioritise_base:
+            merged_class = base.settings_class or other.settings_class
+        else:
+            merged_class = other.settings_class or base.settings_class
+
+        # Scalars: simple priority
+        if prioritise_base:
+            merged_env_prefix = base.env_prefix or other.env_prefix
+            merged_secrets_dir = base.secrets_dir or other.secrets_dir
+        else:
+            merged_env_prefix = other.env_prefix or base.env_prefix
+            merged_secrets_dir = other.secrets_dir or base.secrets_dir
+
+        # Kwargs: merge dicts
+        if base.kwargs is None and other.kwargs is None:
+            merged_kwargs = None
+        elif prioritise_base:
+            merged_kwargs = base.kwargs or other.kwargs
+        else:
+            merged_kwargs = dict(base.kwargs or {}) | dict(other.kwargs or {})
+            merged_kwargs = merged_kwargs if merged_kwargs else None
+
+        return cls.create(
+            settings_class=merged_class,
+            config_files=merged_config_files,
+            env_prefix=merged_env_prefix,
+            secrets_dir=merged_secrets_dir,
+            **(merged_kwargs or {})
+        )
 
 
     #Export / retrieve values
     def to_dict(self) -> Dict[str, Any]:
         return {
-            'namespace': self.namespace,
             'config_files': list(self.config_files) if self.config_files else None,
             'kwargs': self.get_all_kwargs() if self.kwargs else None,
             'settings_class': self.settings_class,

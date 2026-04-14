@@ -35,7 +35,6 @@ class TestEquality:
     def test_eq_with_non_settings_parameters_returns_false(self):
         """Test equality with non-SettingsParameters object returns False."""
         params = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings
         )
 
@@ -43,20 +42,18 @@ class TestEquality:
         assert params != "string"
         assert params != 123
         assert params != None
-        assert params != {"namespace": "test"}
+        assert params != {"settings_class": TestSettings}
         assert params != ["test"]
 
     @pytest.mark.unit
     def test_eq_with_identical_structural_params(self):
         """Test equality with identical structural parameters."""
         params1 = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             config_files=["config.yaml"],
             env_prefix="TEST_"
         )
         params2 = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             config_files=["config.yaml"],
             env_prefix="TEST_"
@@ -69,12 +66,10 @@ class TestEquality:
     def test_eq_ignores_kwargs_differences(self):
         """Test that equality ignores kwargs (runtime parameters)."""
         params1 = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             VALUE="value1"
         )
         params2 = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             VALUE="value2"
         )
@@ -84,29 +79,18 @@ class TestEquality:
         assert hash(params1) == hash(params2)
 
     @pytest.mark.unit
-    def test_eq_ignores_secrets_dir_differences(self):
-        """Test that equality ignores secrets_dir (runtime parameter)."""
+    def test_eq_differs_on_secrets_dir(self):
+        """Test that different secrets_dir values produce inequality (structural param)."""
         params1 = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             secrets_dir="/secrets1"
         )
         params2 = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             secrets_dir="/secrets2"
         )
 
-        # Should be equal despite different secrets_dir
-        assert params1 == params2
-        assert hash(params1) == hash(params2)
-
-    @pytest.mark.unit
-    def test_eq_differs_on_namespace(self):
-        """Test that different namespaces produce inequality."""
-        params1 = SettingsParameters.create(namespace="test1", settings_class=TestSettings)
-        params2 = SettingsParameters.create(namespace="test2", settings_class=TestSettings)
-
+        # secrets_dir is structural -- different values should NOT be equal
         assert params1 != params2
         assert hash(params1) != hash(params2)
 
@@ -114,12 +98,10 @@ class TestEquality:
     def test_eq_differs_on_config_files(self):
         """Test that different config files produce inequality."""
         params1 = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             config_files=["config1.yaml"]
         )
         params2 = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             config_files=["config2.yaml"]
         )
@@ -130,8 +112,8 @@ class TestEquality:
     @pytest.mark.unit
     def test_eq_differs_on_settings_class(self):
         """Test that different settings classes produce inequality."""
-        params1 = SettingsParameters.create(namespace="test", settings_class=TestSettings)
-        params2 = SettingsParameters.create(namespace="test", settings_class=SimpleSettings)
+        params1 = SettingsParameters.create(settings_class=TestSettings)
+        params2 = SettingsParameters.create(settings_class=SimpleSettings)
 
         assert params1 != params2
         assert hash(params1) != hash(params2)
@@ -140,12 +122,10 @@ class TestEquality:
     def test_eq_differs_on_env_prefix(self):
         """Test that different env_prefix values produce inequality."""
         params1 = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             env_prefix="PREFIX1_"
         )
         params2 = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             env_prefix="PREFIX2_"
         )
@@ -160,9 +140,7 @@ class TestGetSettings:
     @pytest.mark.unit
     def test_get_settings_raises_error_without_settings_class(self):
         """Test that get_settings raises ValueError when settings_class is None."""
-        params = SettingsParameters.create(
-            namespace="test_no_class"
-        )
+        params = SettingsParameters.create()
 
         with pytest.raises(ValueError, match="Settings class is required to get settings"):
             params.get_settings()
@@ -171,7 +149,6 @@ class TestGetSettings:
     def test_get_settings_with_settings_class(self, isolated_settings_manager):
         """Test that get_settings works with settings_class provided."""
         params = SettingsParameters.create(
-            namespace="test_with_class",
             settings_class=SimpleSettings,
             VALUE="custom_value"
         )
@@ -185,7 +162,6 @@ class TestGetSettings:
     def test_get_settings_with_additional_kwargs(self, isolated_settings_manager):
         """Test get_settings with additional kwargs passed."""
         params = SettingsParameters.create(
-            namespace="test_extra_kwargs",
             settings_class=SimpleSettings,
             VALUE="initial"
         )
@@ -200,8 +176,8 @@ class TestGetSettings:
     def test_get_settings_works_correctly(self, isolated_settings_manager):
         """Test that get_settings works correctly."""
         params = SettingsParameters.create(
-            namespace="test_get_settings_unique",
             settings_class=SimpleSettings,
+            env_prefix="UNIQUE_GS_",
             VALUE="cached_value"
         )
 
@@ -210,7 +186,6 @@ class TestGetSettings:
 
         assert isinstance(settings, SimpleSettings)
         assert settings.VALUE == "cached_value"
-        assert settings.SETTINGS_NAMESPACE == "test_get_settings_unique"
 
 
 class TestGetValidKwargNames:
@@ -219,7 +194,7 @@ class TestGetValidKwargNames:
     @pytest.mark.unit
     def test_get_valid_kwarg_names_with_none_settings_class(self):
         """Test _get_valid_kwarg_names returns empty set when settings_class is None."""
-        params = SettingsParameters.create(namespace="test")
+        params = SettingsParameters.create()
 
         result = params._get_valid_kwarg_names()
 
@@ -228,7 +203,7 @@ class TestGetValidKwargNames:
     @pytest.mark.unit
     def test_get_valid_kwarg_names_with_none_passed_and_none_stored(self):
         """Test _get_valid_kwarg_names with None passed explicitly and None stored."""
-        params = SettingsParameters.create(namespace="test")
+        params = SettingsParameters.create()
 
         result = params._get_valid_kwarg_names(settings_class=None)
 
@@ -237,7 +212,7 @@ class TestGetValidKwargNames:
     @pytest.mark.unit
     def test_get_valid_kwarg_names_with_class_provided(self):
         """Test _get_valid_kwarg_names with settings_class provided."""
-        params = SettingsParameters.create(namespace="test")
+        params = SettingsParameters.create()
 
         result = params._get_valid_kwarg_names(settings_class=SimpleSettings)
 
@@ -251,7 +226,6 @@ class TestGetValidKwargNames:
     def test_get_valid_kwarg_names_uses_stored_class(self):
         """Test _get_valid_kwarg_names uses stored settings_class."""
         params = SettingsParameters.create(
-            namespace="test",
             settings_class=SimpleSettings
         )
 
@@ -268,8 +242,8 @@ class TestApplyRuntimeOverrides:
     def test_apply_runtime_overrides_with_no_kwargs(self, isolated_settings_manager):
         """Test that apply_runtime_overrides returns original when no kwargs."""
         params = SettingsParameters.create(
-            namespace="test_no_overrides",
-            settings_class=SimpleSettings
+            settings_class=SimpleSettings,
+            env_prefix="NO_OVERRIDE_"
         )
         original_settings = params.get_settings()
 
@@ -283,16 +257,16 @@ class TestApplyRuntimeOverrides:
         """Test that apply_runtime_overrides creates copy with overrides."""
         # Create cached settings
         params_base = SettingsParameters.create(
-            namespace="test_with_overrides",
             settings_class=SimpleSettings,
+            env_prefix="WITH_OVERRIDE_",
             VALUE="original"
         )
         cached_settings = params_base.get_settings()
 
         # Create params with runtime overrides
         params_override = SettingsParameters.create(
-            namespace="test_with_overrides",
             settings_class=SimpleSettings,
+            env_prefix="WITH_OVERRIDE_",
             VALUE="overridden",
             COUNT=99
         )
@@ -311,16 +285,16 @@ class TestApplyRuntimeOverrides:
     def test_apply_runtime_overrides_with_empty_override_kwargs(self, isolated_settings_manager):
         """Test apply_runtime_overrides when kwargs exist but no valid overrides."""
         params_base = SettingsParameters.create(
-            namespace="test_empty_overrides",
             settings_class=SimpleSettings,
+            env_prefix="EMPTY_OVERRIDE_",
             VALUE="original"
         )
         cached_settings = params_base.get_settings()
 
         # Create params with kwargs but only invalid ones
         params_override = SettingsParameters(
-            namespace="test_empty_overrides",
             settings_class=SimpleSettings,
+            env_prefix="EMPTY_OVERRIDE_",
             kwargs={"invalid_field": "value"}  # Not a valid field
         )
 
@@ -335,8 +309,8 @@ class TestApplyRuntimeOverrides:
     def test_apply_runtime_overrides_preserves_unmodified_fields(self, isolated_settings_manager):
         """Test that apply_runtime_overrides preserves unmodified fields."""
         params_base = SettingsParameters.create(
-            namespace="test_preserves",
             settings_class=SimpleSettings,
+            env_prefix="PRESERVES_",
             VALUE="original_value",
             COUNT=10
         )
@@ -344,8 +318,8 @@ class TestApplyRuntimeOverrides:
 
         # Override only one field
         params_override = SettingsParameters.create(
-            namespace="test_preserves",
             settings_class=SimpleSettings,
+            env_prefix="PRESERVES_",
             VALUE="new_value"
         )
 
@@ -363,8 +337,8 @@ class TestHashWithConfigFiles:
     @pytest.mark.unit
     def test_hash_with_none_config_files(self):
         """Test hash when config_files is None."""
-        params1 = SettingsParameters.create(namespace="test", settings_class=TestSettings)
-        params2 = SettingsParameters.create(namespace="test", settings_class=TestSettings)
+        params1 = SettingsParameters.create(settings_class=TestSettings)
+        params2 = SettingsParameters.create(settings_class=TestSettings)
 
         assert hash(params1) == hash(params2)
 
@@ -372,12 +346,10 @@ class TestHashWithConfigFiles:
     def test_hash_with_empty_config_files(self):
         """Test hash when config_files is empty."""
         params1 = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             config_files=[]
         )
         params2 = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             config_files=[]
         )
@@ -388,12 +360,10 @@ class TestHashWithConfigFiles:
     def test_hash_different_config_file_order_normalized(self):
         """Test that config files in different order produce same hash (if sorted)."""
         params1 = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             config_files=["a.yaml", "b.yaml"]
         )
         params2 = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             config_files=["a.yaml", "b.yaml"]
         )
@@ -405,7 +375,6 @@ class TestHashWithConfigFiles:
     def test_hash_consistency_across_multiple_calls(self):
         """Test that hash is consistent across multiple calls."""
         params = SettingsParameters.create(
-            namespace="test",
             settings_class=TestSettings,
             config_files=["config.yaml"],
             env_prefix="TEST_",
@@ -426,7 +395,6 @@ class TestGetAttributeSettingsKwargs:
     def test_get_attribute_settings_kwargs_with_none_kwargs(self):
         """Test get_attribute_settings_kwargs returns empty dict when kwargs is None."""
         params = SettingsParameters.create(
-            namespace="test",
             settings_class=SimpleSettings
         )
 
@@ -461,7 +429,7 @@ class TestGetPydanticKwargs:
     @pytest.mark.unit
     def test_get_pydantic_settings_kwargs_with_none_kwargs(self):
         """Test get_pydantic_settings_kwargs returns empty dict when kwargs is None."""
-        params = SettingsParameters.create(namespace="test")
+        params = SettingsParameters.create()
 
         result = params.get_pydantic_settings_kwargs()
 
@@ -470,7 +438,7 @@ class TestGetPydanticKwargs:
     @pytest.mark.unit
     def test_get_pydantic_modelconfig_kwargs_with_none_kwargs(self):
         """Test get_pydantic_modelconfig_kwargs returns empty dict when kwargs is None."""
-        params = SettingsParameters.create(namespace="test")
+        params = SettingsParameters.create()
 
         result = params.get_pydantic_modelconfig_kwargs()
 
@@ -525,8 +493,8 @@ class TestIntegration:
         """Test complete workflow with runtime overrides."""
         # Create base parameters
         base_params = SettingsParameters.create(
-            namespace="integration_test_unique",
             settings_class=SimpleSettings,
+            env_prefix="INTEG_UNIQUE_",
             VALUE="base_value",
             COUNT=10
         )
@@ -538,8 +506,8 @@ class TestIntegration:
 
         # Create params with same structural but different runtime
         override_params = SettingsParameters.create(
-            namespace="integration_test_unique",
             settings_class=SimpleSettings,
+            env_prefix="INTEG_UNIQUE_",
             VALUE="override_value",
             COUNT=20
         )
@@ -555,13 +523,13 @@ class TestIntegration:
         """Test caching strategy based on equality."""
         # These should be equal (same structural params, different runtime kwargs)
         params1 = SettingsParameters.create(
-            namespace="cache_equality_test",
             settings_class=SimpleSettings,
+            env_prefix="CACHE_EQ_",
             VALUE="value1"
         )
         params2 = SettingsParameters.create(
-            namespace="cache_equality_test",
             settings_class=SimpleSettings,
+            env_prefix="CACHE_EQ_",
             VALUE="value2"
         )
 
@@ -573,8 +541,8 @@ class TestIntegration:
         settings1 = isolated_settings_manager.get_or_create_settings(params1)
         settings2 = isolated_settings_manager.get_or_create_settings(params2)
 
-        # Should be same cached instance (structural params identical)
-        assert settings1 is settings2
+        # Cache should have only one entry (same structural params)
+        assert len(isolated_settings_manager.settings_object_cache) == 1
 
 
 class TestEdgeCases:
@@ -594,16 +562,16 @@ class TestEdgeCases:
     def test_apply_runtime_overrides_with_model_copy_preservation(self, isolated_settings_manager):
         """Test that apply_runtime_overrides preserves model integrity."""
         params_base = SettingsParameters.create(
-            namespace="model_copy_test",
             settings_class=SimpleSettings,
+            env_prefix="MODEL_COPY_",
             VALUE="original",
             COUNT=5
         )
         cached = params_base.get_settings()
 
         params_override = SettingsParameters.create(
-            namespace="model_copy_test",
             settings_class=SimpleSettings,
+            env_prefix="MODEL_COPY_",
             COUNT=10
         )
 
@@ -619,7 +587,6 @@ class TestEdgeCases:
     def test_to_dict_preserves_structure(self):
         """Test that to_dict preserves parameter structure."""
         params = SettingsParameters.create(
-            namespace="dict_test",
             settings_class=SimpleSettings,
             config_files=["config1.yaml", "config2.yaml"],
             env_prefix="TEST_",
@@ -631,7 +598,6 @@ class TestEdgeCases:
         result = params.to_dict()
 
         # All fields should be present
-        assert result["namespace"] == "dict_test"
         assert isinstance(result["config_files"], list)
         assert len(result["config_files"]) == 2
         assert result["settings_class"] is SimpleSettings

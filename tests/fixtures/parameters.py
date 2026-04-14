@@ -23,16 +23,6 @@ from .settings_classes import (
 def basic_settings_parameters():
     """Provides basic SettingsParameters for simple testing."""
     return SettingsParameters.create(
-        namespace="test",
-        settings_class=TestSettings
-    )
-
-
-@pytest.fixture
-def settings_parameters_with_namespace():
-    """Provides SettingsParameters with a specific namespace."""
-    return SettingsParameters.create(
-        namespace="custom_namespace",
         settings_class=TestSettings
     )
 
@@ -41,7 +31,6 @@ def settings_parameters_with_namespace():
 def settings_parameters_with_prefix():
     """Provides SettingsParameters with environment prefix."""
     return SettingsParameters.create(
-        namespace="test",
         settings_class=TestSettings,
         env_prefix="TEST_"
     )
@@ -51,7 +40,6 @@ def settings_parameters_with_prefix():
 def settings_parameters_with_config_file(temp_yaml_file):
     """Provides SettingsParameters with a config file."""
     return SettingsParameters.create(
-        namespace="test",
         settings_class=TestSettings,
         config_files=temp_yaml_file
     )
@@ -61,7 +49,6 @@ def settings_parameters_with_config_file(temp_yaml_file):
 def settings_parameters_with_multiple_files(temp_multiple_yaml_files):
     """Provides SettingsParameters with multiple config files."""
     return SettingsParameters.create(
-        namespace="test",
         settings_class=TestSettings,
         config_files=temp_multiple_yaml_files
     )
@@ -71,7 +58,6 @@ def settings_parameters_with_multiple_files(temp_multiple_yaml_files):
 def settings_parameters_with_kwargs():
     """Provides SettingsParameters with kwargs."""
     return SettingsParameters.create(
-        namespace="test",
         settings_class=TestSettings,
         TEST_VAL_1="kwarg_value_1",
         TEST_VAL_2="kwarg_value_2"
@@ -84,7 +70,6 @@ def settings_parameters_with_secrets_dir(temp_dir):
     secrets_dir = temp_dir / "secrets"
     secrets_dir.mkdir()
     return SettingsParameters.create(
-        namespace="test",
         settings_class=TestSettings,
         secrets_dir=str(secrets_dir)
     )
@@ -97,7 +82,6 @@ def settings_parameters_full_config(temp_yaml_file, temp_dir):
     secrets_dir.mkdir()
 
     return SettingsParameters.create(
-        namespace="full_test",
         config_files=temp_yaml_file,
         settings_class=TestSettings,
         env_prefix="FULL_",
@@ -116,7 +100,6 @@ def sample_settings_parameters():
     This is an alias for backwards compatibility with existing tests.
     """
     return SettingsParameters.create(
-        namespace="test",
         config_files="test_config.yaml",
         env_prefix="TEST_"
     )
@@ -140,13 +123,11 @@ def create_settings_parameters():
 
     Usage:
         params = create_settings_parameters(
-            namespace="my_test",
             settings_class=TestSettings,
             custom_key="custom_value"
         )
     """
     def _create(
-        namespace: str = None,
         config_files: Any = None,
         settings_class: type = TestSettings,
         env_prefix: str = None,
@@ -157,7 +138,6 @@ def create_settings_parameters():
         Create a SettingsParameters object with custom configuration.
 
         Args:
-            namespace: Namespace for settings
             config_files: Configuration files to use
             settings_class: Settings class to use
             env_prefix: Environment variable prefix
@@ -168,7 +148,6 @@ def create_settings_parameters():
             Configured SettingsParameters object
         """
         return SettingsParameters.create(
-            namespace=namespace,
             config_files=config_files,
             settings_class=settings_class,
             env_prefix=env_prefix,
@@ -188,17 +167,6 @@ def create_settings_parameters():
 ])
 def parametrized_settings_class(request):
     """Provides different settings classes for parametrized testing."""
-    return request.param
-
-
-@pytest.fixture(params=[
-    None,
-    "test_namespace",
-    "production",
-    "development"
-])
-def parametrized_namespace(request):
-    """Provides different namespaces for parametrized testing."""
     return request.param
 
 

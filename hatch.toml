@@ -15,13 +15,13 @@ installer = "uv"
 dependencies = [
     "cyclonedx-bom==4.5.0",
 
-    "mountainash_constants @      {root:uri}/temp/mountainash-constants",
-    "mountainash_utils_os @       {root:uri}/temp/mountainash-utils-os",
+    # "mountainash_constants @      {root:uri}/temp/mountainash-constants",
+    # "mountainash_utils_os @       {root:uri}/temp/mountainash-utils-os",
 ]
 [envs.build_github.scripts]
 sbom-all = "cyclonedx-py environment > ./sbom-full.json"
 sbom-direct = "cyclonedx-py requirements > ./sbom-direct.json"
-export-requirements = "hatch dep show requirements > ./requirements.txt"   
+export-requirements = "hatch dep show requirements > ./requirements.txt"
 
 #================
 # Env: default
@@ -52,8 +52,8 @@ dependencies = [
     "pytest-check==2.5.3",
     "pytest-cov==6.1.1",
 
-    "mountainash_constants @ {root:uri}/temp/mountainash-constants",
-    "mountainash_utils_os @ {root:uri}/temp/mountainash-utils-os",
+    # "mountainash_constants @ {root:uri}/temp/mountainash-constants",
+    # "mountainash_utils_os @ {root:uri}/temp/mountainash-utils-os",
 ]
 [envs.test_github.scripts]
 test = "pytest"
@@ -82,8 +82,8 @@ dependencies = [
     "pytest-timeout>=2.1.0",     # Test timing control
     "pytest-picked>=0.5.0",      # Changed files testing
 
-    "mountainash_constants @ {root:uri}/../mountainash-constants",
-    "mountainash_utils_os @ {root:uri}/../mountainash-utils-os",
+    # "mountainash_constants @ {root:uri}/../mountainash-constants",
+    # "mountainash_utils_os @ {root:uri}/../mountainash-utils-os",
 
 
 ]

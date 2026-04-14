@@ -17,7 +17,6 @@ class TestSettingsParameters:
 
     def test_initialization_with_defaults_succeeds(self):
         params = SettingsParameters()
-        assert params.namespace is None
         assert params.config_files is None
         assert params.settings_class is None
         assert params.env_prefix is None
@@ -27,17 +26,15 @@ class TestSettingsParameters:
     def test_initialization_with_all_parameters_succeeds(self):
         config_files = ["config.yaml"]
         kwargs = {"DEBUG": True}
-        
+
         params = SettingsParameters(
-            namespace="test",
             config_files=config_files,
             settings_class=MockSettings,
             env_prefix="TEST_",
             secrets_dir="/secrets",
             kwargs=kwargs
         )
-        
-        assert params.namespace == "test"
+
         assert params.config_files == config_files
         assert params.settings_class == MockSettings
         assert params.env_prefix == "TEST_"
@@ -47,23 +44,22 @@ class TestSettingsParameters:
     def test_dataclass_is_frozen(self):
         params = SettingsParameters()
         with pytest.raises(FrozenInstanceError):
-            params.namespace = "new_namespace"
+            params.config_files = ("new_config.yaml",)
 
     def test_hash_returns_consistent_value(self):
-        params1 = SettingsParameters(namespace="test", settings_class=MockSettings)
-        params2 = SettingsParameters(namespace="test", settings_class=MockSettings)
-        
+        params1 = SettingsParameters(settings_class=MockSettings)
+        params2 = SettingsParameters(settings_class=MockSettings)
+
         assert hash(params1) == hash(params2)
 
     def test_hash_different_for_different_params(self):
-        params1 = SettingsParameters(namespace="test1")
-        params2 = SettingsParameters(namespace="test2")
-        
+        params1 = SettingsParameters(env_prefix="PREFIX1_")
+        params2 = SettingsParameters(env_prefix="PREFIX2_")
+
         assert hash(params1) != hash(params2)
 
     def test_create_with_all_parameters_succeeds(self):
         params = SettingsParameters.create(
-            namespace="test",
             config_files="config.yaml",
             settings_class=MockSettings,
             env_prefix="TEST_",
@@ -71,8 +67,7 @@ class TestSettingsParameters:
             DEBUG=True,
             VERBOSE=False
         )
-        
-        assert params.namespace == "test"
+
         assert isinstance(params.config_files, tuple)
         assert params.settings_class == MockSettings
         assert params.env_prefix == "TEST_"
@@ -92,31 +87,21 @@ class TestSettingsParameters:
         assert len(params.config_files) == 2
 
     def test_create_with_no_kwargs_sets_kwargs_to_none(self):
-        params = SettingsParameters.create(namespace="test")
+        params = SettingsParameters.create()
         assert params.kwargs is None
-
-    def test_init_namespace_returns_default_for_none(self):
-        result = SettingsParameters._init_namespace(None)
-        assert result == "DEFAULT"
-
-    def test_init_namespace_returns_provided_value(self):
-        result = SettingsParameters._init_namespace("custom")
-        assert result == "custom"
 
     def test_to_dict_with_all_fields_populated(self):
         kwargs = {"DEBUG": True, "VERBOSE": False}
         params = SettingsParameters(
-            namespace="test",
             config_files=("config.yaml",),
             settings_class=MockSettings,
             env_prefix="TEST_",
             secrets_dir="/secrets",
             kwargs=kwargs
         )
-        
+
         result = params.to_dict()
-        
-        assert result["namespace"] == "test"
+
         assert result["config_files"] == ["config.yaml"]
         assert result["kwargs"] == kwargs
         assert result["settings_class"] == MockSettings
@@ -126,8 +111,7 @@ class TestSettingsParameters:
     def test_to_dict_with_none_values(self):
         params = SettingsParameters()
         result = params.to_dict()
-        
-        assert result["namespace"] is None
+
         assert result["config_files"] is None
         assert result["kwargs"] is None
         assert result["settings_class"] is None
@@ -137,7 +121,7 @@ class TestSettingsParameters:
     def test_get_settings_kwarg_names_with_mock_settings(self):
         params = SettingsParameters(settings_class=MockSettings)
         result = params._get_settings_kwarg_names()
-        
+
         expected_fields = {"field1", "field2", "field3"}
         assert result == expected_fields
 
@@ -149,14 +133,14 @@ class TestSettingsParameters:
     def test_get_settings_kwarg_names_with_provided_class(self):
         params = SettingsParameters()
         result = params._get_settings_kwarg_names(MockSettings)
-        
+
         expected_fields = {"field1", "field2", "field3"}
         assert result == expected_fields
 
     def test_get_valid_kwarg_names_includes_reserved_pydantic_kwargs(self):
         params = SettingsParameters(settings_class=MockSettings)
         result = params._get_valid_kwarg_names()
-        
+
         assert "field1" in result
         assert "field2" in result
         assert "field3" in result
@@ -170,10 +154,10 @@ class TestSettingsParameters:
             "_env_prefix": "TEST_",
             "invalid_field": "should_be_filtered"
         }
-        
+
         params = SettingsParameters(settings_class=MockSettings, kwargs=kwargs)
         result = params.get_attribute_settings_kwargs()
-        
+
         assert "field1" in result
         assert "field2" in result
         assert "_env_prefix" in result
@@ -186,10 +170,10 @@ class TestSettingsParameters:
             "_case_sensitive": True,
             "custom_field": "value"
         }
-        
+
         params = SettingsParameters(kwargs=kwargs)
         result = params.get_pydantic_settings_kwargs()
-        
+
         assert "_env_prefix" in result
         assert "_case_sensitive" in result
         assert "field1" not in result
@@ -202,10 +186,10 @@ class TestSettingsParameters:
             "field1": "value1",
             "_env_prefix": "TEST_"
         }
-        
+
         params = SettingsParameters(kwargs=kwargs)
         result = params.get_pydantic_modelconfig_kwargs()
-        
+
         assert "extra" in result
         assert "arbitrary_types_allowed" in result
         assert "field1" not in result
@@ -217,10 +201,10 @@ class TestSettingsParameters:
             "_env_prefix": "TEST_",
             "custom": "value"
         }
-        
+
         params = SettingsParameters(kwargs=kwargs)
         result = params.get_all_kwargs()
-        
+
         assert result == kwargs
 
     def test_get_all_kwargs_returns_empty_dict_when_none(self):

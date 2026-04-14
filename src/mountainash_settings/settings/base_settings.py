@@ -6,7 +6,7 @@ from importlib import import_module
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource, TomlConfigSettingsSource, YamlConfigSettingsSource, JsonConfigSettingsSource
 
-from mountainash_settings.settings_parameters import SettingsFileHandler, SettingsParameters, SettingsUtils, SettingsFiles
+from mountainash_settings.settings_parameters import SettingsFileHandler, SettingsParameters, SettingsKwargsHandler, SettingsFiles
 
 # T = TypeVar('T', bound='BaseSettings')
 T = TypeVar('T', BaseSettings, 'MountainAshBaseSettings')
@@ -23,7 +23,6 @@ class MountainAshBaseSettings(BaseSettings):
         )
 
     #Tracablility and repeatability
-    SETTINGS_NAMESPACE: str =                                         Field(default=None)
     SETTINGS_CLASS: Type =                                            Field(default=None)
     SETTINGS_CLASS_NAME: str =                                        Field(default=None)
 
@@ -43,6 +42,7 @@ class MountainAshBaseSettings(BaseSettings):
     def __init__(self,
                  config_files:          Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
                  settings_parameters:   Optional[SettingsParameters] = None,
+                 template_settings_parameters:   Optional[SettingsParameters] = None,
                  **kwargs) -> None:
 
 
@@ -54,7 +54,7 @@ class MountainAshBaseSettings(BaseSettings):
         )
 
         if settings_parameters is not None:
-            local_settings_params = SettingsUtils.merge_settings_parameter_objects(settings_parameters, local_settings_params)
+            local_settings_params = SettingsParameters.merge(settings_parameters, local_settings_params)
 
         obj_config_files: SettingsFiles = SettingsFileHandler.separate_config_files(local_settings_params.config_files)
 
@@ -97,7 +97,6 @@ class MountainAshBaseSettings(BaseSettings):
         #Update all vals from valid kwargs
         self.update_settings_from_dict(settings_dict=valid_attribute_kwargs)
 
-        setattr(self, "SETTINGS_NAMESPACE",             local_settings_params.namespace)
         setattr(self, "SETTINGS_CLASS",                 local_settings_params.settings_class or MountainAshBaseSettings)
         setattr(self, "SETTINGS_CLASS_NAME",            local_settings_params.settings_class.__name__ if local_settings_params.settings_class else "MountainAshBaseSettings")
         setattr(self, "SETTINGS_SOURCE_ENV_PREFIX",     local_settings_params.env_prefix)
@@ -134,7 +133,6 @@ class MountainAshBaseSettings(BaseSettings):
     def get_settings(cls,
                     settings_parameters:   Optional[SettingsParameters] = None,
                     settings_class:        Optional[Type[T]] = None,
-                    settings_namespace:    Optional[str] = None,
                     config_files:          Optional[Union[UPath, str, List[UPath|str]]]  = None,
                     env_prefix:            Optional[str] = None,
                     **kwargs
@@ -152,7 +150,6 @@ class MountainAshBaseSettings(BaseSettings):
         settings_instance: Any =  get_settings(
                                     settings_parameters = settings_parameters,
                                     settings_class = settings_class,
-                                    settings_namespace = settings_namespace,
                                     config_files = config_files,
                                     env_prefix=env_prefix,
                                     **kwargs
@@ -173,8 +170,7 @@ class MountainAshBaseSettings(BaseSettings):
 
         """
 
-        return hash((self.SETTINGS_NAMESPACE,
-                     self.SETTINGS_CLASS_NAME,
+        return hash((self.SETTINGS_CLASS_NAME,
                      tuple(self.SETTINGS_SOURCE_ENV_FILES) if self.SETTINGS_SOURCE_ENV_FILES else None,
                      tuple(self.SETTINGS_SOURCE_ENV_PREFIX) if self.SETTINGS_SOURCE_ENV_PREFIX else None,
                      tuple(self.SETTINGS_SOURCE_YAML_FILES) if self.SETTINGS_SOURCE_YAML_FILES else None,
@@ -195,7 +191,7 @@ class MountainAshBaseSettings(BaseSettings):
                     raise AttributeError(f"The object does not have an attribute named '{field_name}'")
         return mapping
 
-    def init_setting_from_template(self, template_str:str, current_value: Optional[str] = None, reinitialise: bool = False):
+    def init_setting_from_template(self, template_str:str, current_value: Optional[str] = None, reinitialise: Optional[bool] = False):
 
         """Initializes a setting value from a template string,
         replacing placeholders with  values from the settings object.
@@ -248,7 +244,7 @@ class MountainAshBaseSettings(BaseSettings):
             settings_dict: The dictionary of settings to update.
         """
 
-        settings_dict = SettingsUtils.format_kwargs_dict(p_kwargs=settings_dict)
+        settings_dict = SettingsKwargsHandler.format_kwargs_dict(p_kwargs=settings_dict)
 
         if settings_dict is None:
             return None
@@ -261,7 +257,10 @@ class MountainAshBaseSettings(BaseSettings):
 
         setattr(self, 'SETTINGS_SOURCE_KWARGS', settings_dict)
 
-    def post_init(self, reinitialise: bool = False) -> None:
+    def post_init(self,
+                template_settings_parameters: Optional[SettingsParameters] = None,
+                reinitialise: Optional[bool] = False
+    ) -> None:
         """
         Hook for post-initialization processing.
 
@@ -297,14 +296,12 @@ class MountainAshBaseSettings(BaseSettings):
             config_files += self.SETTINGS_SOURCE_JSON_FILES
 
 
-        existing_namespace =        self.SETTINGS_NAMESPACE or None
-        existing_config_files =     SettingsUtils.format_config_file_list(config_files=config_files)
-        existing_kwargs =           SettingsUtils.format_kwargs_dict(p_kwargs=self.SETTINGS_SOURCE_KWARGS)
+        existing_config_files =     SettingsFileHandler.format_config_file_list(config_files=config_files)
+        existing_kwargs =           SettingsKwargsHandler.format_kwargs_dict(p_kwargs=self.SETTINGS_SOURCE_KWARGS)
         existing_settings_class =   self.SETTINGS_CLASS or None
         existing_env_prefix =       self.SETTINGS_SOURCE_ENV_PREFIX or None
 
         params: SettingsParameters = SettingsParameters.create(
-            namespace= existing_namespace,
             settings_class=     existing_settings_class,
             config_files=       existing_config_files,
             kwargs=             existing_kwargs,
