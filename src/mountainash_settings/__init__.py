@@ -5,6 +5,33 @@ from .settings.base_settings import MountainAshBaseSettings
 from .settings_cache.settings_functions import get_settings, get_settings_manager
 from .settings_cache.settings_manager import SettingsManager
 
+# --- Profiles + auth (2026-04-16 promotion) ---------------------------------
+
+from .profiles import (
+    MISSING,
+    DescriptorProfile,
+    ParameterSpec,
+    ProfileDescriptor,
+    Registry,
+    descriptor_invariants_for,
+)
+from .auth import (
+    AUTH_TO_DRIVER_KWARGS,
+    AuthSpec,
+    AzureADAuth,
+    CertificateAuth,
+    IAMAuth,
+    JWTAuth,
+    KerberosAuth,
+    NoAuth,
+    OAuth2Auth,
+    PasswordAuth,
+    ServiceAccountAuth,
+    TokenAuth,
+    WindowsAuth,
+    auth_to_driver_kwargs,
+)
+
 __all__ = [
     "__version__",
 
@@ -15,4 +42,28 @@ __all__ = [
 
     "get_settings",
     "get_settings_manager",
-    ]
+
+    # Profiles
+    "MISSING",
+    "DescriptorProfile",
+    "ParameterSpec",
+    "ProfileDescriptor",
+    "Registry",
+    "descriptor_invariants_for",
+
+    # Auth
+    "AUTH_TO_DRIVER_KWARGS",
+    "AuthSpec",
+    "AzureADAuth",
+    "CertificateAuth",
+    "IAMAuth",
+    "JWTAuth",
+    "KerberosAuth",
+    "NoAuth",
+    "OAuth2Auth",
+    "PasswordAuth",
+    "ServiceAccountAuth",
+    "TokenAuth",
+    "WindowsAuth",
+    "auth_to_driver_kwargs",
+]

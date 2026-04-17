@@ -1,7 +1,6 @@
 from typing import Optional, Any, Type, Dict
 from importlib import import_module
 
-from pydantic_settings import BaseSettings
 
 from ..settings_parameters import SettingsParameters, SettingsKwargsHandler
 from ..settings import MountainAshBaseSettings

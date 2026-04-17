@@ -1,29 +1,28 @@
 name: Pytest
 
-on:  
+on:
   pull_request_target:
     paths:
-      - 'src/mountainash_settings/**'          
+      - "src/mountainash_settings/**"
   workflow_dispatch:
     inputs:
       fallback_branch:
-        description: 'Fallback branch to use'
+        description: "Fallback branch to use"
         required: true
-        default: 'develop'
+        default: "develop"
         type: choice
         options:
-        - develop
-        - main
+          - develop
+          - main
 
 jobs:
-
   test:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04]
-        python-version: [ "3.12"] #, "3.8", "3.9", "3.10","3.11",]
+        python-version: ["3.12"] #, "3.8", "3.9", "3.10","3.11",]
 
     steps:
       # Current Branch
@@ -41,33 +40,32 @@ jobs:
           else
             echo "FALLBACK_BRANCH=develop" >> $GITHUB_ENV
           fi
-          
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.BRANCH_NAME }}
           fetch-depth: 0
 
-
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }} 
+          python-version: ${{ matrix.python-version }}
 
       # Checkout Mountain Ash Dependencies
-      - name: Load Dependencies
-        id: deps
-        uses: ./.github/actions/load-dependencies
-        with:
-          config-path: .github/config/mountainash_dependencies.yml
+      # - name: Load Dependencies
+      #   id: deps
+      #   uses: ./.github/actions/load-dependencies
+      #   with:
+      #     config-path: .github/config/mountainash_dependencies.yml
 
-      - name: Checkout Dependencies
-        uses: ./.github/actions/checkout-dependencies
-        with:
-          dependencies: ${{ steps.deps.outputs.dependencies }}
-          target-branch: ${{ env.BRANCH_NAME }}
-          default-branch: ${{ env.FALLBACK_BRANCH }}
-          token: ${{ secrets.CLONE_PRIVATE_REPOS_TOKEN }}
-          org-name: ${{ env.ORGNAME }}
+      # - name: Checkout Dependencies
+      #   uses: ./.github/actions/checkout-dependencies
+      #   with:
+      #     dependencies: ${{ steps.deps.outputs.dependencies }}
+      #     target-branch: ${{ env.BRANCH_NAME }}
+      #     default-branch: ${{ env.FALLBACK_BRANCH }}
+      #     token: ${{ secrets.CLONE_PRIVATE_REPOS_TOKEN }}
+      #     org-name: ${{ env.ORGNAME }}
 
       # Install Hatch
       - name: Install Hatch
@@ -75,7 +73,7 @@ jobs:
 
       - name: Create virtual environment
         run: hatch env create test_github
-        
+
       #Run Pytest
       # - name: Run tests
       #   run: hatch run test_github:test
@@ -94,4 +92,4 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}          
+          token: ${{ secrets.CODECOV_TOKEN }}
