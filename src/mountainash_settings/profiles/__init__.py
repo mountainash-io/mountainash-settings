@@ -4,6 +4,13 @@
 from __future__ import annotations
 
 from .descriptor import MISSING, ParameterSpec, ProfileDescriptor
+from .profile import DescriptorProfile
 from .registry import Registry
 
-__all__ = ["MISSING", "ParameterSpec", "ProfileDescriptor", "Registry"]
+__all__ = [
+    "MISSING",
+    "DescriptorProfile",
+    "ParameterSpec",
+    "ProfileDescriptor",
+    "Registry",
+]
