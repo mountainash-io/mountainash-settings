@@ -11,9 +11,11 @@ from .none import NoAuth
 from .oauth2 import OAuth2Auth
 from .password import PasswordAuth
 from .service_account import ServiceAccountAuth
+from .dispatch import AUTH_TO_DRIVER_KWARGS, auth_to_driver_kwargs
 from .token import JWTAuth, TokenAuth
 
 __all__ = [
+    "AUTH_TO_DRIVER_KWARGS",
     "AuthSpec",
     "AzureADAuth",
     "CertificateAuth",
@@ -26,4 +28,5 @@ __all__ = [
     "ServiceAccountAuth",
     "TokenAuth",
     "WindowsAuth",
+    "auth_to_driver_kwargs",
 ]
