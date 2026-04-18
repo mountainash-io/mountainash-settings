@@ -752,3 +752,13 @@ class TestCanonicalAssignmentSemantics:
         p = _SampleProfile(TOKEN="raw", auth=NoAuth())  # type: ignore[call-arg]
         p.LABEL = "lower"  # type: ignore[attr-defined]
         assert p.LABEL == "LOWER"  # type: ignore[attr-defined]
+
+    @pytest.mark.unit
+    def test_meta_field_bookkeeping_still_works(self):
+        """Change B refactors __init__ meta-field writes to
+        object.__setattr__. Confirm the bookkeeping values still land."""
+        from fixtures.settings_classes import TestSettings
+        s = TestSettings(TEST_VAL_1="x", TEST_VAL_2="y")
+        assert s.SETTINGS_CLASS is TestSettings
+        assert s.SETTINGS_CLASS_NAME == "TestSettings"
+        assert s.SETTINGS_SOURCE_KWARGS == {"TEST_VAL_1": "x", "TEST_VAL_2": "y"}
