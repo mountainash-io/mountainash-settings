@@ -684,7 +684,6 @@ class TestCanonicalAssignmentSemantics:
     """Validate_assignment=True restores pydantic's declared-type contract."""
 
     @pytest.mark.unit
-    @pytest.mark.xfail(reason="Enabled by Change A in Task 2", strict=True)
     def test_secretstr_wraps_on_direct_setattr(self):
         s = _SecretSettings()
         # Raw-str assignment is the scenario under test:
@@ -694,7 +693,6 @@ class TestCanonicalAssignmentSemantics:
         assert s.PASSWORD.get_secret_value() == "plain"
 
     @pytest.mark.unit
-    @pytest.mark.xfail(reason="Enabled by Change A in Task 2", strict=True)
     def test_enum_coerces_on_direct_setattr(self):
         s = _EnumSettings()
         # Raw-str assignment is the scenario under test:
@@ -703,14 +701,12 @@ class TestCanonicalAssignmentSemantics:
         assert s.MODE is _Mode.INCREMENTAL
 
     @pytest.mark.unit
-    @pytest.mark.xfail(reason="Enabled by Change A in Task 2", strict=True)
     def test_aftervalidator_transforms_on_direct_setattr(self):
         s = _TransformSettings()
         s.NAME = "lower"
         assert s.NAME == "LOWER"
 
     @pytest.mark.unit
-    @pytest.mark.xfail(reason="Enabled by Change A in Task 2", strict=True)
     def test_update_settings_from_dict_wraps_secretstr(self):
         s = _SecretSettings()
         s.update_settings_from_dict({"PASSWORD": "plain"})
@@ -718,21 +714,18 @@ class TestCanonicalAssignmentSemantics:
         assert s.PASSWORD.get_secret_value() == "plain"
 
     @pytest.mark.unit
-    @pytest.mark.xfail(reason="Enabled by Change A in Task 2", strict=True)
     def test_update_settings_from_dict_coerces_enum(self):
         s = _EnumSettings()
         s.update_settings_from_dict({"MODE": "incremental"})
         assert s.MODE is _Mode.INCREMENTAL
 
     @pytest.mark.unit
-    @pytest.mark.xfail(reason="Enabled by Change A in Task 2", strict=True)
     def test_update_settings_from_dict_applies_transform(self):
         s = _TransformSettings()
         s.update_settings_from_dict({"NAME": "lower"})
         assert s.NAME == "LOWER"
 
     @pytest.mark.unit
-    @pytest.mark.xfail(reason="Enabled by Change A in Task 2", strict=True)
     def test_descriptor_profile_secret_on_setattr(self):
         # Fields (TOKEN/MODE/LABEL) are installed at runtime by
         # DescriptorProfile.__pydantic_init_subclass__; pyright has no
@@ -743,7 +736,6 @@ class TestCanonicalAssignmentSemantics:
         assert p.TOKEN.get_secret_value() == "new"  # type: ignore[attr-defined]
 
     @pytest.mark.unit
-    @pytest.mark.xfail(reason="Enabled by Change A in Task 2", strict=True)
     def test_descriptor_profile_enum_on_setattr(self):
         # Fields (TOKEN/MODE/LABEL) are installed at runtime by
         # DescriptorProfile.__pydantic_init_subclass__; pyright has no
@@ -753,7 +745,6 @@ class TestCanonicalAssignmentSemantics:
         assert p.MODE is _Mode.INCREMENTAL  # type: ignore[attr-defined]
 
     @pytest.mark.unit
-    @pytest.mark.xfail(reason="Enabled by Change A in Task 2", strict=True)
     def test_descriptor_profile_validator_transform_on_setattr(self):
         # Fields (TOKEN/MODE/LABEL) are installed at runtime by
         # DescriptorProfile.__pydantic_init_subclass__; pyright has no

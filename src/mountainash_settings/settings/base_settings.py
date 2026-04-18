@@ -17,8 +17,7 @@ class MountainAshBaseSettings(BaseSettings):
             extra="ignore",
             validate_default=False,
             arbitrary_types_allowed=True,
-            # validate_assignment=True,
-            # validate_assignment=False,
+            validate_assignment=True,
 
         )
 
