@@ -175,3 +175,6 @@ htmlcov/
 #testing artifacts
 junit.*
 coverage.*
+
+# Local hiivmind workspace symlinks (user-specific)
+.hiivmind/
