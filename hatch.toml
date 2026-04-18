@@ -28,6 +28,7 @@ export-requirements = "hatch dep show requirements > ./requirements.txt"
 #================
 [envs.default]
 installer = "uv"
+path = ".venv"
 dependencies = []
 
 #================
