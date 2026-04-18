@@ -109,7 +109,7 @@ class DescriptorProfile(MountainAshBaseSettings):
     def post_init(
         self,
         template_settings_parameters: t.Any = None,
-        reinitialise: bool = False,
+        reinitialise: t.Optional[bool] = False,
     ) -> None:
         """Resolve any ``ParameterSpec.template`` fields.
 
