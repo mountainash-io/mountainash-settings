@@ -756,9 +756,43 @@ class TestCanonicalAssignmentSemantics:
     @pytest.mark.unit
     def test_meta_field_bookkeeping_still_works(self):
         """Change B refactors __init__ meta-field writes to
-        object.__setattr__. Confirm the bookkeeping values still land."""
+        object.__setattr__. Confirm the bookkeeping values still land on
+        both direct MountainAshBaseSettings subclasses and
+        DescriptorProfile subclasses (which inherit the __init__ path)."""
         from fixtures.settings_classes import TestSettings
         s = TestSettings(TEST_VAL_1="x", TEST_VAL_2="y")
         assert s.SETTINGS_CLASS is TestSettings
         assert s.SETTINGS_CLASS_NAME == "TestSettings"
         assert s.SETTINGS_SOURCE_KWARGS == {"TEST_VAL_1": "x", "TEST_VAL_2": "y"}
+
+        # DescriptorProfile subclasses inherit MountainAshBaseSettings.__init__,
+        # so the same meta-field bookkeeping must land on them too.
+        # (SETTINGS_SOURCE_KWARGS is not asserted here — profile construction
+        # passes `auth` and SecretStr-wrapped fields, producing a post-validation
+        # kwargs shape that differs from the raw dict. The CLASS/CLASS_NAME
+        # assertions are sufficient witnesses that the __init__ path ran.)
+        p = _SampleProfile(TOKEN="raw", auth=NoAuth())  # type: ignore[call-arg]
+        assert p.SETTINGS_CLASS is _SampleProfile
+        assert p.SETTINGS_CLASS_NAME == "_SampleProfile"
+
+    @pytest.mark.unit
+    def test_validate_assignment_is_enabled(self):
+        """Regression guard — canonical assignment validation must stay on.
+
+        If this assertion fires, someone disabled validate_assignment on
+        MountainAshBaseSettings. Do not 'fix' by deleting this test.
+        See docs/superpowers/specs/2026-04-18-setattr-bypass-fix-design.md
+        """
+        assert MountainAshBaseSettings.model_config.get("validate_assignment") is True
+
+    @pytest.mark.unit
+    def test_validate_assignment_is_enabled_on_descriptor_profile(self):
+        """Regression guard — DescriptorProfile must not override
+        model_config in a way that drops validate_assignment.
+
+        Pydantic's model_config is a class attribute, so a subclass that
+        redeclares it fully shadows the parent. validate_assignment=True
+        must be carried forward explicitly (or the subclass must leave
+        model_config alone and inherit via MRO).
+        """
+        assert DescriptorProfile.model_config.get("validate_assignment") is True

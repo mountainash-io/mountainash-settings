@@ -12,6 +12,15 @@ from mountainash_settings.settings_parameters import SettingsFileHandler, Settin
 T = TypeVar('T', BaseSettings, 'MountainAshBaseSettings')
 
 class MountainAshBaseSettings(BaseSettings):
+    """Base settings class with template support, multi-format config files,
+    and smart caching.
+
+    Assignments to declared fields after construction are revalidated via
+    pydantic's field-validator pipeline — ``SecretStr`` wrapping, enum
+    coercion, and ``AfterValidator`` transforms all run on every ``setattr``.
+    This is canonical pydantic v2 behaviour; see
+    ``docs/superpowers/specs/2026-04-18-setattr-bypass-fix-design.md``.
+    """
 
     model_config = SettingsConfigDict(
             extra="ignore",
@@ -96,11 +105,15 @@ class MountainAshBaseSettings(BaseSettings):
         # Meta-field bookkeeping only. super().__init__ above already applied
         # valid_attribute_kwargs under full validation — re-applying them via
         # update_settings_from_dict would overwrite validated values with raw
-        # input (see setattr-bypass-limitation spec, 2026-04-18).
+        # input (see 2026-04-18-setattr-bypass-fix-design.md).
         #
         # object.__setattr__ is intentional: these fields are harness
         # bookkeeping, not user config, and with validate_assignment=True on
         # model_config we want to skip revalidation on them explicitly.
+        # Note: this also bypasses __pydantic_fields_set__ tracking, so these
+        # meta-fields do not appear in model_fields_set and are dropped by
+        # model_dump(exclude_unset=True). That matches the pre-Task-2
+        # behaviour and is intentional — bookkeeping is not model state.
         object.__setattr__(self, "SETTINGS_SOURCE_KWARGS",    valid_attribute_kwargs)
         object.__setattr__(self, "SETTINGS_CLASS",            local_settings_params.settings_class or MountainAshBaseSettings)
         object.__setattr__(self, "SETTINGS_CLASS_NAME",       local_settings_params.settings_class.__name__ if local_settings_params.settings_class else "MountainAshBaseSettings")
