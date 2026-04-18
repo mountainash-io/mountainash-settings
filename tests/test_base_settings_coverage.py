@@ -625,3 +625,139 @@ class TestEdgeCases:
         # Should produce equivalent parameters
         assert extracted1.settings_class == extracted2.settings_class
         assert extracted1.kwargs == extracted2.kwargs
+
+
+# ---------------------------------------------------------------------------
+# Canonical pydantic assignment semantics
+# ---------------------------------------------------------------------------
+# See docs/superpowers/specs/2026-04-18-setattr-bypass-fix-design.md
+# Tests codify the contract restored by enabling validate_assignment=True.
+# ---------------------------------------------------------------------------
+
+from enum import Enum
+from typing import Annotated
+
+from pydantic import AfterValidator, Field, SecretStr
+
+from mountainash_settings import MountainAshBaseSettings
+from mountainash_settings.auth import NoAuth
+from mountainash_settings.profiles import (
+    DescriptorProfile,
+    ParameterSpec,
+    ProfileDescriptor,
+)
+
+
+class _Mode(str, Enum):
+    FULL = "full"
+    INCREMENTAL = "incremental"
+
+
+class _SecretSettings(MountainAshBaseSettings):
+    PASSWORD: SecretStr = Field(default=SecretStr(""))
+
+
+class _EnumSettings(MountainAshBaseSettings):
+    MODE: _Mode = Field(default=_Mode.FULL)
+
+
+class _TransformSettings(MountainAshBaseSettings):
+    NAME: Annotated[str, AfterValidator(str.upper)] = Field(default="")
+
+
+class _SampleProfile(DescriptorProfile):
+    __descriptor__ = ProfileDescriptor(
+        name="sample",
+        provider_type="sample",
+        parameters=[
+            ParameterSpec(name="TOKEN", type=str, tier="core", secret=True),
+            ParameterSpec(name="MODE", type=_Mode, tier="core",
+                          default=_Mode.FULL),
+            ParameterSpec(name="LABEL", type=str, tier="core", default="x",
+                          validator=str.upper),
+        ],
+        auth_modes=[NoAuth],
+    )
+
+
+class TestCanonicalAssignmentSemantics:
+    """Validate_assignment=True restores pydantic's declared-type contract."""
+
+    @pytest.mark.unit
+    @pytest.mark.xfail(reason="Enabled by Change A in Task 2", strict=True)
+    def test_secretstr_wraps_on_direct_setattr(self):
+        s = _SecretSettings()
+        # Raw-str assignment is the scenario under test:
+        # validate_assignment=True should wrap it into SecretStr at runtime.
+        s.PASSWORD = "plain"  # type: ignore[assignment]
+        assert isinstance(s.PASSWORD, SecretStr)
+        assert s.PASSWORD.get_secret_value() == "plain"
+
+    @pytest.mark.unit
+    @pytest.mark.xfail(reason="Enabled by Change A in Task 2", strict=True)
+    def test_enum_coerces_on_direct_setattr(self):
+        s = _EnumSettings()
+        # Raw-str assignment is the scenario under test:
+        # validate_assignment=True should coerce it to _Mode at runtime.
+        s.MODE = "incremental"  # type: ignore[assignment]
+        assert s.MODE is _Mode.INCREMENTAL
+
+    @pytest.mark.unit
+    @pytest.mark.xfail(reason="Enabled by Change A in Task 2", strict=True)
+    def test_aftervalidator_transforms_on_direct_setattr(self):
+        s = _TransformSettings()
+        s.NAME = "lower"
+        assert s.NAME == "LOWER"
+
+    @pytest.mark.unit
+    @pytest.mark.xfail(reason="Enabled by Change A in Task 2", strict=True)
+    def test_update_settings_from_dict_wraps_secretstr(self):
+        s = _SecretSettings()
+        s.update_settings_from_dict({"PASSWORD": "plain"})
+        assert isinstance(s.PASSWORD, SecretStr)
+        assert s.PASSWORD.get_secret_value() == "plain"
+
+    @pytest.mark.unit
+    @pytest.mark.xfail(reason="Enabled by Change A in Task 2", strict=True)
+    def test_update_settings_from_dict_coerces_enum(self):
+        s = _EnumSettings()
+        s.update_settings_from_dict({"MODE": "incremental"})
+        assert s.MODE is _Mode.INCREMENTAL
+
+    @pytest.mark.unit
+    @pytest.mark.xfail(reason="Enabled by Change A in Task 2", strict=True)
+    def test_update_settings_from_dict_applies_transform(self):
+        s = _TransformSettings()
+        s.update_settings_from_dict({"NAME": "lower"})
+        assert s.NAME == "LOWER"
+
+    @pytest.mark.unit
+    @pytest.mark.xfail(reason="Enabled by Change A in Task 2", strict=True)
+    def test_descriptor_profile_secret_on_setattr(self):
+        # Fields (TOKEN/MODE/LABEL) are installed at runtime by
+        # DescriptorProfile.__pydantic_init_subclass__; pyright has no
+        # static view of them.
+        p = _SampleProfile(TOKEN="raw", auth=NoAuth())  # type: ignore[call-arg]
+        p.TOKEN = "new"  # type: ignore[attr-defined]
+        assert isinstance(p.TOKEN, SecretStr)  # type: ignore[attr-defined]
+        assert p.TOKEN.get_secret_value() == "new"  # type: ignore[attr-defined]
+
+    @pytest.mark.unit
+    @pytest.mark.xfail(reason="Enabled by Change A in Task 2", strict=True)
+    def test_descriptor_profile_enum_on_setattr(self):
+        # Fields (TOKEN/MODE/LABEL) are installed at runtime by
+        # DescriptorProfile.__pydantic_init_subclass__; pyright has no
+        # static view of them.
+        p = _SampleProfile(TOKEN="raw", auth=NoAuth())  # type: ignore[call-arg]
+        p.MODE = "incremental"  # type: ignore[attr-defined]
+        assert p.MODE is _Mode.INCREMENTAL  # type: ignore[attr-defined]
+
+    @pytest.mark.unit
+    @pytest.mark.xfail(reason="Enabled by Change A in Task 2", strict=True)
+    def test_descriptor_profile_validator_transform_on_setattr(self):
+        # Fields (TOKEN/MODE/LABEL) are installed at runtime by
+        # DescriptorProfile.__pydantic_init_subclass__; pyright has no
+        # static view of them.
+        p = _SampleProfile(TOKEN="raw", auth=NoAuth())  # type: ignore[call-arg]
+        p.LABEL = "lower"  # type: ignore[attr-defined]
+        assert p.LABEL == "LOWER"  # type: ignore[attr-defined]
