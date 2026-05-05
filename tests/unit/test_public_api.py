@@ -28,3 +28,18 @@ def test_auth_surface_imports():
     )
     assert issubclass(PasswordAuth, AuthSpec)
     assert callable(auth_to_driver_kwargs)
+
+
+@pytest.mark.unit
+def test_secrets_surface_imports():
+    from mountainash_settings import (
+        SecretsResolver,
+        register_secrets_resolver,
+        get_secrets_resolver,
+        replace_secrets_resolver,
+        clear_secrets_registry,
+    )
+    assert callable(register_secrets_resolver)
+    assert callable(get_secrets_resolver)
+    assert callable(replace_secrets_resolver)
+    assert callable(clear_secrets_registry)
