@@ -16,8 +16,6 @@ from __future__ import annotations
 
 import typing as t
 
-import pytest
-
 from mountainash_settings.auth.base import AuthSpec
 
 from .registry import Registry
@@ -30,6 +28,9 @@ def descriptor_invariants_for(registry: Registry) -> type:
 
     The returned class is named ``TestDescriptorInvariants_<registry_name>``.
     """
+
+    # Lazy import: keeps ``mountainash_settings`` importable in non-test envs.
+    import pytest
 
     entries = list(registry.descriptors.items())
     ids = list(registry.descriptors.keys()) or [""]
