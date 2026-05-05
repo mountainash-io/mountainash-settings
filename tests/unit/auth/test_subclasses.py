@@ -10,6 +10,7 @@ from mountainash_settings.auth import (
     JWTAuth,
     KerberosAuth,
     NoAuth,
+    OAuth1Auth,
     OAuth2Auth,
     OAuth2AuthCodeAuth,
     PasswordAuth,
@@ -28,6 +29,7 @@ class TestAuthDiscriminator:
             (PasswordAuth, "password"),
             (TokenAuth, "token"),
             (JWTAuth, "jwt"),
+            (OAuth1Auth, "oauth1"),
             (OAuth2Auth, "oauth2"),
             (OAuth2AuthCodeAuth, "oauth2_authcode"),
             (ServiceAccountAuth, "service_account"),
@@ -43,6 +45,8 @@ class TestAuthDiscriminator:
             instance = cls(username="u", password=SecretStr("p"))
         elif cls in (TokenAuth, JWTAuth):
             instance = cls(token=SecretStr("t"))
+        elif cls is OAuth1Auth:
+            instance = cls(consumer_key="ck", consumer_secret=SecretStr("cs"))
         elif cls is OAuth2AuthCodeAuth:
             instance = cls(client_id="cid", client_secret=SecretStr("csec"))
         else:
@@ -85,6 +89,35 @@ class TestOAuth2Auth:
     def test_token_is_secret(self):
         auth = OAuth2Auth(token="t")
         assert isinstance(auth.token, SecretStr)
+
+
+@pytest.mark.unit
+class TestOAuth1Auth:
+    def test_requires_consumer_key_and_secret(self):
+        with pytest.raises(ValidationError):
+            OAuth1Auth()  # type: ignore[call-arg]
+
+    def test_consumer_secret_is_secretstr(self):
+        auth = OAuth1Auth(consumer_key="ck", consumer_secret="secret")
+        assert isinstance(auth.consumer_secret, SecretStr)
+        assert auth.consumer_secret.get_secret_value() == "secret"
+
+    def test_optional_fields_default_none(self):
+        auth = OAuth1Auth(consumer_key="ck", consumer_secret="s")
+        assert auth.access_token is None
+        assert auth.access_token_secret is None
+
+    def test_access_token_is_secretstr(self):
+        auth = OAuth1Auth(
+            consumer_key="ck", consumer_secret="s", access_token="tok"
+        )
+        assert isinstance(auth.access_token, SecretStr)
+
+    def test_access_token_secret_is_secretstr(self):
+        auth = OAuth1Auth(
+            consumer_key="ck", consumer_secret="s", access_token_secret="sec"
+        )
+        assert isinstance(auth.access_token_secret, SecretStr)
 
 
 @pytest.mark.unit

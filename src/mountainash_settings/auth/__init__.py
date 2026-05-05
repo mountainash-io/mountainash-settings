@@ -8,6 +8,7 @@ from .certificate import CertificateAuth
 from .iam import IAMAuth
 from .kerberos import KerberosAuth
 from .none import NoAuth
+from .oauth1 import OAuth1Auth
 from .oauth2 import OAuth2Auth
 from .oauth2_authcode import OAuth2AuthCodeAuth
 from .password import PasswordAuth
@@ -24,6 +25,7 @@ __all__ = [
     "JWTAuth",
     "KerberosAuth",
     "NoAuth",
+    "OAuth1Auth",
     "OAuth2Auth",
     "OAuth2AuthCodeAuth",
     "PasswordAuth",
