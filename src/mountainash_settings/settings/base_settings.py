@@ -41,6 +41,7 @@ class MountainAshBaseSettings(BaseSettings):
     SETTINGS_SOURCE_JSON_FILES: Optional[Union[Any, str, List[Any|str]]] =      Field(default=None)
     SETTINGS_SOURCE_KWARGS: Optional[Dict[str,Any]] =                           Field(default=None)
     SETTINGS_SOURCE_SECRETS_DIR: Optional[Dict[str,Any]] =                      Field(default=None)
+    SETTINGS_SOURCE_SECRETS_PROVIDER: Optional[str] =                              Field(default=None)
 
 
     # protected_attributes: List[str] = ['BATCH_TIER', 'BATCH_VERSION']
@@ -77,6 +78,13 @@ class MountainAshBaseSettings(BaseSettings):
         valid_attribute_kwargs: Dict[str, Any] =            local_settings_params.get_attribute_settings_kwargs(settings_class=self.__class__)
         valid_pydantic_kwargs: Dict[str, Any] =             local_settings_params.get_pydantic_settings_kwargs()
 
+
+        # Resolve secret: prefixed values in kwargs before pydantic validation
+        if local_settings_params.secrets_provider:
+            from mountainash_settings.secrets.registry import get_secrets_resolver
+            from mountainash_settings.secrets.resolve import resolve_secrets_in_dict
+            _secrets_resolver = get_secrets_resolver(local_settings_params.secrets_provider)
+            valid_attribute_kwargs = resolve_secrets_in_dict(valid_attribute_kwargs, _secrets_resolver)
 
         # Handle non env config files via model_config
         self.model_config["yaml_file"] = obj_config_files.yaml_files or None
@@ -123,6 +131,14 @@ class MountainAshBaseSettings(BaseSettings):
         object.__setattr__(self, "SETTINGS_SOURCE_TOML_FILES", obj_config_files.toml_files)
         object.__setattr__(self, "SETTINGS_SOURCE_JSON_FILES", obj_config_files.json_files)
         object.__setattr__(self, "SETTINGS_SOURCE_SECRETS_DIR", local_settings_params.secrets_dir)
+        object.__setattr__(self, "SETTINGS_SOURCE_SECRETS_PROVIDER", local_settings_params.secrets_provider)
+
+        # Resolve secret: prefixed values loaded from config files
+        if local_settings_params.secrets_provider:
+            from mountainash_settings.secrets.registry import get_secrets_resolver as _get_resolver
+            from mountainash_settings.secrets.resolve import resolve_secrets_on_instance
+            _secrets_resolver = _get_resolver(local_settings_params.secrets_provider)
+            resolve_secrets_on_instance(self, _secrets_resolver)
 
         # Initialise templated variables
         self.post_init()
@@ -318,12 +334,14 @@ class MountainAshBaseSettings(BaseSettings):
         existing_kwargs =           SettingsKwargsHandler.format_kwargs_dict(p_kwargs=self.SETTINGS_SOURCE_KWARGS)
         existing_settings_class =   self.SETTINGS_CLASS or None
         existing_env_prefix =       self.SETTINGS_SOURCE_ENV_PREFIX or None
+        existing_secrets_provider =  self.SETTINGS_SOURCE_SECRETS_PROVIDER or None
 
         params: SettingsParameters = SettingsParameters.create(
             settings_class=     existing_settings_class,
             config_files=       existing_config_files,
             kwargs=             existing_kwargs,
-            env_prefix=         existing_env_prefix)
+            env_prefix=         existing_env_prefix,
+            secrets_provider=   existing_secrets_provider)
 
         return params
 
