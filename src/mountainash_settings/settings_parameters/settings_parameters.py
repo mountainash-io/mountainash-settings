@@ -49,6 +49,7 @@ class SettingsParameters():
     env_prefix:     Optional[str] = None
     secrets_dir:    Optional[str] = None
     kwargs:         Optional[Dict[str,Any]] = None
+    secrets_provider: Optional[str] = None
 
     # _reserved_mountainash_kwargs = ["_dummy"]
 
@@ -122,6 +123,7 @@ class SettingsParameters():
             self.settings_class,
             self.env_prefix,
             self.secrets_dir,
+            self.secrets_provider,
             # Deliberately exclude: self.kwargs
         ])
 
@@ -153,7 +155,8 @@ class SettingsParameters():
             self_hashable_config_files == other_hashable_config_files and
             self.settings_class == other.settings_class and
             self.env_prefix == other.env_prefix and
-            self.secrets_dir == other.secrets_dir
+            self.secrets_dir == other.secrets_dir and
+            self.secrets_provider == other.secrets_provider
             # Deliberately exclude: kwargs comparison
         )
 
@@ -175,6 +178,7 @@ class SettingsParameters():
                settings_class: Optional[Type[BaseSettings]] = None,
                env_prefix: Optional[str] = None,
                secrets_dir: Optional[str] = None,
+               secrets_provider: Optional[str] = None,
                **kwargs: Any
                ) -> 'SettingsParameters':
 
@@ -188,6 +192,7 @@ class SettingsParameters():
             settings_class=settings_class,
             env_prefix=env_prefix,
             secrets_dir=secrets_dir,
+            secrets_provider=secrets_provider,
             kwargs=resolved_kwargs
         )
 
@@ -253,6 +258,12 @@ class SettingsParameters():
             merged_env_prefix = other.env_prefix or base.env_prefix
             merged_secrets_dir = other.secrets_dir or base.secrets_dir
 
+        # Secrets provider: simple priority (same as scalars)
+        if prioritise_base:
+            merged_secrets_provider = base.secrets_provider or other.secrets_provider
+        else:
+            merged_secrets_provider = other.secrets_provider or base.secrets_provider
+
         # Kwargs: merge dicts
         if base.kwargs is None and other.kwargs is None:
             merged_kwargs = None
@@ -267,6 +278,7 @@ class SettingsParameters():
             config_files=merged_config_files,
             env_prefix=merged_env_prefix,
             secrets_dir=merged_secrets_dir,
+            secrets_provider=merged_secrets_provider,
             **(merged_kwargs or {})
         )
 
@@ -278,7 +290,8 @@ class SettingsParameters():
             'kwargs': self.get_all_kwargs() if self.kwargs else None,
             'settings_class': self.settings_class,
             'env_prefix': self.env_prefix,
-            'secrets_dir': self.secrets_dir
+            'secrets_dir': self.secrets_dir,
+            'secrets_provider': self.secrets_provider,
         }
 
 
@@ -362,6 +375,11 @@ class SettingsParameters():
             settings_copy = cached_settings.model_copy()
             override_kwargs = self.get_attribute_settings_kwargs()
             if override_kwargs:
+                if self.secrets_provider:
+                    from ..secrets.registry import get_secrets_resolver
+                    from ..secrets.resolve import resolve_secrets_in_dict
+                    resolver = get_secrets_resolver(self.secrets_provider)
+                    override_kwargs = resolve_secrets_in_dict(override_kwargs, resolver)
                 settings_copy.update_settings_from_dict(settings_dict=override_kwargs)
             return settings_copy
         return cached_settings
