@@ -211,3 +211,93 @@ class TestSettingsParameters:
         params = SettingsParameters()
         result = params.get_all_kwargs()
         assert result == {}
+
+
+class TestSecretsProvider:
+
+    def test_default_is_none(self):
+        params = SettingsParameters()
+        assert params.secrets_provider is None
+
+    def test_create_accepts_secrets_provider(self):
+        params = SettingsParameters.create(
+            settings_class=MockSettings,
+            secrets_provider="local",
+        )
+        assert params.secrets_provider == "local"
+
+    def test_secrets_provider_in_hash(self):
+        params_a = SettingsParameters.create(
+            settings_class=MockSettings,
+            secrets_provider="local",
+        )
+        params_b = SettingsParameters.create(
+            settings_class=MockSettings,
+            secrets_provider="vault",
+        )
+        assert hash(params_a) != hash(params_b)
+
+    def test_secrets_provider_none_matches_no_provider(self):
+        params_a = SettingsParameters.create(settings_class=MockSettings)
+        params_b = SettingsParameters.create(
+            settings_class=MockSettings,
+            secrets_provider=None,
+        )
+        assert hash(params_a) == hash(params_b)
+
+    def test_secrets_provider_in_eq(self):
+        params_a = SettingsParameters.create(
+            settings_class=MockSettings,
+            secrets_provider="local",
+        )
+        params_b = SettingsParameters.create(
+            settings_class=MockSettings,
+            secrets_provider="vault",
+        )
+        assert params_a != params_b
+
+    def test_to_dict_includes_secrets_provider(self):
+        params = SettingsParameters.create(
+            settings_class=MockSettings,
+            secrets_provider="local",
+        )
+        d = params.to_dict()
+        assert d["secrets_provider"] == "local"
+
+    def test_to_dict_secrets_provider_none(self):
+        params = SettingsParameters()
+        d = params.to_dict()
+        assert d["secrets_provider"] is None
+
+    def test_merge_last_wins(self):
+        base = SettingsParameters.create(
+            settings_class=MockSettings,
+            secrets_provider="local",
+        )
+        other = SettingsParameters.create(
+            settings_class=MockSettings,
+            secrets_provider="vault",
+        )
+        merged = SettingsParameters.merge(base, other)
+        assert merged.secrets_provider == "vault"
+
+    def test_merge_prioritise_base(self):
+        base = SettingsParameters.create(
+            settings_class=MockSettings,
+            secrets_provider="local",
+        )
+        other = SettingsParameters.create(
+            settings_class=MockSettings,
+            secrets_provider="vault",
+        )
+        merged = SettingsParameters.merge(base, other, prioritise_base=True)
+        assert merged.secrets_provider == "local"
+
+    def test_merge_base_none_takes_other(self):
+        base = SettingsParameters.create(settings_class=MockSettings)
+        other = SettingsParameters.create(
+            settings_class=MockSettings,
+            secrets_provider="vault",
+        )
+        merged = SettingsParameters.merge(base, other)
+        assert merged.secrets_provider == "vault"

@@ -7,8 +7,8 @@ from pytest_check import check
 from upath import UPath
 
 from mountainash_settings import SettingsManager, MountainAshBaseSettings, SettingsParameters
-
 from mountainash_settings import get_settings_manager, get_settings
+from mountainash_settings.secrets import register_secrets_resolver, clear_secrets_registry
 
 
 @pytest.fixture
@@ -256,3 +256,76 @@ def test_init_config_valid_init_files_override_and_kwargs_noprefix2(settings_man
         #kwargs not working here
         assert app_settings.TEST_VAL_1 == "ABC"
         assert app_settings.TEST_VAL_2 == "TEST_VAL_2_File_2"
+
+
+# --- Secrets Resolution Integration Tests ---
+
+def _test_resolver(path: str) -> str:
+    return f"resolved_{path}"
+
+
+@pytest.fixture
+def secrets_registry():
+    """Register a test resolver and clean up after."""
+    clear_secrets_registry()
+    register_secrets_resolver("test", _test_resolver)
+    yield
+    clear_secrets_registry()
+
+
+class _SecretsTestSettings(MountainAshBaseSettings):
+    USERNAME: str = Field(default="default_user")
+    PASSWORD: str = Field(default="default_pass")
+
+
+class TestSecretsResolution:
+    def test_kwargs_secret_resolved_on_construction(self, secrets_registry):
+        settings = _SecretsTestSettings(
+            settings_parameters=SettingsParameters.create(
+                settings_class=_SecretsTestSettings,
+                secrets_provider="test",
+                PASSWORD="secret:db/password",
+            )
+        )
+        assert settings.PASSWORD == "resolved_db/password"
+
+    def test_config_file_secret_resolved_post_construction(self, secrets_registry):
+        settings = _SecretsTestSettings(
+            settings_parameters=SettingsParameters.create(
+                settings_class=_SecretsTestSettings,
+                secrets_provider="test",
+                config_files=["tests/config/secrets_test.yaml"],
+                env_prefix="SECRETSTEST_",
+            )
+        )
+        assert settings.PASSWORD == "resolved_db/password"
+        assert settings.USERNAME == "admin"
+
+    def test_no_provider_leaves_secret_prefix_as_literal(self):
+        settings = _SecretsTestSettings(PASSWORD="secret:db/password")
+        assert settings.PASSWORD == "secret:db/password"
+
+    def test_cache_hit_runtime_override_resolves_secret(self, secrets_registry):
+        from mountainash_settings.settings_cache.settings_functions import _get_settings
+
+        params_base = SettingsParameters.create(
+            settings_class=_SecretsTestSettings,
+            secrets_provider="test",
+            config_files=["tests/config/secrets_test.yaml"],
+        )
+
+        # First call — constructs and caches
+        settings1 = get_settings(settings_parameters=params_base)
+        assert settings1.PASSWORD == "resolved_db/password"
+
+        # Second call — cache hit with runtime override containing a secret ref
+        settings2 = get_settings(
+            settings_parameters=params_base,
+            PASSWORD="secret:other/password",
+        )
+        assert settings2.PASSWORD == "resolved_other/password"
+        # Original cached instance untouched
+        assert settings1.PASSWORD == "resolved_db/password"
+
+        # Cleanup: clear the lru_cache entry we just created
+        _get_settings.cache_clear()

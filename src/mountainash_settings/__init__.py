@@ -33,6 +33,13 @@ from .auth import (
     WindowsAuth,
     auth_to_driver_kwargs,
 )
+from .secrets import (
+    SecretsResolver,
+    register_secrets_resolver,
+    get_secrets_resolver,
+    replace_secrets_resolver,
+    clear_secrets_registry,
+)
 
 __all__ = [
     "__version__",
@@ -70,4 +77,11 @@ __all__ = [
     "TokenAuth",
     "WindowsAuth",
     "auth_to_driver_kwargs",
+
+    # Secrets
+    "SecretsResolver",
+    "register_secrets_resolver",
+    "get_secrets_resolver",
+    "replace_secrets_resolver",
+    "clear_secrets_registry",
 ]
