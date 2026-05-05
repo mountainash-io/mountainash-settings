@@ -11,6 +11,7 @@ from mountainash_settings.auth import (
     KerberosAuth,
     NoAuth,
     OAuth2Auth,
+    OAuth2AuthCodeAuth,
     PasswordAuth,
     ServiceAccountAuth,
     TokenAuth,
@@ -28,6 +29,7 @@ class TestAuthDiscriminator:
             (TokenAuth, "token"),
             (JWTAuth, "jwt"),
             (OAuth2Auth, "oauth2"),
+            (OAuth2AuthCodeAuth, "oauth2_authcode"),
             (ServiceAccountAuth, "service_account"),
             (IAMAuth, "iam"),
             (WindowsAuth, "windows"),
@@ -41,6 +43,8 @@ class TestAuthDiscriminator:
             instance = cls(username="u", password=SecretStr("p"))
         elif cls in (TokenAuth, JWTAuth):
             instance = cls(token=SecretStr("t"))
+        elif cls is OAuth2AuthCodeAuth:
+            instance = cls(client_id="cid", client_secret=SecretStr("csec"))
         else:
             instance = cls()
         assert instance.kind == kind
@@ -81,3 +85,34 @@ class TestOAuth2Auth:
     def test_token_is_secret(self):
         auth = OAuth2Auth(token="t")
         assert isinstance(auth.token, SecretStr)
+
+
+@pytest.mark.unit
+class TestOAuth2AuthCodeAuth:
+    def test_requires_client_id_and_secret(self):
+        with pytest.raises(ValidationError):
+            OAuth2AuthCodeAuth()  # type: ignore[call-arg]
+
+    def test_client_secret_is_secretstr(self):
+        auth = OAuth2AuthCodeAuth(client_id="cid", client_secret="secret")
+        assert isinstance(auth.client_secret, SecretStr)
+        assert auth.client_secret.get_secret_value() == "secret"
+
+    def test_optional_fields_default_none(self):
+        auth = OAuth2AuthCodeAuth(client_id="cid", client_secret="s")
+        assert auth.access_token is None
+        assert auth.refresh_token is None
+        assert auth.token_expires_at is None
+        assert auth.scope is None
+
+    def test_access_token_is_secretstr(self):
+        auth = OAuth2AuthCodeAuth(
+            client_id="cid", client_secret="s", access_token="tok"
+        )
+        assert isinstance(auth.access_token, SecretStr)
+
+    def test_token_expires_at_accepts_int(self):
+        auth = OAuth2AuthCodeAuth(
+            client_id="cid", client_secret="s", token_expires_at=1714900000
+        )
+        assert auth.token_expires_at == 1714900000
