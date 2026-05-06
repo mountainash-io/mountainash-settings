@@ -377,9 +377,9 @@ class SettingsParameters():
             if override_kwargs:
                 if self.secrets_provider:
                     from ..secrets.registry import get_secrets_resolver
-                    from ..secrets.resolve import resolve_secrets_in_dict
+                    from ..resolve import resolve_references_in_dict
                     resolver = get_secrets_resolver(self.secrets_provider)
-                    override_kwargs = resolve_secrets_in_dict(override_kwargs, resolver)
+                    override_kwargs = resolve_references_in_dict(override_kwargs, resolver)
                 settings_copy.update_settings_from_dict(settings_dict=override_kwargs)
             return settings_copy
         return cached_settings
