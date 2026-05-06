@@ -329,3 +329,38 @@ class TestSecretsResolution:
 
         # Cleanup: clear the lru_cache entry we just created
         _get_settings.cache_clear()
+
+    def test_nested_frozen_model_secret_resolved_from_yaml(self, secrets_registry):
+        from mountainash_settings.auth import PasswordAuth
+
+        class _NestedAuthSettings(MountainAshBaseSettings):
+            APP_NAME: str = Field(default="default")
+            auth: PasswordAuth
+
+        settings = _NestedAuthSettings(
+            settings_parameters=SettingsParameters.create(
+                settings_class=_NestedAuthSettings,
+                secrets_provider="test",
+                config_files=["tests/config/nested_secrets_test.yaml"],
+                env_prefix="NESTEDSECTEST_",
+            )
+        )
+        assert settings.APP_NAME == "test_app"
+        assert settings.auth.username == "admin"
+        assert settings.auth.password.get_secret_value() == "resolved_db/production/password"
+
+    def test_nested_model_secret_in_kwargs_resolved(self, secrets_registry):
+        from mountainash_settings.auth import PasswordAuth
+
+        class _NestedAuthSettings(MountainAshBaseSettings):
+            APP_NAME: str = Field(default="default")
+            auth: PasswordAuth
+
+        settings = _NestedAuthSettings(
+            settings_parameters=SettingsParameters.create(
+                settings_class=_NestedAuthSettings,
+                secrets_provider="test",
+                auth={"kind": "password", "username": "admin", "password": "secret:db/password"},
+            )
+        )
+        assert settings.auth.password.get_secret_value() == "resolved_db/password"
