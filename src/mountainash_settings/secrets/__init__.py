@@ -1,4 +1,8 @@
-"""Secrets resolver registry and resolution utilities."""
+"""Secrets resolver registry — write-once provider mapping.
+
+Resolution logic lives in ``mountainash_settings.resolve`` (domain-agnostic).
+This package owns the secrets-specific provider registry only.
+"""
 
 from .registry import (
     SecretsResolver,
