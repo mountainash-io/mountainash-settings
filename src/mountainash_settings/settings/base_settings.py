@@ -79,12 +79,12 @@ class MountainAshBaseSettings(BaseSettings):
         valid_pydantic_kwargs: Dict[str, Any] =             local_settings_params.get_pydantic_settings_kwargs()
 
 
-        # Resolve secret: prefixed values in kwargs before pydantic validation
+        # Resolve prefixed references (e.g. secret:) in kwargs before pydantic validation
         if local_settings_params.secrets_provider:
             from mountainash_settings.secrets.registry import get_secrets_resolver
-            from mountainash_settings.secrets.resolve import resolve_secrets_in_dict
+            from mountainash_settings.resolve import resolve_references_in_dict
             _secrets_resolver = get_secrets_resolver(local_settings_params.secrets_provider)
-            valid_attribute_kwargs = resolve_secrets_in_dict(valid_attribute_kwargs, _secrets_resolver)
+            valid_attribute_kwargs = resolve_references_in_dict(valid_attribute_kwargs, _secrets_resolver)
 
         # Handle non env config files via model_config
         self.model_config["yaml_file"] = obj_config_files.yaml_files or None
@@ -133,12 +133,12 @@ class MountainAshBaseSettings(BaseSettings):
         object.__setattr__(self, "SETTINGS_SOURCE_SECRETS_DIR", local_settings_params.secrets_dir)
         object.__setattr__(self, "SETTINGS_SOURCE_SECRETS_PROVIDER", local_settings_params.secrets_provider)
 
-        # Resolve secret: prefixed values loaded from config files
+        # Resolve prefixed references (e.g. secret:) in fields loaded from config files
         if local_settings_params.secrets_provider:
             from mountainash_settings.secrets.registry import get_secrets_resolver as _get_resolver
-            from mountainash_settings.secrets.resolve import resolve_secrets_on_instance
+            from mountainash_settings.resolve import resolve_references_in_model_tree
             _secrets_resolver = _get_resolver(local_settings_params.secrets_provider)
-            resolve_secrets_on_instance(self, _secrets_resolver)
+            resolve_references_in_model_tree(self, _secrets_resolver)
 
         # Initialise templated variables
         self.post_init()
