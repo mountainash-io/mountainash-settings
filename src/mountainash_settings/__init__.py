@@ -89,3 +89,28 @@ __all__ = [
     "replace_secrets_resolver",
     "clear_secrets_registry",
 ]
+
+
+# --- Deprecation aliases (PEP 562) ------------------------------------------
+# Resolves pre-26.5.0 names with DeprecationWarning. Removed in 26.6.0.
+
+import typing as _t
+import warnings as _warnings
+
+_DEPRECATED: dict[str, tuple[str, _t.Any]] = {
+    "ProfileDescriptor":         ("ProfileSpec", ProfileSpec),
+    "DescriptorProfile":         ("Profile", Profile),
+    "descriptor_invariants_for": ("spec_invariants_for", spec_invariants_for),
+}
+
+
+def __getattr__(name: str) -> _t.Any:
+    if name in _DEPRECATED:
+        new_name, obj = _DEPRECATED[name]
+        _warnings.warn(
+            f"{name!r} is renamed to {new_name!r} in mountainash-settings "
+            f"26.5.0. The old name will be removed in 26.6.0.",
+            DeprecationWarning, stacklevel=2,
+        )
+        return obj
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
