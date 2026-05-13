@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
-from .descriptor import ProfileDescriptor
 from .invariants import spec_invariants_for
 from .profile import Profile
 from .registry import Registry
 from .spec import MISSING, ParameterSpec, ProfileSpec
+
+# ProfileDescriptor is now an alias for ProfileSpec (deprecated name).
+ProfileDescriptor = ProfileSpec
 
 # Compatibility alias — removed in Task 9 which adds deprecation __getattr__
 DescriptorProfile = Profile

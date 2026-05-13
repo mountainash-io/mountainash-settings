@@ -26,15 +26,10 @@ import typing as t
 
 from .spec import ProfileSpec
 
-# Transitional: accept legacy ProfileDescriptor instances in @register(spec).
-# ProfileDescriptor is a separate dataclass during 26.5.x (Tasks 1–7).
-# Task 8 makes it an alias for ProfileSpec, at which point this widening
-# becomes redundant and this block can be removed in one step.
-try:
-    from .descriptor import ProfileDescriptor as _ProfileDescriptor
-    _SPEC_TYPES: tuple[type, ...] = (ProfileSpec, _ProfileDescriptor)
-except ImportError:
-    _SPEC_TYPES = (ProfileSpec,)
+# After Task 8, ProfileDescriptor IS ProfileSpec (shim alias), so _SPEC_TYPES
+# only needs ProfileSpec. The widening is retained as a single-element tuple
+# for forward compatibility — decorator() checks isinstance(arg, _SPEC_TYPES).
+_SPEC_TYPES: tuple[type, ...] = (ProfileSpec,)
 
 if t.TYPE_CHECKING:
     from .profile import Profile
