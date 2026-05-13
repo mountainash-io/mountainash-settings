@@ -1,6 +1,6 @@
-# The ProfileDescriptor Pattern: Why and When
+# The ProfileSpec Pattern: Why and When
 
-The quickstart shows `DescriptorProfile` + `ProfileDescriptor` used to define a connection profile. This guide explains the design rationale — what you gain over a plain `MountainAshBaseSettings` subclass, and when the extra structure is worth it.
+The quickstart shows `Profile` + `ProfileSpec` used to define a connection profile. This guide explains the design rationale — what you gain over a plain `MountainAshBaseSettings` subclass, and when the extra structure is worth it.
 
 ## The plain subclass approach
 
@@ -20,11 +20,11 @@ class PostgreSQLSettings(MountainAshBaseSettings):
 
 This is fine for one profile in one application. The friction starts when you have many.
 
-## What the ProfileDescriptor pattern adds
+## What the ProfileSpec pattern adds
 
-### 1. The descriptor is inspectable data, not just code
+### 1. The spec is inspectable data, not just code
 
-A `ProfileDescriptor` is a frozen dataclass — it's a value you can pass around, iterate over, and query programmatically, independently of any settings instance. Each `ParameterSpec` carries metadata that a plain pydantic field cannot express:
+A `ProfileSpec` is a frozen dataclass — it's a value you can pass around, iterate over, and query programmatically, independently of any settings instance. Each `ParameterSpec` carries metadata that a plain pydantic field cannot express:
 
 | `ParameterSpec` attribute | What it holds |
 |---|---|
@@ -37,10 +37,10 @@ A `ProfileDescriptor` is a frozen dataclass — it's a value you can pass around
 
 None of these exist in a plain pydantic `FieldInfo`. With a direct subclass you can define all the behaviour, but it is scattered across field annotations, validators, and `post_init()` methods with no single place to introspect it.
 
-With a descriptor, you can query the shape of a profile without constructing an instance:
+With a spec, you can query the shape of a profile without constructing an instance:
 
 ```python
-for spec in POSTGRESQL_DESCRIPTOR.parameters:
+for spec in POSTGRESQL_SPEC.parameters:
     if spec.secret:
         print(f"  {spec.name} is a secret (driver key: {spec.driver_key})")
 ```
@@ -49,11 +49,11 @@ for spec in POSTGRESQL_DESCRIPTOR.parameters:
 
 With a direct subclass, every profile you write re-declares its fields. Twelve database profiles means twelve copies of `HOST`, `PORT`, `DATABASE`, each with slightly different types or defaults — and it's easy for them to drift.
 
-`DescriptorProfile.__pydantic_init_subclass__` reads the `__descriptor__` at class-creation time and installs pydantic fields automatically. The descriptor is the single source of truth. If `POSTGRESQL_DESCRIPTOR` says `PORT` defaults to `5432`, every subclass pointing at it gets that default — you cannot accidentally override it in the wrong place.
+`Profile.__pydantic_init_subclass__` reads the `__spec__` at class-creation time and installs pydantic fields automatically. The spec is the single source of truth. If `POSTGRESQL_SPEC` says `PORT` defaults to `5432`, every subclass pointing at it gets that default — you cannot accidentally override it in the wrong place.
 
 ```python
-# The descriptor is declared once
-POSTGRESQL_DESCRIPTOR = ProfileDescriptor(
+# The spec is declared once
+POSTGRESQL_SPEC = ProfileSpec(
     name="postgresql",
     provider_type="postgresql",
     parameters=[
@@ -64,9 +64,9 @@ POSTGRESQL_DESCRIPTOR = ProfileDescriptor(
     auth_modes=[NoAuth, PasswordAuth],
 )
 
-# The class declares nothing — fields come from the descriptor
-class PostgreSQLSettings(DescriptorProfile):
-    __descriptor__ = POSTGRESQL_DESCRIPTOR
+# The class declares nothing — fields come from the spec
+class PostgreSQLSettings(Profile):
+    __spec__ = POSTGRESQL_SPEC
 ```
 
 ### 3. The auth union is assembled automatically
@@ -81,7 +81,7 @@ class PostgreSQLSettings(MountainAshBaseSettings):
     auth: Union[NoAuth, PasswordAuth] = Field(discriminator="kind")
 ```
 
-The descriptor declares `auth_modes=[NoAuth, PasswordAuth]`, and `DescriptorProfile` assembles the discriminated union field automatically. Add a new valid auth mode to the descriptor; all subclasses pick it up. Remove one; it is rejected at validation time for every profile pointing at that descriptor.
+The spec declares `auth_modes=[NoAuth, PasswordAuth]`, and `Profile` assembles the discriminated union field automatically. Add a new valid auth mode to the spec; all subclasses pick it up. Remove one; it is rejected at validation time for every profile pointing at that spec.
 
 ### 4. The `_default_kwargs()` method handles the naming mismatch
 
@@ -98,7 +98,7 @@ def to_driver_kwargs(self) -> dict:
     }
 ```
 
-`DescriptorProfile._default_kwargs()` generates this mapping from `ParameterSpec.driver_key` automatically. It also handles:
+`Profile._default_kwargs()` generates this mapping from `ParameterSpec.driver_key` automatically. It also handles:
 
 - **SecretStr unwrapping** — `spec.secret=True` fields are unwrapped via `.get_secret_value()` before emission
 - **None skipping** — optional fields that were not set are omitted from the output dict
@@ -121,15 +121,15 @@ When the connection type is determined at runtime (e.g. read from a config file,
 DATABASES = Registry("databases")
 register = DATABASES.decorator()
 
-@register(POSTGRESQL_DESCRIPTOR)
-class PostgreSQLSettings(DescriptorProfile): ...
+@register
+class PostgreSQLSettings(Profile): ...
 
-@register(REDSHIFT_DESCRIPTOR)
-class RedshiftSettings(DescriptorProfile): ...
+@register
+class RedshiftSettings(Profile): ...
 
 # Runtime dispatch from a string — no manual mapping needed
 backend = config["backend"]                          # e.g. "postgresql"
-descriptor = DATABASES.get_descriptor(backend)
+spec = DATABASES.get_spec(backend)
 cls = DATABASES.get_settings_class(backend)
 settings = cls(HOST=..., DATABASE=..., auth=...)
 ```
@@ -140,16 +140,16 @@ This pattern is the foundation for packages like `mountainash-data` that let cal
 
 With direct subclasses, testing that every profile satisfies the same structural rules requires either duplication (one test per class) or a manually maintained parametrised test.
 
-`descriptor_invariants_for(REGISTRY)` returns a pytest class parametrised over every descriptor in the registry. Add a new profile; it is automatically covered. The invariants check things that are easy to get wrong — parameter names in the wrong case, duplicate `driver_key` values, empty `auth_modes`, missing `provider_type`.
+`spec_invariants_for(REGISTRY)` returns a pytest class parametrised over every spec in the registry. Add a new profile; it is automatically covered. The invariants check things that are easy to get wrong — parameter names in the wrong case, duplicate `driver_key` values, empty `auth_modes`, missing `provider_type`.
 
 ```python
 # tests/unit/test_database_profiles.py
 
-from mountainash_settings import descriptor_invariants_for
+from mountainash_settings import spec_invariants_for
 from my_package.db.settings import DATABASES
 
-TestDatabaseInvariants = descriptor_invariants_for(DATABASES)
-# That's it. Every descriptor in DATABASES is now tested.
+TestDatabaseInvariants = spec_invariants_for(DATABASES)
+# That's it. Every spec in DATABASES is now tested.
 ```
 
 ## When to use each approach
@@ -157,18 +157,18 @@ TestDatabaseInvariants = descriptor_invariants_for(DATABASES)
 | Situation | Use |
 |---|---|
 | One-off settings class for your own application | Plain `MountainAshBaseSettings` subclass |
-| Several connection types in the same domain that must be lookable by name | `ProfileDescriptor` + `Registry` |
-| You need to emit driver kwargs with field renaming, SecretStr unwrapping, or value transforms | `DescriptorProfile` (`_default_kwargs()`) |
-| You want to introspect profile structure programmatically (schema generation, documentation, audit) | `ProfileDescriptor` — it's just data |
-| You're building a library where downstream code registers profiles you don't control | `Registry` + `descriptor_invariants_for()` |
-| The valid auth modes differ between backends | `ProfileDescriptor.auth_modes` discriminated union assembly |
+| Several connection types in the same domain that must be lookable by name | `ProfileSpec` + `Registry` |
+| You need to emit driver kwargs with field renaming, SecretStr unwrapping, or value transforms | `Profile` (`_default_kwargs()`) |
+| You want to introspect profile structure programmatically (schema generation, documentation, audit) | `ProfileSpec` — it's just data |
+| You're building a library where downstream code registers profiles you don't control | `Registry` + `spec_invariants_for()` |
+| The valid auth modes differ between backends | `ProfileSpec.auth_modes` discriminated union assembly |
 
 ## What you give up
 
 The pattern is not free. Compared to a plain subclass:
 
-- **More indirection** — fields are installed at class-creation time via `__pydantic_init_subclass__`, which is invisible to a reader who just looks at the class body. IDE "go to definition" on a field like `HOST` will not lead anywhere useful.
+- **More indirection** — fields are installed at class-creation time via `__pydantic_init_subclass__`, which is invisible to a reader who just looks at the class body. IDE "go to definition" on a field like `HOST` will not lead anywhere useful — the field comes from `__spec__`, not the class body.
 - **Dynamic field installation is pydantic-version-sensitive** — it mutates `model_fields` and calls `model_rebuild(force=True)`, which is not officially documented by pydantic and may need adjustment on major pydantic upgrades.
-- **Slightly more ceremony to set up** — you need a `ProfileDescriptor`, at least one `ParameterSpec` per field, a `Registry`, and a `DescriptorProfile` subclass, before you have a working settings class.
+- **Slightly more ceremony to set up** — you need a `ProfileSpec`, at least one `ParameterSpec` per field, a `Registry`, and a `Profile` subclass, before you have a working settings class.
 
 For a single application-specific settings class, none of this is worth it. For a library or any code where you manage more than two or three similar profiles, the structural guarantees pay for themselves quickly.
