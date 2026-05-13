@@ -51,6 +51,7 @@ from mountainash_settings import (
     MISSING,               # unchanged sentinel instance
     Missing,               # NEW — public class for type annotations
     spec_invariants_for,   # was descriptor_invariants_for
+    lookup_class_var,      # NEW — public MRO-walking helper
 )
 ```
 
@@ -90,14 +91,14 @@ class MyProfile(Profile):
 
 The argument-free `@register` reads `cls.__dict__["__spec__"]` and registers under `cls.__spec__.name`. Spec is named exactly once. The old form `@register(spec)` continues to work during deprecation and additionally validates that `spec` and `cls.__spec__` (if both present) agree — a drift-catch that the previous "belt-and-braces" assignment lacked.
 
-### Shared MRO-walk helper
+### Shared MRO-walk helper (public)
 
 ```python
-def _lookup_class_var(cls: type, name: str) -> t.Any | None:
+def lookup_class_var(cls: type, name: str) -> t.Any | None:
     """Walk cls.__mro__ and return the first __dict__ value for `name`."""
 ```
 
-Used internally for `__spec__` lookup (with old-name fallback) and `__adapter__` lookup. The old-name fallback issues a `DeprecationWarning` when only `__descriptor__` is present.
+Exported as `mountainash_settings.lookup_class_var` (and from `mountainash_settings.profiles`). Used internally for `__spec__` lookup (with old-name fallback) and `__adapter__` lookup. Documented as a public, supported helper from 26.5.0 onwards so downstream consumers can adopt it without taking a private-dependency risk. The old-name fallback issues a `DeprecationWarning` when only `__descriptor__` is present.
 
 ## Upstream changes — `mountainash-settings`
 
@@ -111,20 +112,21 @@ Used internally for `__spec__` lookup (with old-name fallback) and `__adapter__`
 - `__all__` exports `ProfileSpec`, `Missing`, `MISSING`, `ParameterSpec`.
 
 **`src/mountainash_settings/profiles/descriptor.py`** (kept as a compatibility shim).
-- Module-level `__getattr__` (PEP 562) intercepts `ProfileDescriptor`, `_Missing`, and `BackendDescriptor` lookups.
+- Module-level `__getattr__` (PEP 562) intercepts `ProfileDescriptor` and `_Missing` lookups (the two symbols this module owned).
 - Each emits `DeprecationWarning` naming the new symbol and the removal version, then returns the new object.
+- `BackendDescriptor` is intentionally **not** aliased here — it is a `mountainash-data` symbol, not a `mountainash-settings` one. Its compatibility shim lives in `mountainash-data`'s own `descriptor.py` (see "Optional: keep your own old names available" in the migration guide).
 
 **`src/mountainash_settings/profiles/profile.py`**.
 - `Profile` class — verbatim port of `DescriptorProfile` with the new name.
 - `__pydantic_init_subclass__` reads `cls.__dict__.get("__spec__")` first, falls back to `cls.__dict__.get("__descriptor__")` with a `DeprecationWarning` when only the old attribute is present.
 - If both `__spec__` and `__descriptor__` are declared and disagree → `TypeError` with both values in the message.
-- `post_init()` uses the new `_lookup_class_var()` helper instead of an inline MRO loop.
+- `post_init()` uses the new public `lookup_class_var()` helper instead of an inline MRO loop.
 - The `_default_kwargs()` and `_auth_kwargs()` methods are unchanged.
 
 **`src/mountainash_settings/profiles/registry.py`**.
 - `Registry.__init__` accepts keyword-only `spec_type: type[ProfileSpec] = ProfileSpec` and `profile_type: type[Profile] = Profile`. Stored on the instance.
 - `Registry.register(spec, cls)` validates `isinstance(spec, self._spec_type)` and `issubclass(cls, self._profile_type)`. `TypeError` on mismatch.
-- `Registry.register()` now sets `cls.__spec__` (not `__descriptor__`).
+- `Registry.register()` sets `cls.__spec__` to the registered spec **and also mirrors it to `cls.__descriptor__`** during the 26.5.x deprecation window. Both attributes point at the same object. Any downstream code that still reads `cls.__descriptor__` or `instance.__descriptor__` keeps working until 26.6.0 — the documented removal point. The mirror is dropped in 26.6.0.
 - `Registry.decorator()` returns a decorator that accepts either:
   - Zero arguments (the class) — reads `cls.__spec__`, validates, registers. New canonical form.
   - One argument (the spec) — same as before, also validates against `cls.__spec__` if declared. Emits `DeprecationWarning`.
@@ -133,8 +135,8 @@ Used internally for `__spec__` lookup (with old-name fallback) and `__adapter__`
 - `spec_invariants_for(registry)` — verbatim port of `descriptor_invariants_for` with renamed parametrize IDs (`descriptor` → `spec`).
 - Generated test class name: `TestSpecInvariants_<registry_name>` (was `TestDescriptorInvariants_<registry_name>`).
 
-**`src/mountainash_settings/profiles/_lookup.py`** (new helper module, private).
-- `_lookup_class_var(cls, name)` — single MRO walk used by `Profile` for `__spec__`, `__descriptor__` fallback, and `__adapter__`.
+**`src/mountainash_settings/profiles/lookup.py`** (new helper module, public).
+- `lookup_class_var(cls, name)` — single MRO walk used by `Profile` for `__spec__`, `__descriptor__` fallback, and `__adapter__`. Re-exported from `mountainash_settings.profiles` and `mountainash_settings` top-level. Documented as supported public API from 26.5.0 onwards.
 
 **`src/mountainash_settings/profiles/__init__.py`**.
 - Re-exports the new public symbols.
@@ -167,7 +169,11 @@ def __getattr__(name: str) -> t.Any:
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 ```
 
-**Class attribute `__descriptor__`.** Read in `Profile.__pydantic_init_subclass__`:
+**Class attribute `__descriptor__`.** The deprecation contract has two sides — *reading* code that still uses the old attribute name, and *writing* code that still declares it.
+
+*Reading side (preservation of old attribute on migrated classes).* `Registry.register()` sets `cls.__spec__` to the registered spec and additionally sets `cls.__descriptor__` to the same object. This means a class that has been fully migrated to the new form — `__spec__ = MY_SPEC` in the body and the bare `@register` decorator — still exposes `cls.__descriptor__` and `instance.__descriptor__` for any downstream consumer that hasn't yet migrated its *reads*. Both names resolve to the same object. The mirror lives only during 26.5.x; removed in 26.6.0.
+
+*Writing side (classes that still declare `__descriptor__` in the body).* `Profile.__pydantic_init_subclass__` reads:
 
 ```python
 spec = cls.__dict__.get("__spec__")
@@ -186,6 +192,8 @@ elif spec is not None and old is not None and spec is not old:
     )
 ```
 
+This handles the case where a class body still uses the old name. The reading-side mirror above runs after this (when `@register` fires) and unconditionally mirrors `__spec__` to `__descriptor__`, so any successful registration leaves both attributes available regardless of which name the body used.
+
 **Decorator form `@register(spec)`.** When `Registry.decorator()` is called with one argument:
 
 ```python
@@ -203,6 +211,7 @@ The old form still works and additionally validates against `cls.__spec__` if de
 - Module-level `__getattr__` shims removed.
 - `descriptor.py` compatibility shim file removed.
 - `__pydantic_init_subclass__` no longer reads `__descriptor__`.
+- `Registry.register()` no longer mirrors `__spec__` to `__descriptor__`. Only `__spec__` is set on migrated classes.
 - `Registry.decorator()` only accepts the argument-free form.
 - All deprecation tests deleted; new-form tests retained.
 
@@ -303,7 +312,7 @@ This section is reusable by any package that builds on `mountainash_settings.pro
 
     The generated test class name changes accordingly. Update any test selection patterns that referenced `TestDescriptorInvariants_*`.
 
-8. **Replace local MRO walks (if any).** If your package implements its own version of "walk `__mro__` to find a class-level dunder" (the way `ConnectionProfile.to_driver_kwargs()` originally did for `__adapter__`), import the helper from `mountainash_settings.profiles`:
+8. **Replace local MRO walks (if any).** If your package implements its own version of "walk `__mro__` to find a class-level dunder" (the way `ConnectionProfile.to_driver_kwargs()` originally did for `__adapter__`), import the public helper from `mountainash_settings`:
 
     ```python
     # Before — local MRO walk
@@ -315,12 +324,10 @@ This section is reusable by any package that builds on `mountainash_settings.pro
                 adapter = candidate
                 break
 
-    # After — shared helper (note: private API; subject to change)
-    from mountainash_settings.profiles._lookup import _lookup_class_var
-    adapter = _lookup_class_var(type(self), "__adapter__")
+    # After — public helper (supported API from 26.5.0)
+    from mountainash_settings import lookup_class_var
+    adapter = lookup_class_var(type(self), "__adapter__")
     ```
-
-    (If `mountainash-settings` promotes `_lookup_class_var` to a public name later, the import path is the only thing that changes.)
 
 9. **Verify migration is complete.** Re-run your tests with deprecation warnings escalated to errors:
 
@@ -373,7 +380,7 @@ This section illustrates the migration guide above against the concrete shape of
 ### Files changed
 
 - `src/mountainash_data/core/settings/descriptor.py` — `BackendDescriptor` → `BackendSpec`, `_Missing` import replaced with public `Missing`. `__getattr__` shim added for the old names (since `mountainash-data` itself may have downstream consumers).
-- `src/mountainash_data/core/settings/profile.py` — local MRO walk in `to_driver_kwargs()` replaced with `_lookup_class_var()` call.
+- `src/mountainash_data/core/settings/profile.py` — local MRO walk in `to_driver_kwargs()` replaced with a `lookup_class_var()` call imported from `mountainash_settings`.
 - `src/mountainash_data/core/settings/registry.py` — `DATABASES_REGISTRY` constructed with `spec_type=BackendSpec, profile_type=ConnectionProfile`.
 - `src/mountainash_data/core/settings/*.py` (21 backend files) — mechanical sweep: import renames, constant renames (`*_DESCRIPTOR` → `*_SPEC`), `@register(SPEC)` → `@register`, `__descriptor__` → `__spec__`.
 - `src/mountainash_data/core/settings/__init__.py` — exports updated; deprecation `__getattr__` for any re-exported old names.
@@ -408,6 +415,7 @@ Three new concerns, each with its own test module or section.
 - A class declaring both `__spec__` and `__descriptor__` with the same value installs correctly (no warning).
 - A class declaring both `__spec__` and `__descriptor__` with different values raises `TypeError`.
 - `Registry.decorator()(spec)` (old one-argument form) emits `DeprecationWarning`, registers correctly, and additionally raises if `spec` disagrees with `cls.__spec__`.
+- **A class registered via the new bare `@register` form with only `__spec__` declared still exposes `cls.__descriptor__` after registration.** Specifically: `cls.__descriptor__ is cls.__spec__` and `instance.__descriptor__ is cls.__spec__`. This protects downstream code that still *reads* the old attribute name during the deprecation window. (This test deletes in 26.6.0 when the mirror is removed.)
 
 **Registry constraints** — additions to `tests/unit/profiles/test_registry.py`:
 
@@ -423,11 +431,12 @@ Three new concerns, each with its own test module or section.
 - `@register` raises `TypeError` when `cls.__spec__` is missing.
 - `@register` raises `TypeError` when `cls.__spec__` is the wrong type for the registry.
 
-**Shared lookup helper** — new `tests/unit/profiles/test_lookup.py`:
+**Public lookup helper** — new `tests/unit/profiles/test_lookup.py`:
 
-- `_lookup_class_var(cls, name)` returns the value from `cls.__dict__` when present.
-- `_lookup_class_var(cls, name)` walks `__mro__` when the attribute is on a base class.
-- `_lookup_class_var(cls, name)` returns `None` when the attribute is absent everywhere in the MRO.
+- `lookup_class_var(cls, name)` returns the value from `cls.__dict__` when present.
+- `lookup_class_var(cls, name)` walks `__mro__` when the attribute is on a base class.
+- `lookup_class_var(cls, name)` returns `None` when the attribute is absent everywhere in the MRO.
+- `lookup_class_var` is importable from both `mountainash_settings` and `mountainash_settings.profiles` and resolves to the same function object.
 
 **Regression checks** — additions to existing tests:
 
@@ -455,7 +464,7 @@ Single PR, single review cycle. Branch off `develop`, target `develop`.
 
 1. Add `spec.py`; port `ProfileSpec` and `Missing` from `descriptor.py`.
 2. Update `profile.py` — class rename, `__spec__` attribute, MRO fallback for `__descriptor__`.
-3. Add `_lookup.py` — shared MRO-walk helper.
+3. Add `lookup.py` — public `lookup_class_var()` helper.
 4. Update `registry.py` — constructor constraints, argument-free decorator form, drift catch on old form.
 5. Rename `descriptor_invariants_for` → `spec_invariants_for` in `invariants.py`.
 6. Convert `descriptor.py` to a compatibility shim with `__getattr__`.
@@ -470,7 +479,9 @@ The `docs/package-profile/` profile records the codebase shape at a given commit
 
 ## Risks and mitigations
 
-**Conflicting `__spec__` / `__descriptor__` declarations.** A class could end up declaring both attributes with different values (e.g. a partial migration). Mitigation: the fallback path in `Profile.__pydantic_init_subclass__` raises `TypeError` rather than silently picking one, with both values in the error message.
+**Conflicting `__spec__` / `__descriptor__` declarations.** A class could end up declaring both attributes with different values (e.g. a partial migration). Mitigation: the fallback path in `Profile.__pydantic_init_subclass__` raises `TypeError` rather than silently picking one, with both values in the error message. The `Registry.register()` mirror runs after this check, so a class that conflicts will never reach the mirroring step.
+
+**Mirror-induced shadowing across inheritance.** During deprecation, `Registry.register()` mirrors `__spec__` to `__descriptor__` on the registered class. If a user defines a subclass of a registered class without re-registering it, the subclass inherits both attributes. This is intentional and matches the existing inheritance semantics for `__spec__`; documented for transparency. The 26.6.0 removal eliminates this surface entirely.
 
 **External consumers we have not audited.** Packages beyond `mountainash-data` may depend on `mountainash-settings.profiles` symbols. Mitigation: the deprecation cycle gives them time. The deprecation message names both the new symbol and the removal version. The 26.6.0 release should be preceded by an audit of the `mountainash-io` org for any remaining old-name usage.
 
@@ -482,7 +493,6 @@ The `docs/package-profile/` profile records the codebase shape at a given commit
 
 - Renaming `ConnectionProfile`, `ParameterSpec`, `Registry`.
 - Renaming concrete `*AuthSettings` classes in `mountainash-data` or any other consumer.
-- Promoting `_lookup_class_var` to a public symbol (deferred — may follow once usage proves stable).
 - Updating downstream packages other than `mountainash-data`. Each is owned by its maintainers; this spec provides them the migration guide.
 - Refreshing the `docs/package-profile/` profile — separate task using the package-documentation-profile skill.
 
