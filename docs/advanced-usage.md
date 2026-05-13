@@ -235,17 +235,17 @@ kwargs = auth_to_driver_kwargs(auth)
 
 For the other seven modes (`OAuth1Auth`, `OAuth2AuthCodeAuth`, `AzureADAuth`, `WindowsAuth`, `KerberosAuth`, `CertificateAuth`, `ServiceAccountAuth`), your backend adapter is responsible for converting to driver kwargs. `auth_to_driver_kwargs()` will raise `KeyError` for these — that is intentional.
 
-### Using auth in a `DescriptorProfile`
+### Using auth in a `Profile`
 
 When a profile has multiple `auth_modes`, pydantic uses the `kind` literal to discriminate:
 
 ```python
 from mountainash_settings import (
-    DescriptorProfile, ParameterSpec, ProfileDescriptor, Registry,
+    Profile, ParameterSpec, ProfileSpec, Registry,
     NoAuth, PasswordAuth, IAMAuth,
 )
 
-DESCRIPTOR = ProfileDescriptor(
+REDSHIFT_SPEC = ProfileSpec(
     name="redshift",
     provider_type="redshift",
     parameters=[
@@ -256,8 +256,8 @@ DESCRIPTOR = ProfileDescriptor(
     auth_modes=[PasswordAuth, IAMAuth],
 )
 
-class RedshiftSettings(DescriptorProfile):
-    __descriptor__ = DESCRIPTOR
+class RedshiftSettings(Profile):
+    __spec__ = REDSHIFT_SPEC
 
 # Instantiate with the right auth — pydantic validates the kind discriminator
 settings = RedshiftSettings(
@@ -278,13 +278,13 @@ driver_kwargs = {**settings._default_kwargs(), **settings._auth_kwargs()}
 Every domain that builds a `Registry` gets free pytest coverage with one line:
 
 ```python
-from mountainash_settings import descriptor_invariants_for
+from mountainash_settings import spec_invariants_for
 from my_package.settings import MY_REGISTRY
 
-TestMyInvariants = descriptor_invariants_for(MY_REGISTRY)
+TestMyInvariants = spec_invariants_for(MY_REGISTRY)
 ```
 
-Drop this in any `test_*.py` file. Pytest collects it as a parametrised test class — every descriptor registered in `MY_REGISTRY` is tested automatically.
+Drop this in any `test_*.py` file. Pytest collects it as a parametrised test class — every spec registered in `MY_REGISTRY` is tested automatically.
 
 ### What is checked
 
@@ -308,16 +308,16 @@ For each registered descriptor:
 
 import pytest
 from mountainash_settings import (
-    DescriptorProfile, MISSING, ParameterSpec, ProfileDescriptor,
+    Profile, MISSING, ParameterSpec, ProfileSpec,
     Registry, NoAuth, PasswordAuth, IAMAuth,
-    descriptor_invariants_for,
+    spec_invariants_for,
 )
 
 # Build the registry under test
 DATABASES = Registry("databases")
 register = DATABASES.decorator()
 
-POSTGRESQL_DESCRIPTOR = ProfileDescriptor(
+POSTGRESQL_SPEC = ProfileSpec(
     name="postgresql",
     provider_type="postgresql",
     parameters=[
@@ -329,7 +329,7 @@ POSTGRESQL_DESCRIPTOR = ProfileDescriptor(
     auth_modes=[NoAuth, PasswordAuth],
 )
 
-REDSHIFT_DESCRIPTOR = ProfileDescriptor(
+REDSHIFT_SPEC = ProfileSpec(
     name="redshift",
     provider_type="redshift",
     parameters=[
@@ -340,17 +340,17 @@ REDSHIFT_DESCRIPTOR = ProfileDescriptor(
     auth_modes=[PasswordAuth, IAMAuth],
 )
 
-@register(POSTGRESQL_DESCRIPTOR)
-class PostgreSQLSettings(DescriptorProfile):
-    __descriptor__ = POSTGRESQL_DESCRIPTOR
+@register
+class PostgreSQLSettings(Profile):
+    __spec__ = POSTGRESQL_SPEC
 
-@register(REDSHIFT_DESCRIPTOR)
-class RedshiftSettings(DescriptorProfile):
-    __descriptor__ = REDSHIFT_DESCRIPTOR
+@register
+class RedshiftSettings(Profile):
+    __spec__ = REDSHIFT_SPEC
 
-# This one line gives you parametrised invariant tests for BOTH descriptors.
-# Add more descriptors to the registry — they are covered automatically.
-TestDatabaseInvariants = descriptor_invariants_for(DATABASES)
+# This one line gives you parametrised invariant tests for BOTH specs.
+# Add more specs to the registry — they are covered automatically.
+TestDatabaseInvariants = spec_invariants_for(DATABASES)
 ```
 
 Running `pytest tests/unit/test_db_profiles.py` will produce one test per invariant per descriptor:
