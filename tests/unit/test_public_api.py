@@ -7,15 +7,17 @@ import pytest
 def test_profiles_surface_imports():
     from mountainash_settings import (
         MISSING,
-        DescriptorProfile,
+        Missing,
         ParameterSpec,
-        ProfileDescriptor,
+        Profile,
+        ProfileSpec,
         Registry,
+        lookup_class_var,
         spec_invariants_for,
     )
     assert all(obj is not None for obj in (
-        MISSING, DescriptorProfile, ParameterSpec,
-        ProfileDescriptor, Registry, spec_invariants_for,
+        MISSING, Missing, ParameterSpec,
+        Profile, ProfileSpec, Registry, lookup_class_var, spec_invariants_for,
     ))
 
 

@@ -9,10 +9,12 @@ from .settings_cache.settings_manager import SettingsManager
 
 from .profiles import (
     MISSING,
-    DescriptorProfile,
+    Missing,
     ParameterSpec,
-    ProfileDescriptor,
+    Profile,
+    ProfileSpec,
     Registry,
+    lookup_class_var,
     spec_invariants_for,
 )
 from .auth import (
@@ -54,10 +56,12 @@ __all__ = [
 
     # Profiles
     "MISSING",
-    "DescriptorProfile",
+    "Missing",
     "ParameterSpec",
-    "ProfileDescriptor",
+    "Profile",
+    "ProfileSpec",
     "Registry",
+    "lookup_class_var",
     "spec_invariants_for",
 
     # Auth
