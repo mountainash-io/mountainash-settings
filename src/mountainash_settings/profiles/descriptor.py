@@ -24,7 +24,11 @@ import warnings
 # ``from mountainash_settings.profiles.descriptor import MISSING, ParameterSpec``.
 from .spec import MISSING, ParameterSpec  # noqa: F401
 
-__all__ = ["MISSING", "ParameterSpec", "ProfileDescriptor", "_Missing"]
+__all__ = ["MISSING", "ParameterSpec"]
+# Note: ProfileDescriptor and _Missing are NOT in __all__ — they resolve via
+# PEP 562 __getattr__ with DeprecationWarning. Excluding them from __all__
+# prevents `from mountainash_settings.profiles.descriptor import *` from
+# silently pulling in deprecated names.
 
 
 def __getattr__(name: str) -> t.Any:
