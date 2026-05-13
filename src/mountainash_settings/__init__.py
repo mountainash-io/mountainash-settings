@@ -13,7 +13,7 @@ from .profiles import (
     ParameterSpec,
     ProfileDescriptor,
     Registry,
-    descriptor_invariants_for,
+    spec_invariants_for,
 )
 from .auth import (
     AUTH_TO_DRIVER_KWARGS,
@@ -58,7 +58,7 @@ __all__ = [
     "ParameterSpec",
     "ProfileDescriptor",
     "Registry",
-    "descriptor_invariants_for",
+    "spec_invariants_for",
 
     # Auth
     "AUTH_TO_DRIVER_KWARGS",

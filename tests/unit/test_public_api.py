@@ -11,11 +11,11 @@ def test_profiles_surface_imports():
         ParameterSpec,
         ProfileDescriptor,
         Registry,
-        descriptor_invariants_for,
+        spec_invariants_for,
     )
     assert all(obj is not None for obj in (
         MISSING, DescriptorProfile, ParameterSpec,
-        ProfileDescriptor, Registry, descriptor_invariants_for,
+        ProfileDescriptor, Registry, spec_invariants_for,
     ))
 
 

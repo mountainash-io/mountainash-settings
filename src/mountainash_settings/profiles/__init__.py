@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from .descriptor import ProfileDescriptor
-from .invariants import descriptor_invariants_for
+from .invariants import spec_invariants_for
 from .profile import Profile
 from .registry import Registry
 from .spec import MISSING, ParameterSpec, ProfileSpec
@@ -20,5 +20,5 @@ __all__ = [
     "ProfileDescriptor",
     "ProfileSpec",
     "Registry",
-    "descriptor_invariants_for",
+    "spec_invariants_for",
 ]
