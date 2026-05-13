@@ -129,7 +129,7 @@ class RedshiftSettings(Profile): ...
 
 # Runtime dispatch from a string — no manual mapping needed
 backend = config["backend"]                          # e.g. "postgresql"
-spec = DATABASES.get_spec(backend)
+spec = DATABASES.get_descriptor(backend)
 cls = DATABASES.get_settings_class(backend)
 settings = cls(HOST=..., DATABASE=..., auth=...)
 ```
