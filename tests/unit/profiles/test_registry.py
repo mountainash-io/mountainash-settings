@@ -101,3 +101,74 @@ class TestRegistry:
         view = reg.descriptors
         view["fake"] = desc  # mutating the view does not affect the registry
         assert "fake" not in reg
+
+
+from mountainash_settings.profiles import Profile, ProfileSpec, ParameterSpec
+
+
+class _CustomSpec(ProfileSpec):
+    pass
+
+
+class _CustomProfile(Profile):
+    pass
+
+
+@pytest.mark.unit
+class TestRegistryConstraints:
+    def test_default_construction_unchanged(self):
+        """Registry() with no constraints still works (backwards compatible)."""
+        reg = Registry("default_test")
+        assert reg.name == "default_test"
+
+    def test_spec_type_accepts_matching(self):
+        """spec_type=_CustomSpec accepts _CustomSpec instances."""
+        reg = Registry("custom_spec_test", spec_type=_CustomSpec)
+        spec = _CustomSpec(
+            name="custom", provider_type="custom",
+            parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
+            auth_modes=[NoAuth],
+        )
+        class P(Profile):
+            __spec__ = spec
+        reg.register(spec, P)  # should not raise
+        assert "custom" in reg
+
+    def test_spec_type_rejects_plain_profilespec(self):
+        """spec_type=_CustomSpec rejects a plain ProfileSpec instance."""
+        reg = Registry("reject_test", spec_type=_CustomSpec)
+        plain = ProfileSpec(
+            name="plain", provider_type="plain",
+            parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
+            auth_modes=[NoAuth],
+        )
+        class P(Profile):
+            __spec__ = plain
+        with pytest.raises(TypeError, match="spec_type"):
+            reg.register(plain, P)
+
+    def test_profile_type_accepts_matching(self):
+        """profile_type=_CustomProfile accepts _CustomProfile subclasses."""
+        reg = Registry("profile_match", profile_type=_CustomProfile)
+        spec = ProfileSpec(
+            name="cm", provider_type="cm",
+            parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
+            auth_modes=[NoAuth],
+        )
+        class P(_CustomProfile):
+            __spec__ = spec
+        reg.register(spec, P)
+        assert "cm" in reg
+
+    def test_profile_type_rejects_non_subclass(self):
+        """profile_type=_CustomProfile rejects a plain Profile subclass."""
+        reg = Registry("profile_reject", profile_type=_CustomProfile)
+        spec = ProfileSpec(
+            name="pr", provider_type="pr",
+            parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
+            auth_modes=[NoAuth],
+        )
+        class P(Profile):
+            __spec__ = spec
+        with pytest.raises(TypeError, match="profile_type"):
+            reg.register(spec, P)

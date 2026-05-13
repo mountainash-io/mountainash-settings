@@ -1,91 +1,158 @@
 # src/mountainash_settings/profiles/registry.py
-"""Per-domain registry of profile descriptors and settings classes.
+"""Per-domain registry of profile specs and settings classes.
 
-Each consumer domain instantiates one :class:`Registry` with a name (used in
-error messages and test IDs). Example::
+Each consumer domain instantiates one :class:`Registry`. The optional
+``spec_type`` and ``profile_type`` keyword arguments lock in a typed
+contract: only specs that subclass ``spec_type`` and classes that subclass
+``profile_type`` can be registered.
 
-    DATABASES_REGISTRY = Registry("databases")
+Example::
+
+    DATABASES_REGISTRY = Registry(
+        "databases",
+        spec_type=BackendSpec,
+        profile_type=ConnectionProfile,
+    )
     register = DATABASES_REGISTRY.decorator()
 
-    @register(POSTGRESQL_DESCRIPTOR)
+    @register
     class PostgreSQLAuthSettings(ConnectionProfile):
-        __descriptor__ = POSTGRESQL_DESCRIPTOR
+        __spec__ = POSTGRESQL_SPEC
 """
 
 from __future__ import annotations
 
 import typing as t
 
-from .descriptor import ProfileDescriptor
+from .spec import ProfileSpec
 
 if t.TYPE_CHECKING:
-    from .profile import DescriptorProfile
+    from .profile import Profile
 
 __all__ = ["Registry"]
 
 
-T = t.TypeVar("T", bound="DescriptorProfile")
+T = t.TypeVar("T", bound="Profile")
 
 
 class Registry:
-    """Mutable, name-keyed store of descriptors + their settings classes."""
+    """Mutable, name-keyed store of specs + their profile classes."""
 
-    def __init__(self, name: str) -> None:
+    def __init__(
+        self,
+        name: str,
+        *,
+        spec_type: type[ProfileSpec] | None = None,
+        profile_type: type | None = None,
+    ) -> None:
+        """Construct a Registry with optional type constraints.
+
+        Args:
+            name: Registry name (used in error messages and test IDs).
+            spec_type: Required base class for registered specs. When
+                ``None`` (the default), any spec-like object is accepted,
+                preserving backwards compatibility. Passing ``ProfileSpec`` or
+                a stricter subclass enforces an ``isinstance`` check in
+                ``register()``.
+            profile_type: Required base class for registered profile classes.
+                When ``None`` (the default), any class is accepted. Passing
+                ``Profile`` or a stricter subclass enforces an ``issubclass``
+                check in ``register()``.
+        """
         self.name = name
-        self._descriptors: dict[str, ProfileDescriptor] = {}
-        self._classes: dict[str, type["DescriptorProfile"]] = {}
+        self._spec_type = spec_type
+        self._profile_type = profile_type
+        self._descriptors: dict[str, ProfileSpec] = {}
+        self._classes: dict[str, type["Profile"]] = {}
 
     def __len__(self) -> int:
         return len(self._descriptors)
 
-    def __contains__(self, name: str) -> bool:
-        return name in self._descriptors
+    def __contains__(self, name: object) -> bool:
+        return isinstance(name, str) and name in self._descriptors
 
     @property
-    def descriptors(self) -> dict[str, ProfileDescriptor]:
-        """Read-only view of the descriptor dict."""
+    def descriptors(self) -> dict[str, ProfileSpec]:
+        """Read-only view of the spec dict.
+
+        Named ``descriptors`` for backwards compatibility with the pre-rename
+        ``Registry`` API; returns ``ProfileSpec`` instances.
+        """
         return dict(self._descriptors)
 
     def register(
         self,
-        descriptor: ProfileDescriptor,
-        cls: type["DescriptorProfile"],
+        spec: ProfileSpec,
+        cls: type["Profile"],
     ) -> None:
-        """Register ``cls`` under ``descriptor.name``.
+        """Register ``cls`` under ``spec.name``.
+
+        Validates ``spec`` against the registry's ``spec_type`` and ``cls``
+        against the registry's ``profile_type``. Sets ``cls.__spec__`` and,
+        during the 26.5.x deprecation window, also mirrors to
+        ``cls.__descriptor__`` so downstream code reading the old attribute
+        continues to work until 26.6.0.
 
         Raises:
-            ValueError: if ``descriptor.name`` is already registered.
+            TypeError: if ``spec`` is not an instance of ``self._spec_type``
+                or ``cls`` is not a subclass of ``self._profile_type``.
+            ValueError: if ``spec.name`` is already registered.
         """
-        if descriptor.name in self._descriptors:
-            existing = self._classes.get(descriptor.name)
+        if self._spec_type is not None and not isinstance(spec, self._spec_type):
+            raise TypeError(
+                f"Registry {self.name!r}: spec_type mismatch — expected "
+                f"{self._spec_type.__name__}, got {type(spec).__name__}"
+            )
+        if self._profile_type is not None and not issubclass(cls, self._profile_type):
+            raise TypeError(
+                f"Registry {self.name!r}: profile_type mismatch — expected "
+                f"a subclass of {self._profile_type.__name__}, got "
+                f"{cls.__name__} (MRO does not include "
+                f"{self._profile_type.__name__})"
+            )
+        if spec.name in self._descriptors:
+            existing = self._classes.get(spec.name)
             where = (
                 f"{existing.__module__}.{existing.__qualname__}"
                 if existing is not None
                 else "<unknown class>"
             )
             raise ValueError(
-                f"Profile {descriptor.name!r} is already registered "
+                f"Profile {spec.name!r} is already registered "
                 f"in {self.name} registry by {where}"
             )
-        self._descriptors[descriptor.name] = descriptor
-        self._classes[descriptor.name] = cls
-        cls.__descriptor__ = descriptor  # belt-and-braces
+        self._descriptors[spec.name] = spec
+        self._classes[spec.name] = cls
+        cls.__spec__ = spec
+        # Deprecation-window mirror: downstream readers of cls.__descriptor__
+        # continue to see the spec until the 26.6.0 removal. Dropped in 26.6.0.
+        cls.__descriptor__ = spec
 
     def decorator(
         self,
-    ) -> t.Callable[[ProfileDescriptor], t.Callable[[type[T]], type[T]]]:
-        """Return a bound ``@register(descriptor)`` class decorator."""
+    ) -> t.Callable[..., t.Any]:
+        """Return a ``@register`` decorator bound to this registry.
 
-        def _factory(descriptor: ProfileDescriptor) -> t.Callable[[type[T]], type[T]]:
+        Supports two call shapes:
+
+        - Bare ``@register`` (new canonical form): reads ``cls.__spec__`` and
+          registers under its name.
+        - ``@register(spec)`` (deprecated): emits ``DeprecationWarning``;
+          validates the argument matches ``cls.__spec__`` if declared.
+        """
+        # NOTE: The bare/with-arg disambiguation in this method is implemented
+        # in a later task (Task 5). For now, only the with-arg form works.
+
+        def _outer(spec: ProfileSpec) -> t.Callable[[type[T]], type[T]]:
             def _wrap(cls: type[T]) -> type[T]:
-                self.register(descriptor, cls)
+                self.register(spec, cls)
                 return cls
             return _wrap
 
-        return _factory
+        return _outer
 
-    def get_descriptor(self, name: str) -> ProfileDescriptor:
-        """Return the descriptor for ``name``.
+    def get_descriptor(self, name: str) -> ProfileSpec:
+        """Return the spec for ``name``.
 
         Raises:
             KeyError: with a hint listing known names.
@@ -99,8 +166,8 @@ class Registry:
                 f"registry. Known: {known}"
             ) from None
 
-    def get_settings_class(self, name: str) -> type["DescriptorProfile"]:
-        """Return the settings class for ``name``.
+    def get_settings_class(self, name: str) -> type["Profile"]:
+        """Return the profile class for ``name``.
 
         Raises:
             KeyError: with a hint listing known names.
@@ -118,17 +185,14 @@ class Registry:
 
     def _snapshot_for_tests(
         self,
-    ) -> tuple[
-        dict[str, ProfileDescriptor],
-        dict[str, type["DescriptorProfile"]],
-    ]:
+    ) -> tuple[dict[str, ProfileSpec], dict[str, type["Profile"]]]:
         """Snapshot for later :meth:`_reset_for_tests` restore."""
         return self._descriptors.copy(), self._classes.copy()
 
     def _reset_for_tests(
         self,
-        descriptors_snapshot: dict[str, ProfileDescriptor],
-        classes_snapshot: dict[str, type["DescriptorProfile"]],
+        descriptors_snapshot: dict[str, ProfileSpec],
+        classes_snapshot: dict[str, type["Profile"]],
     ) -> None:
         """Restore descriptors + classes dicts to snapshots (test-only)."""
         self._descriptors.clear()
