@@ -34,7 +34,7 @@ class DummyProfile(Profile):
 
 
 @pytest.mark.unit
-class TestDescriptorProfile:
+class TestProfile:
     def test_required_field_enforced(self):
         with pytest.raises(ValidationError):
             DummyProfile(auth=NoAuth())  # HOST missing
