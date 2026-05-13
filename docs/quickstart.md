@@ -189,17 +189,17 @@ For database or service connections, use the declarative profile system to defin
 
 ```python
 from mountainash_settings import (
-    DescriptorProfile,
+    Profile,
     MISSING,
     ParameterSpec,
-    ProfileDescriptor,
+    ProfileSpec,
     Registry,
     NoAuth,
     PasswordAuth,
 )
 
 # 1. Describe the connection
-POSTGRESQL_DESCRIPTOR = ProfileDescriptor(
+POSTGRESQL_SPEC = ProfileSpec(
     name="postgresql",
     provider_type="postgresql",
     parameters=[
@@ -217,9 +217,9 @@ DATABASES = Registry("databases")
 register = DATABASES.decorator()
 
 # 3. Define the settings class
-@register(POSTGRESQL_DESCRIPTOR)
-class PostgreSQLSettings(DescriptorProfile):
-    __descriptor__ = POSTGRESQL_DESCRIPTOR
+@register
+class PostgreSQLSettings(Profile):
+    __spec__ = POSTGRESQL_SPEC
 ```
 
 Pydantic fields, type validation, and SecretStr wrapping are installed automatically from the descriptor. No boilerplate.
@@ -241,5 +241,5 @@ kwargs = {**settings._default_kwargs(), **settings._auth_kwargs()}
 
 - **Multiple config files and merging** — `SettingsParameters.merge()` for combining base and environment-specific parameters
 - **Auth modes reference** — 13 typed auth modes: `PasswordAuth`, `TokenAuth`, `JWTAuth`, `OAuth2Auth`, `OAuth1Auth`, `OAuth2AuthCodeAuth`, `IAMAuth`, `AzureADAuth`, `WindowsAuth`, `KerberosAuth`, `CertificateAuth`, `ServiceAccountAuth`, `NoAuth`
-- **Profile invariant tests** — `descriptor_invariants_for(REGISTRY)` gives automatic pytest coverage for every registered profile
+- **Profile invariant tests** — `spec_invariants_for(REGISTRY)` gives automatic pytest coverage for every registered profile
 - **Examples** — `examples/` directory contains working code for path templating, smart merging, and comprehensive patterns
