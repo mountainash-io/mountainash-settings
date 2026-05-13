@@ -1,0 +1,43 @@
+{
+  "id": "mountainash_settings.settings_parameters.merge_framework",
+  "path": "src/mountainash_settings/settings_parameters/merge_framework.py",
+  "summary": "Defines ValidationError — a custom exception for settings parameter validation failures. The merge_framework module is minimal in its current form; ValidationError is the primary export.",
+  "role": "backend",
+  "visibility": "internal",
+  "stability": "evolving",
+  "audiences": ["maintainers", "contributors"],
+  "doc_priority": "internal-note",
+  "confidence": "medium",
+  "public_api": [
+    "ValidationError"
+  ],
+  "key_classes": ["ValidationError"],
+  "key_functions": [],
+  "dependencies": [],
+  "dependents": [
+    "mountainash_settings.settings_parameters.settings_parameters"
+  ],
+  "extension_points": [],
+  "lifecycle_notes": [
+    "Currently contains only ValidationError — may expand as merge logic grows"
+  ],
+  "documentation_hooks": [],
+  "examples": [],
+  "tests": [
+    "tests/test_settings_parameters/test_merge_framework.py"
+  ],
+  "risks": [],
+  "open_questions": [
+    "The module name implies more merge logic may be planned — watch for expansion"
+  ],
+  "evidence": [
+    {"kind": "test", "path": "tests/test_settings_parameters/test_merge_framework.py", "detail": "Dedicated test file"}
+  ],
+  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "manual": {
+    "notes": "",
+    "editorial_status": "",
+    "owner": "",
+    "manual_summary": ""
+  }
+}

@@ -2,13 +2,7 @@
 
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue) ![Category](https://img.shields.io/badge/category-core-purple) ![Tests](https://img.shields.io/badge/tests-✓-green) ![Docs](https://img.shields.io/badge/docs-✓-blue)
 
-Advanced configuration management for Python applications with smart caching, template resolution, multi-format support, and seamless Pydantic integration.
-
-## Overview
-
-mountainash-settings provides sophisticated configuration management that goes beyond standard Pydantic BaseSettings. It offers smart caching, template resolution, multi-format configuration files (YAML, TOML, JSON), and a powerful parameter system - all while maintaining the familiar Pydantic interface developers love.
-
-
+Advanced configuration management for Python applications — typed settings with smart caching, multi-format file loading, template-driven derived fields, a pluggable secrets layer, and a declarative system for building typed connection profiles.
 
 ## Installation
 
@@ -16,364 +10,242 @@ mountainash-settings provides sophisticated configuration management that goes b
 pip install mountainash-settings
 ```
 
-### Development Installation
+## Quick start
 
-```bash
-# Clone and install in development mode
-git clone <repository-url>
-cd mountainash-settings
-pip install -e .
-```
-
-
-
-## Quick Start
-
-### Basic Usage with MountainAshBaseSettings
+Subclass `MountainAshBaseSettings`, declare fields with pydantic `Field()`, and load from config files, environment variables, or kwargs:
 
 ```python
 from pydantic import Field
 from mountainash_settings import MountainAshBaseSettings
 
 class AppSettings(MountainAshBaseSettings):
-    """Application settings with smart caching and template support."""
-    debug: bool = Field(default=False)
-    app_name: str = Field(default="MyApp")
-    database_url: str = Field(default="sqlite:///app.db")
-    log_file: str = Field(default="logs/{app_name}.log")  # Template support
+    APP_NAME: str = Field(default="MyApp")
+    DEBUG: bool = Field(default=False)
+    DATABASE_URL: str = Field(default="sqlite:///app.db")
 
-# Simple usage - works like standard Pydantic
-settings = AppSettings()
-print(settings.app_name)  # "MyApp"
-
-# With runtime overrides
-settings = AppSettings(debug=True, app_name="ProductionApp")
-print(settings.debug)  # True
-
-# Smart caching with get_settings()
-cached_settings = AppSettings.get_settings(
-    namespace="production",
-    config_files=["config.yaml"],
-    debug=True
-)
-
-# Template resolution
-log_path = settings.format_template_from_settings("logs/{app_name}_debug.log")
-print(log_path)  # "logs/ProductionApp_debug.log"
+settings = AppSettings(config_files=["config/production.yaml"])
+print(settings.APP_NAME)   # value from YAML, env var, or default
 ```
 
-### Multi-Format Configuration Files
+Priority order (highest wins): **kwargs → environment variables → config files → Field defaults**.
 
-Create `config.yaml`:
-```yaml
-debug: false
-app_name: "MyWebApp"
-database_url: "postgresql://localhost/myapp"
-```
+See [docs/quickstart.md](docs/quickstart.md) for a step-by-step introduction.
+
+## Key features
+
+### Multi-format configuration files
+
+Pass YAML, TOML, JSON, and `.env` files in any combination. Files are detected by extension and merged in order:
 
 ```python
-from mountainash_settings import MountainAshBaseSettings
-from pydantic_settings import SettingsConfigDict
-
-class ConfigSettings(MountainAshBaseSettings):
-    debug: bool = Field(default=True)
-    app_name: str = Field(default="DefaultApp")
-    database_url: str = Field(default="sqlite:///default.db")
-    
-    model_config = SettingsConfigDict(yaml_file="config.yaml")
-
-settings = ConfigSettings()
-print(settings.app_name)  # "MyWebApp" (from YAML file)
+settings = AppSettings(config_files=[
+    "config/base.yaml",
+    "config/production.toml",
+    ".env.production",
+])
 ```
 
-### Advanced Usage with SettingsParameters
+### Template-driven derived fields
+
+Derive fields from other fields using `{FIELD_NAME}` placeholders, resolved in `post_init()`:
+
+```python
+from upath import UPath
+
+class AppSettings(MountainAshBaseSettings):
+    APP_NAME: str = Field(default="myapp")
+    ENV: str = Field(default="dev")
+
+    LOG_PATH_TEMPLATE: str = Field(
+        default=str(UPath("~") / "logs" / "{APP_NAME}" / "{ENV}.log")
+    )
+    LOG_PATH: str = Field(default=None)
+
+    def post_init(self, reinitialise: bool = False):
+        super().post_init(reinitialise=reinitialise)
+        self.LOG_PATH = self.init_setting_from_template(
+            template_str=self.LOG_PATH_TEMPLATE,
+            current_value=self.LOG_PATH,
+            reinitialise=reinitialise,
+        )
+```
+
+Use `UPath`'s `/` operator to build cross-platform path templates — no platform-specific separators needed.
+
+### Smart caching
+
+`get_settings()` returns the same instance for the same structural parameters (config files, settings class, env prefix). Call it freely inside frequently-executed code:
+
+```python
+from mountainash_settings import get_settings
+
+settings = get_settings(
+    settings_class=AppSettings,
+    config_files=["config/production.yaml"],
+)
+```
+
+Runtime overrides (extra kwargs) never pollute the cache — each override call gets a lightweight `model_copy()` with the overrides applied.
+
+### SettingsParameters for reusable and composable configuration
+
+`SettingsParameters` captures a full configuration identity as an immutable, hashable value. Build one and pass it around, merge two together, or store them in a service registry:
 
 ```python
 from mountainash_settings import SettingsParameters
 
-# Create reusable parameter configurations
-params = SettingsParameters.create(
-    namespace="microservice_auth",
+base = SettingsParameters.create(
     settings_class=AppSettings,
-    config_files=["base.yaml", "auth.yaml"],
-    env_prefix="AUTH_",
-    debug=False,  # Runtime override
-    app_name="AuthService"
+    config_files=["config/base.yaml", "config/production.yaml"],
+    env_prefix="APP_",
 )
 
-# Use with any compatible settings class
-settings = AppSettings.get_settings(settings_parameters=params)
-print(settings.app_name)  # "AuthService"
-print(settings.SETTINGS_NAMESPACE)  # "microservice_auth"
+# Merge with runtime overrides — base config files are preserved
+merged = SettingsParameters.merge(
+    base,
+    SettingsParameters.create(settings_class=AppSettings, TENANT_ID="acme"),
+)
 
-# Works with any MountainAshBaseSettings class
-params = SettingsParameters.create(
-    namespace="microservice_auth",
-    settings_class=AppSettings,
-    config_files=["base.yaml", "auth.yaml"],
-    env_prefix="AUTH_",
-    debug=False,
-    app_name="AuthService"
+settings = get_settings(settings_parameters=merged)
+```
+
+### Pluggable secrets resolution
+
+Register a resolver callable for any secrets backend, then reference secrets with a `secret:` prefix in your YAML or kwargs:
+
+```python
+from mountainash_settings import register_secrets_resolver
+
+register_secrets_resolver("vault", lambda path: fetch_from_vault(path))
+
+settings = AppSettings(
+    config_files=["config/production.yaml"],  # may contain secret:db/prod/url
+    secrets_provider="vault",
 )
 ```
 
+### Declarative connection profiles
 
+For database and service connections, the `DescriptorProfile` + `ProfileDescriptor` system provides typed, inspectable, driver-ready settings with automatic field installation, auth mode validation, and runtime lookup by name:
 
-## Key Features
+```python
+from mountainash_settings import (
+    DescriptorProfile, MISSING, ParameterSpec, ProfileDescriptor,
+    Registry, NoAuth, PasswordAuth,
+)
 
-### 🎯 **MountainAshBaseSettings** (Primary Interface)
-- **Enhanced Pydantic Interface**: Extended BaseSettings with advanced functionality
-- **Template Support**: Dynamic field substitution with `{field_name}` placeholders
-- **Multi-Format Configuration**: YAML, TOML, JSON support out of the box
-- **Smart Caching**: Intelligent instance caching and management
+POSTGRESQL_DESCRIPTOR = ProfileDescriptor(
+    name="postgresql",
+    provider_type="postgresql",
+    parameters=[
+        ParameterSpec(name="HOST",     type=str, tier="core",     driver_key="host"),
+        ParameterSpec(name="PORT",     type=int, tier="core",     driver_key="port",   default=5432),
+        ParameterSpec(name="DATABASE", type=str, tier="core",     driver_key="dbname"),
+        ParameterSpec(name="PASSWORD", type=str, tier="core",     driver_key="password",
+                      secret=True, default=None),
+    ],
+    auth_modes=[NoAuth, PasswordAuth],
+)
 
-### ⚡ **Smart Caching System**
-- **Structural Parameter Caching**: Cache based on namespace, config files, and class structure
-- **Runtime Override Support**: Apply kwargs without affecting cache identity
-- **Memory Efficient**: Intelligent cache key generation and cleanup
-- **Cross-Application Support**: Share cached instances across modules
+DATABASES = Registry("databases")
 
-### 🔧 **Template Resolution** 
-- **Dynamic Configuration**: Use `{field_name}` placeholders in any string field
-- **Post-Initialization Processing**: Templates resolved automatically after object creation
-- **Flexible API**: `format_template_from_settings()` for ad-hoc formatting
-- **Custom Logic Support**: Integrate with custom `post_init()` methods
+@DATABASES.decorator()(POSTGRESQL_DESCRIPTOR)
+class PostgreSQLSettings(DescriptorProfile):
+    __descriptor__ = POSTGRESQL_DESCRIPTOR
 
-### 📁 **Multi-Format Configuration**
-- **Universal Support**: YAML, TOML, JSON, and .env files
-- **Priority System**: Hierarchical configuration loading with clear precedence
-- **File Validation**: Automatic validation that configuration files exist
-- **Environment Integration**: Seamless environment variable support
+settings = PostgreSQLSettings(
+    HOST="prod-db.example.com",
+    DATABASE="myapp",
+    auth=PasswordAuth(username="app_user", password="s3cr3t"),
+)
 
-### 🔄 **SettingsParameters System**
-- **Reusable Configuration**: Create parameter objects for consistent settings
-- **Dynamic Resolution**: SettingsParameters carry type information for runtime resolution
-- **Serialization Safe**: Store and transmit configuration parameters securely
-- **JIT Security**: Just-in-time settings loading to minimize secret exposure
-- **Complex Scenarios**: Support for multi-tenant and dynamic configuration needs
+driver_kwargs = {**settings._default_kwargs(), **settings._auth_kwargs()}
+# {"host": "prod-db.example.com", "port": 5432, "dbname": "myapp",
+#  "user": "app_user", "password": "s3cr3t"}
+```
 
-### 📊 **Metadata Tracking & Observability**
-- **Full Traceability**: Track configuration sources, files, and overrides
-- **Debugging Support**: Comprehensive metadata for troubleshooting
-- **Configuration Audit**: Know exactly where each setting value came from
-- **Parameter Reconstruction**: Extract SettingsParameters from any instance
+See [docs/profile-descriptor-pattern.md](docs/profile-descriptor-pattern.md) for an explanation of when and why to use this pattern over a plain subclass.
 
-### 🏗️ **Enterprise-Ready Architecture**
-- **Authentication Integration**: Built-in support for database, storage, and secret providers
-- **Secret Management**: Integration with AWS, Azure, GCP, and HashiCorp Vault
-- **Performance Optimized**: Minimal overhead with intelligent caching strategies
-- **Production Tested**: Battle-tested in large-scale applications
+### 13 typed auth modes
 
+All authentication modes are validated pydantic models with `SecretStr` protection for credentials:
 
+| Mode | Use for |
+|---|---|
+| `NoAuth` | SQLite, local DuckDB, PySpark |
+| `PasswordAuth` | PostgreSQL, MySQL, most databases |
+| `TokenAuth` | MotherDuck, PyIceberg REST, simple APIs |
+| `JWTAuth` | Trino |
+| `OAuth2Auth` | Snowflake, Trino, REST APIs |
+| `OAuth2AuthCodeAuth` | Interactive OAuth2 / token refresh flows |
+| `IAMAuth` | AWS Redshift, S3, Athena (explicit or ambient credentials) |
+| `AzureADAuth` | MSSQL, Azure services |
+| `WindowsAuth` | On-prem MSSQL (integrated Windows auth) |
+| `KerberosAuth` | Trino on Kerberos, PostgreSQL via GSS |
+| `CertificateAuth` | Snowflake JWT |
+| `ServiceAccountAuth` | BigQuery, GCS |
+| `OAuth1Auth` | OAuth 1.0a services |
+
+### Profile invariant tests
+
+Drop one line into a test module to get parametrised pytest coverage for every descriptor in a registry — name conventions, field uniqueness, valid auth modes, and more:
+
+```python
+from mountainash_settings import descriptor_invariants_for
+from my_package.settings import DATABASES
+
+TestDatabaseInvariants = descriptor_invariants_for(DATABASES)
+```
+
+New profile registrations are covered automatically.
 
 ## Documentation
 
-### 📚 **Core Documentation**
-- **[CLAUDE.md](CLAUDE.md)** - Complete development guide and API reference
-- **[Examples](examples/)** - Working code examples and patterns
-- **[TESTING.md](TESTING.md)** - Testing guidelines and procedures
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines
+| Document | Contents |
+|---|---|
+| [docs/quickstart.md](docs/quickstart.md) | Step-by-step introduction — settings class, config files, templates, caching, secrets, profiles |
+| [docs/advanced-usage.md](docs/advanced-usage.md) | SettingsParameters merging, auth modes reference, invariant tests, dynamic resolution |
+| [docs/profile-descriptor-pattern.md](docs/profile-descriptor-pattern.md) | When and why to use ProfileDescriptor vs a plain subclass |
+| [examples/](examples/) | Working code: basic usage, path templating, smart merging, dynamic resolution |
 
-### 🔧 **Development**
-- **[CLAUDE.md](CLAUDE.md)** - Development guide and technical details
-
-### 🌐 **Ecosystem**
-- **[Mountain Ash Documentation](https://mountainash-io.github.io/mountainash-docs/)** - Complete ecosystem docs
-
-
-
-## Advanced Usage Examples
-
-### Feature-Specific Configurations
-
-```python
-from mountainash_settings import MountainAshBaseSettings
-from pydantic_settings import SettingsConfigDict
-
-# High-performance service
-class HighPerfSettings(MountainAshBaseSettings):
-    api_timeout: int = Field(default=5)
-    max_connections: int = Field(default=100)
-
-# Complex configuration service with templates
-class ComplexAppSettings(MountainAshBaseSettings):
-    environment: str = Field(default="dev")
-    service_name: str = Field(default="myapp")
-    
-    # Template-based paths
-    log_dir: str = Field(default="logs/{environment}/{service_name}")
-    config_file: str = Field(default="config/{service_name}/{environment}.yaml")
-    
-    model_config = SettingsConfigDict(
-        yaml_file=["base.yaml", "{environment}.yaml"],
-        env_prefix="APP_"
-    )
-
-# Testing settings
-class TestSettings(MountainAshBaseSettings):
-    test_database: str = Field(default="sqlite:///:memory:")
-    mock_external_apis: bool = Field(default=True)
-```
-
-### Production Patterns
-
-```python
-# Multi-tenant configuration
-def create_tenant_settings(tenant_id: str):
-    class TenantSettings(MountainAshBaseSettings):
-        database_url: str = Field(default="sqlite:///default.db")
-        feature_flags: dict = Field(default_factory=dict)
-        
-        @classmethod
-        def get_namespace(cls):
-            return f"tenant_{tenant_id}"
-    
-    return TenantSettings
-
-# Environment-based configuration
-class EnvironmentAwareSettings(MountainAshBaseSettings):
-    debug: bool = Field(default=False)
-    log_level: str = Field(default="INFO")
-    
-    model_config = SettingsConfigDict(
-        yaml_file=[
-            "base.yaml",
-            f"{os.getenv('ENVIRONMENT', 'dev')}.yaml",
-            "local.yaml"  # Optional local overrides
-        ]
-    )
-    
-    @classmethod
-    def get_namespace(cls):
-        return f"app_{os.getenv('ENVIRONMENT', 'dev')}"
-```
-
-## Advanced Configuration Patterns
-
-MountainAshBaseSettings provides powerful patterns for complex configuration scenarios:
-
-```python
-from mountainash_settings import MountainAshBaseSettings, SettingsParameters
-
-class AppSettings(MountainAshBaseSettings):
-    debug: bool = Field(default=False)
-    app_name: str = Field(default="MyApp")
-    database_url: str = Field(default="sqlite:///app.db")
-
-# Smart caching with SettingsParameters
-params = SettingsParameters.create(
-    namespace="production",
-    settings_class=AppSettings,
-    config_files=["config.yaml"],
-    debug=True
-)
-
-# Cached instance - subsequent calls return same instance
-settings = AppSettings.get_settings(settings_parameters=params)
-```
-
-**Key Benefits:**
-- ✅ **Smart Caching**: Intelligent instance management and caching
-- ✅ **Template Support**: Dynamic field substitution
-- ✅ **Multi-Format Config**: YAML, TOML, JSON support
-- ✅ **Enterprise Ready**: Production-tested performance and features
-- ✅ **Full Observability**: Complete configuration traceability
-
-## Development & Testing
+## Development
 
 ### Testing
 
 ```bash
-# Run all tests
-hatch run test:test
-
-# Run with coverage
-hatch run test:cov
-
-# Run specific tests
-pytest tests/test_base_settings.py -v
-
-# Performance benchmarks
-pytest tests/test_base_settings.py::TestBaseSettingsPerformance -v
+hatch run test:test        # run all tests
+hatch run test:cov         # with coverage
+pytest tests/path/to/test_file.py::TestClass::test_method -v  # single test
 ```
 
-### Linting & Quality
+### Linting and type checking
 
 ```bash
-# Code linting
-hatch run ruff:check
-
-# Auto-fix issues
-hatch run ruff:fix
-
-# Type checking
-hatch run mypy:check
+hatch run ruff:check       # lint
+hatch run ruff:fix         # auto-fix
+hatch run mypy:check       # type check
 ```
 
-### Build Commands
+### Build
 
 ```bash
-# Build package
 hatch build
-
-# Clean build artifacts
-hatch clean
 ```
-
-See [CLAUDE.md](CLAUDE.md) for complete development commands.
 
 ## Contributing
 
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Make** your changes with tests
-4. **Run** tests and linting (`hatch run test:test && hatch run ruff:check`)
-5. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-6. **Push** to the branch (`git push origin feature/amazing-feature`)
-7. **Open** a Pull Request
-
-### Development Setup
-
-```bash
-git clone https://github.com/mountainash-io/mountainash-settings.git
-cd mountainash-settings
-pip install -e .
-hatch env create  # Set up development environment
-```
-
-
-
-## Why Choose mountainash-settings?
-
-### vs Standard Pydantic BaseSettings
-- ✅ **Smart Caching**: Automatically cache settings for better performance
-- ✅ **Template Support**: Dynamic configuration with `{field}` placeholders  
-- ✅ **Multi-Format Files**: YAML, TOML, JSON support out of the box
-- ✅ **Configuration Reuse**: SettingsParameters for consistent configuration
-- ✅ **Metadata Tracking**: Full observability of configuration sources
-
-### vs Other Configuration Libraries
-- ✅ **Pydantic Integration**: Built on Pydantic for validation and type safety
-- ✅ **Enterprise Features**: Secret management, authentication, multi-tenancy  
-- ✅ **Production Ready**: Battle-tested caching and performance optimizations
-- ✅ **Developer Experience**: Familiar interface with powerful features
-- ✅ **Incremental Adoption**: Use only the features you need
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Make your changes with tests
+4. Run `hatch run test:test && hatch run ruff:check`
+5. Open a pull request targeting `develop`
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+MIT License — see [LICENSE](LICENSE) for details.
 
-## Mountain Ash Ecosystem
+## Mountain Ash ecosystem
 
-This package is part of the [Mountain Ash](https://github.com/mountainash-io) ecosystem of Python packages for building production-ready applications.
+This package is part of the [Mountain Ash](https://github.com/mountainash-io) ecosystem of Python packages for building production-ready data applications.
 
-### Related Packages
-- **mountainash-core**: Core utilities and foundations
-- **mountainash-auth**: Authentication and authorization 
-- **mountainash-data**: Data processing and analysis tools
-- **mountainash-api**: API development utilities
-
----
-
-**Ready to get started?** Check out our [CLAUDE.md](CLAUDE.md) development guide or try the [examples](examples/)!
-
+Related packages: **mountainash-core** · **mountainash-data** · **mountainash-auth** · **mountainash-api**

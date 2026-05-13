@@ -1,0 +1,117 @@
+{
+  "audience": "extension-authors",
+  "summary": "Extension authors build domain-specific connection profiles (databases, storage, APIs) on top of this package. The primary extension surface is: define a ProfileDescriptor with ParameterSpec entries, create a Registry, subclass DescriptorProfile with __descriptor__, and optionally implement a custom __adapter__ or override _auth_kwargs(). Auth modes are extended by subclassing AuthSpec and registering in AUTH_TO_DRIVER_KWARGS.",
+  "concepts": [
+    {
+      "name": "Defining a profile descriptor",
+      "module_ids": [
+        "mountainash_settings.profiles.descriptor"
+      ],
+      "recommended_docs": [
+        "ProfileDescriptor: name, provider_type, parameters, auth_modes, metadata",
+        "ParameterSpec: name (UPPERCASE), type, tier, default, driver_key, secret, transform, validator, template",
+        "MISSING sentinel for required fields"
+      ],
+      "evidence": [
+        "src/mountainash_settings/profiles/descriptor.py",
+        "tests/unit/profiles/test_descriptor.py"
+      ]
+    },
+    {
+      "name": "Registering and using a profile class",
+      "module_ids": [
+        "mountainash_settings.profiles.profile",
+        "mountainash_settings.profiles.registry"
+      ],
+      "recommended_docs": [
+        "Registry instantiation: REGISTRY = Registry('domain')",
+        "@REGISTRY.decorator() class decorator pattern",
+        "DescriptorProfile.__pydantic_init_subclass__ installs fields automatically",
+        "__adapter__ for custom output pipelines"
+      ],
+      "evidence": [
+        "src/mountainash_settings/profiles/registry.py decorator() docstring",
+        "src/mountainash_settings/profiles/profile.py __adapter__ class var"
+      ]
+    },
+    {
+      "name": "Auth mode extension",
+      "module_ids": [
+        "mountainash_settings.auth.base",
+        "mountainash_settings.auth.dispatch"
+      ],
+      "recommended_docs": [
+        "Subclass AuthSpec, declare kind: Literal['your_kind']",
+        "Add to AUTH_TO_DRIVER_KWARGS for default dispatch",
+        "Or override _auth_kwargs() in your DescriptorProfile subclass"
+      ],
+      "evidence": [
+        "src/mountainash_settings/auth/dispatch.py AUTH_TO_DRIVER_KWARGS comment block"
+      ]
+    },
+    {
+      "name": "Invariant test coverage",
+      "module_ids": [
+        "mountainash_settings.profiles.invariants"
+      ],
+      "recommended_docs": [
+        "TestInvariants = descriptor_invariants_for(MY_REGISTRY) — drop in test module for automatic invariant coverage",
+        "Invariants checked: name lowercase, param names UPPERCASE, driver_keys unique, auth_modes non-empty AuthSpec, provider_type not None"
+      ],
+      "evidence": [
+        "src/mountainash_settings/profiles/invariants.py"
+      ]
+    },
+    {
+      "name": "Secret fields in profiles",
+      "module_ids": [
+        "mountainash_settings.profiles.descriptor",
+        "mountainash_settings.profiles.profile"
+      ],
+      "recommended_docs": [
+        "ParameterSpec(secret=True) wraps field as SecretStr automatically",
+        "_default_kwargs() unwraps SecretStr via .get_secret_value()"
+      ],
+      "evidence": [
+        "src/mountainash_settings/profiles/profile.py _default_kwargs()"
+      ]
+    },
+    {
+      "name": "Template-derived fields in profiles",
+      "module_ids": [
+        "mountainash_settings.profiles.descriptor",
+        "mountainash_settings.profiles.profile"
+      ],
+      "recommended_docs": [
+        "ParameterSpec(template='{OTHER_FIELD}/suffix') — auto-wired in post_init()",
+        "Template only applies when current value matches the declared default (explicit user values win)"
+      ],
+      "evidence": [
+        "src/mountainash_settings/profiles/profile.py post_init()"
+      ]
+    }
+  ],
+  "featured_modules": [
+    "mountainash_settings.profiles.descriptor",
+    "mountainash_settings.profiles.profile",
+    "mountainash_settings.profiles.registry",
+    "mountainash_settings.profiles.invariants",
+    "mountainash_settings.auth.base",
+    "mountainash_settings.auth.dispatch"
+  ],
+  "hidden_or_internal_modules": [
+    "mountainash_settings.settings_cache.settings_manager",
+    "mountainash_settings.settings_parameters.filehandler",
+    "mountainash_settings.settings_parameters.kwargshandler",
+    "mountainash_settings.resolve"
+  ],
+  "documentation_plan": [
+    "Tutorial: build a PostgreSQL connection profile from ProfileDescriptor to Registry registration",
+    "Reference: ParameterSpec fields and their pydantic mapping",
+    "Reference: auth modes available and when to extend AUTH_TO_DRIVER_KWARGS vs override _auth_kwargs()",
+    "How-to: drop descriptor_invariants_for into your test suite"
+  ],
+  "open_questions": [
+    "The __adapter__ protocol is mentioned in profile.py but not fully documented — what exact signature does an adapter callable need?"
+  ]
+}

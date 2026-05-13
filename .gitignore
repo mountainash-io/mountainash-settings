@@ -178,3 +178,5 @@ coverage.*
 
 # Local hiivmind workspace symlinks (user-specific)
 .hiivmind/
+.ruff_cache/
+.benchmarks/

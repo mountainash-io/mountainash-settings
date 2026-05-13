@@ -1,0 +1,133 @@
+{
+  "audience": "maintainers",
+  "summary": "Maintainers need to understand the two-level caching system (lru_cache + SettingsManager dict), the validate_assignment=True invariant and its object.__setattr__ workaround, the SettingsParameters structural-vs-runtime split, the __pydantic_init_subclass__ dynamic field installation in DescriptorProfile, and the secrets resolution pipeline.",
+  "concepts": [
+    {
+      "name": "Two-level caching architecture",
+      "module_ids": [
+        "mountainash_settings.settings_cache.settings_functions",
+        "mountainash_settings.settings_cache.settings_manager"
+      ],
+      "recommended_docs": [
+        "lru_cache on _get_settings() — unbounded, process-global",
+        "SettingsManager dict as secondary store",
+        "apply_runtime_overrides() returns model_copy() — cached instance is never mutated"
+      ],
+      "evidence": [
+        "src/mountainash_settings/settings_cache/settings_functions.py",
+        "src/mountainash_settings/settings_cache/settings_manager.py"
+      ]
+    },
+    {
+      "name": "SettingsParameters structural/runtime split",
+      "module_ids": [
+        "mountainash_settings.settings_parameters.settings_parameters"
+      ],
+      "recommended_docs": [
+        "Custom __hash__/__eq__ exclude kwargs — structural params only",
+        "merge() field-by-field strategies (union, last-wins, dict-merge)",
+        "apply_runtime_overrides() for post-cache kwargs application"
+      ],
+      "evidence": [
+        "src/mountainash_settings/settings_parameters/settings_parameters.py __hash__ docstring"
+      ]
+    },
+    {
+      "name": "validate_assignment=True and object.__setattr__ invariant",
+      "module_ids": [
+        "mountainash_settings.settings.base_settings"
+      ],
+      "recommended_docs": [
+        "All setattr triggers pydantic validation — SecretStr wrapping, enum coercion, AfterValidator",
+        "SETTINGS_SOURCE_* fields use object.__setattr__ to bypass revalidation and model_fields_set tracking",
+        "Design doc: docs/superpowers/specs/2026-04-18-setattr-bypass-fix-design.md"
+      ],
+      "evidence": [
+        "src/mountainash_settings/settings/base_settings.py lines ~100-120 (object.__setattr__ block with comment)"
+      ]
+    },
+    {
+      "name": "DescriptorProfile dynamic field installation",
+      "module_ids": [
+        "mountainash_settings.profiles.profile",
+        "mountainash_settings.profiles.descriptor"
+      ],
+      "recommended_docs": [
+        "__pydantic_init_subclass__ fires at class creation — mutates model_fields and __annotations__",
+        "model_rebuild(force=True) required after dynamic annotation changes",
+        "auth discriminated union assembled from descriptor.auth_modes list"
+      ],
+      "evidence": [
+        "src/mountainash_settings/profiles/profile.py __pydantic_init_subclass__"
+      ]
+    },
+    {
+      "name": "Secrets resolution pipeline",
+      "module_ids": [
+        "mountainash_settings.secrets.registry",
+        "mountainash_settings.resolve",
+        "mountainash_settings.settings.base_settings"
+      ],
+      "recommended_docs": [
+        "Resolution runs twice in __init__: once on kwargs before super().__init__, once on model fields after",
+        "resolve_references_in_dict for kwargs; resolve_references_in_model_tree for loaded config fields",
+        "Nested BaseModel fields are rebuilt as new instances to avoid frozen=True mutation"
+      ],
+      "evidence": [
+        "src/mountainash_settings/settings/base_settings.py __init__ (two if local_settings_params.secrets_provider: blocks)"
+      ]
+    },
+    {
+      "name": "Config file dispatch pipeline",
+      "module_ids": [
+        "mountainash_settings.settings_parameters.filehandler",
+        "mountainash_settings.settings.base_settings"
+      ],
+      "recommended_docs": [
+        "Files separated by extension into SettingsFiles (env/yaml/toml/json)",
+        "yaml_file/toml_file/json_file set on model_config before super().__init__",
+        "settings_customise_sources() returns source priority tuple"
+      ],
+      "evidence": [
+        "src/mountainash_settings/settings/base_settings.py settings_customise_sources()"
+      ]
+    },
+    {
+      "name": "Known risks and change areas",
+      "module_ids": [
+        "mountainash_settings.settings.base_settings",
+        "mountainash_settings.settings_cache.settings_manager",
+        "mountainash_settings.profiles.profile"
+      ],
+      "recommended_docs": [
+        "model_config mutation before super().__init__ is class-level — thread-safety risk under concurrent construction",
+        "SettingsManager dict cache is not thread-safe for concurrent first-creation",
+        "Dynamic pydantic field installation via model_rebuild() may need update on pydantic upgrades"
+      ],
+      "evidence": [
+        "src/mountainash_settings/settings/base_settings.py (model_config mutation lines)",
+        "src/mountainash_settings/settings_cache/settings_manager.py (dict cache)"
+      ]
+    }
+  ],
+  "featured_modules": [
+    "mountainash_settings.settings.base_settings",
+    "mountainash_settings.settings_parameters.settings_parameters",
+    "mountainash_settings.settings_cache.settings_functions",
+    "mountainash_settings.settings_cache.settings_manager",
+    "mountainash_settings.profiles.profile",
+    "mountainash_settings.secrets.registry",
+    "mountainash_settings.resolve"
+  ],
+  "hidden_or_internal_modules": [],
+  "documentation_plan": [
+    "Architecture note: two-level caching and why lru_cache + SettingsManager coexist",
+    "Architecture note: validate_assignment invariant and the object.__setattr__ pattern",
+    "Architecture note: DescriptorProfile dynamic field installation under pydantic v2",
+    "Risk log: thread-safety of model_config mutation and SettingsManager dict"
+  ],
+  "open_questions": [
+    "Is the model_config class-level mutation before super().__init__ actually a threading issue in practice? Needs thread-safety audit.",
+    "lru_cache is never cleared — does any scenario require a cache flush API?"
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "id": "mountainash_settings.settings.app.app_settings",
+  "path": "src/mountainash_settings/settings/app/app_settings.py",
+  "summary": "AppSettings is a ready-made MountainAshBaseSettings subclass for application-level configuration. It pre-declares common fields: LOCALE_TIMEZONE, DEBUG, RUNDATE, RUNTIME, RUNDATETIME. Intended as a convenience base for user applications — subclass AppSettings instead of MountainAshBaseSettings for opinionated defaults.",
+  "role": "public-api",
+  "visibility": "public",
+  "stability": "stable",
+  "audiences": ["users", "contributors"],
+  "doc_priority": "useful",
+  "confidence": "high",
+  "public_api": [
+    "AppSettings",
+    "AppSettings.LOCALE_TIMEZONE",
+    "AppSettings.DEBUG",
+    "AppSettings.RUNDATE",
+    "AppSettings.RUNTIME",
+    "AppSettings.RUNDATETIME"
+  ],
+  "key_classes": ["AppSettings"],
+  "key_functions": [
+    "post_init"
+  ],
+  "dependencies": [
+    "mountainash_settings.settings.base_settings",
+    "mountainash_settings.settings_parameters.settings_parameters",
+    "mountainash_settings.settings.app.app_settings_templates"
+  ],
+  "dependents": [],
+  "extension_points": [
+    "post_init(): override to add application-specific derived fields"
+  ],
+  "lifecycle_notes": [
+    "RUNDATE and RUNTIME are set to datetime.now() at class definition time — instances created at different times will share the same date unless post_init re-evaluates",
+    "RUNDATETIME is derived in post_init from RUNDATE and RUNTIME"
+  ],
+  "documentation_hooks": [],
+  "examples": [],
+  "tests": [
+    "tests/test_app_settings.py"
+  ],
+  "risks": [
+    "RUNDATE/RUNTIME Field defaults capture time at class import — not at instance creation. Long-running processes may produce stale timestamps."
+  ],
+  "open_questions": [],
+  "evidence": [
+    {"kind": "test", "path": "tests/test_app_settings.py", "detail": "AppSettings test coverage"}
+  ],
+  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "manual": {
+    "notes": "",
+    "editorial_status": "",
+    "owner": "",
+    "manual_summary": ""
+  }
+}
