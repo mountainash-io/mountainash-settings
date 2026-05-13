@@ -26,6 +26,16 @@ import typing as t
 
 from .spec import ProfileSpec
 
+# Transitional: accept legacy ProfileDescriptor instances in @register(spec).
+# ProfileDescriptor is a separate dataclass during 26.5.x (Tasks 1–7).
+# Task 8 makes it an alias for ProfileSpec, at which point this widening
+# becomes redundant and this block can be removed in one step.
+try:
+    from .descriptor import ProfileDescriptor as _ProfileDescriptor
+    _SPEC_TYPES: tuple[type, ...] = (ProfileSpec, _ProfileDescriptor)
+except ImportError:
+    _SPEC_TYPES = (ProfileSpec,)
+
 if t.TYPE_CHECKING:
     from .profile import Profile
 
@@ -146,32 +156,10 @@ class Registry:
         """
         import warnings as _warnings
 
-        # Import ProfileDescriptor lazily to avoid circular imports; it is the
-        # pre-rename name for ProfileSpec (Task 8 will make it a true alias).
-        try:
-            from .descriptor import ProfileDescriptor as _ProfileDescriptor
-        except ImportError:
-            _ProfileDescriptor = None  # type: ignore[assignment,misc]
-
         def _outer(arg: t.Any) -> t.Any:
-            # Bare form: the decorator was applied without arguments, so
-            # Python passes the class itself as `arg`.
-            if isinstance(arg, type):
-                cls = arg
-                spec = cls.__dict__.get("__spec__")
-                if spec is None:
-                    raise TypeError(
-                        f"{cls.__name__} has no '__spec__' attribute declared. "
-                        f"Use `@register` only on classes that declare "
-                        f"`__spec__ = <YOUR_SPEC>` in their body."
-                    )
-                self.register(spec, cls)
-                return cls
-
             # With-spec form (deprecated). Accept both ProfileSpec and
             # ProfileDescriptor (the pre-rename alias) during the 26.5.x window.
-            _spec_types = (ProfileSpec,) if _ProfileDescriptor is None else (ProfileSpec, _ProfileDescriptor)
-            if isinstance(arg, _spec_types):
+            if isinstance(arg, _SPEC_TYPES):
                 spec = arg
                 _warnings.warn(
                     "@register(spec) is deprecated. Use '@register' "
@@ -184,19 +172,34 @@ class Registry:
                     body_spec = cls.__dict__.get("__spec__")
                     if body_spec is not None and body_spec is not spec:
                         raise TypeError(
-                            f"{cls.__name__}: @register(spec) and "
-                            f"class-body __spec__ disagree: "
-                            f"{spec!r} vs {body_spec!r}"
+                            f"{cls.__name__}: @register(spec) and class-body __spec__ disagree: "
+                            f"decorator has spec.name={spec.name!r}, "
+                            f"class body has spec.name={body_spec.name!r}"
                         )
                     self.register(spec, cls)
                     return cls
 
                 return _wrap
 
-            raise TypeError(
-                f"@register expected either no arguments (the class) or a "
-                f"ProfileSpec instance, got {type(arg).__name__}"
-            )
+            # Bare form: the decorator was applied without arguments, so
+            # Python passes the class itself as `arg`.
+            elif isinstance(arg, type):
+                cls = arg
+                spec = cls.__dict__.get("__spec__")
+                if spec is None:
+                    raise TypeError(
+                        f"{cls.__name__} has no '__spec__' attribute declared. "
+                        f"Use `@register` only on classes that declare "
+                        f"`__spec__ = <YOUR_SPEC>` in their body."
+                    )
+                self.register(spec, cls)
+                return cls
+
+            else:
+                raise TypeError(
+                    f"@register expected either no arguments (the class) or a "
+                    f"ProfileSpec instance, got {type(arg).__name__}"
+                )
 
         return _outer
 
