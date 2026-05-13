@@ -1,6 +1,8 @@
 # tests/unit/profiles/test_registry.py
 """Unit tests for the Registry class."""
 
+import warnings
+
 import pytest
 
 from mountainash_settings.auth import NoAuth
@@ -172,3 +174,74 @@ class TestRegistryConstraints:
             __spec__ = spec
         with pytest.raises(TypeError, match="profile_type"):
             reg.register(spec, P)
+
+
+@pytest.mark.unit
+class TestBareRegisterDecorator:
+    """Tests for the new argument-free @register form."""
+
+    def test_bare_register_reads_spec_from_class(self):
+        reg = Registry("bare_test")
+        register = reg.decorator()
+
+        spec = ProfileSpec(
+            name="bare", provider_type="bare",
+            parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
+            auth_modes=[NoAuth],
+        )
+
+        @register
+        class BareProfile(Profile):
+            __spec__ = spec
+
+        assert "bare" in reg
+        assert reg.get_settings_class("bare") is BareProfile
+
+    def test_bare_register_raises_when_spec_missing(self):
+        reg = Registry("bare_missing")
+        register = reg.decorator()
+
+        with pytest.raises(TypeError, match="__spec__"):
+            @register
+            class NoSpecProfile(Profile):
+                pass  # no __spec__ declared
+
+    def test_old_form_emits_deprecation_warning(self):
+        reg = Registry("old_form")
+        register = reg.decorator()
+
+        spec = ProfileSpec(
+            name="old", provider_type="old",
+            parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
+            auth_modes=[NoAuth],
+        )
+
+        with pytest.warns(DeprecationWarning, match="@register\\(spec\\).*deprecated"):
+            @register(spec)
+            class OldFormProfile(Profile):
+                __spec__ = spec
+
+        assert "old" in reg
+
+    def test_old_form_drift_catch(self):
+        """@register(SPEC_A) on a class with __spec__ = SPEC_B raises."""
+        reg = Registry("drift_test")
+        register = reg.decorator()
+
+        spec_a = ProfileSpec(
+            name="a", provider_type="a",
+            parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
+            auth_modes=[NoAuth],
+        )
+        spec_b = ProfileSpec(
+            name="b", provider_type="b",
+            parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
+            auth_modes=[NoAuth],
+        )
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            with pytest.raises(TypeError, match="disagree"):
+                @register(spec_a)
+                class DriftProfile(Profile):
+                    __spec__ = spec_b

@@ -135,19 +135,68 @@ class Registry:
 
         Supports two call shapes:
 
-        - Bare ``@register`` (new canonical form): reads ``cls.__spec__`` and
-          registers under its name.
+        - Bare ``@register`` (canonical from 26.5.0): reads ``cls.__spec__``
+          and registers under its name.
         - ``@register(spec)`` (deprecated): emits ``DeprecationWarning``;
           validates the argument matches ``cls.__spec__`` if declared.
-        """
-        # NOTE: The bare/with-arg disambiguation in this method is implemented
-        # in a later task (Task 5). For now, only the with-arg form works.
 
-        def _outer(spec: ProfileSpec) -> t.Callable[[type[T]], type[T]]:
-            def _wrap(cls: type[T]) -> type[T]:
+        Disambiguation: the bare form is detected by ``isinstance(arg, type)``
+        because Python passes the decorated class directly. The with-spec
+        form is detected by ``isinstance(arg, ProfileSpec)``.
+        """
+        import warnings as _warnings
+
+        # Import ProfileDescriptor lazily to avoid circular imports; it is the
+        # pre-rename name for ProfileSpec (Task 8 will make it a true alias).
+        try:
+            from .descriptor import ProfileDescriptor as _ProfileDescriptor
+        except ImportError:
+            _ProfileDescriptor = None  # type: ignore[assignment,misc]
+
+        def _outer(arg: t.Any) -> t.Any:
+            # Bare form: the decorator was applied without arguments, so
+            # Python passes the class itself as `arg`.
+            if isinstance(arg, type):
+                cls = arg
+                spec = cls.__dict__.get("__spec__")
+                if spec is None:
+                    raise TypeError(
+                        f"{cls.__name__} has no '__spec__' attribute declared. "
+                        f"Use `@register` only on classes that declare "
+                        f"`__spec__ = <YOUR_SPEC>` in their body."
+                    )
                 self.register(spec, cls)
                 return cls
-            return _wrap
+
+            # With-spec form (deprecated). Accept both ProfileSpec and
+            # ProfileDescriptor (the pre-rename alias) during the 26.5.x window.
+            _spec_types = (ProfileSpec,) if _ProfileDescriptor is None else (ProfileSpec, _ProfileDescriptor)
+            if isinstance(arg, _spec_types):
+                spec = arg
+                _warnings.warn(
+                    "@register(spec) is deprecated. Use '@register' "
+                    "(no argument); the spec will be read from the "
+                    "class's __spec__ attribute. Removed in 26.6.0.",
+                    DeprecationWarning, stacklevel=2,
+                )
+
+                def _wrap(cls: type[T]) -> type[T]:
+                    body_spec = cls.__dict__.get("__spec__")
+                    if body_spec is not None and body_spec is not spec:
+                        raise TypeError(
+                            f"{cls.__name__}: @register(spec) and "
+                            f"class-body __spec__ disagree: "
+                            f"{spec!r} vs {body_spec!r}"
+                        )
+                    self.register(spec, cls)
+                    return cls
+
+                return _wrap
+
+            raise TypeError(
+                f"@register expected either no arguments (the class) or a "
+                f"ProfileSpec instance, got {type(arg).__name__}"
+            )
 
         return _outer
 
