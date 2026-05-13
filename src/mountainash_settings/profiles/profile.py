@@ -1,16 +1,21 @@
 # src/mountainash_settings/profiles/profile.py
-"""Generic DescriptorProfile base for declarative settings profiles.
+"""Generic Profile base for declarative settings profiles.
 
-A subclass declares ``__descriptor__`` (a :class:`ProfileDescriptor`); this
-base uses pydantic v2's ``__pydantic_init_subclass__`` hook to materialize the
-descriptor into pydantic fields and compose the :class:`AuthSpec` union into
-the ``auth`` field. Consumers add their own domain-specific output methods
-(e.g. ``to_driver_kwargs()``) in their own subclasses.
+A subclass declares ``__spec__`` (a :class:`ProfileSpec`); this base uses
+pydantic v2's ``__pydantic_init_subclass__`` hook to materialize the spec
+into pydantic fields and compose the :class:`AuthSpec` union into the
+``auth`` field.
+
+During the 26.5.x deprecation window, this class also accepts the old
+``__descriptor__`` attribute name; concrete classes that still declare
+``__descriptor__`` emit a ``DeprecationWarning`` but install fields
+correctly. Removed in 26.6.0.
 """
 
 from __future__ import annotations
 
 import typing as t
+import warnings
 
 from pydantic import AfterValidator, SecretStr
 from pydantic.fields import FieldInfo
@@ -18,64 +23,97 @@ from pydantic.fields import FieldInfo
 from mountainash_settings import MountainAshBaseSettings
 from mountainash_settings.auth import auth_to_driver_kwargs
 
-from .descriptor import MISSING, ProfileDescriptor
+from .lookup import lookup_class_var
+from .spec import MISSING, ProfileSpec
 
-__all__ = ["DescriptorProfile"]
+__all__ = ["Profile"]
 
 
-class DescriptorProfile(MountainAshBaseSettings):
-    """Declarative settings base — subclasses set ``__descriptor__`` only.
+def _resolve_spec(cls: type) -> ProfileSpec | None:
+    """Resolve a class's bound spec from __spec__ (new) or __descriptor__ (old).
+
+    Reads only from cls.__dict__ (not the MRO) because field installation
+    must use the spec declared on this class specifically.
+
+    Returns:
+        The bound ProfileSpec, or None if neither attribute is set.
+
+    Raises:
+        TypeError: If both __spec__ and __descriptor__ are declared with
+            different values.
+    """
+    spec = cls.__dict__.get("__spec__")
+    old = cls.__dict__.get("__descriptor__")
+    if spec is None and old is not None:
+        warnings.warn(
+            f"{cls.__name__} declares '__descriptor__' (deprecated). "
+            f"Rename to '__spec__' before mountainash-settings 26.6.0.",
+            DeprecationWarning, stacklevel=3,
+        )
+        return old
+    if spec is not None and old is not None and spec is not old:
+        raise TypeError(
+            f"{cls.__name__} declares both '__spec__' and '__descriptor__' "
+            f"with conflicting values: {spec!r} vs {old!r}"
+        )
+    return spec
+
+
+class Profile(MountainAshBaseSettings):
+    """Declarative settings base — subclasses set ``__spec__`` only.
 
     Public contract:
-        - :attr:`backend` / :attr:`profile_name` — descriptor name.
-        - :attr:`provider_type` — descriptor provider_type.
-        - :meth:`_default_kwargs` — 1:1 ``driver_key`` mappings from the descriptor.
+        - :attr:`backend` / :attr:`profile_name` — spec name.
+        - :attr:`provider_type` — spec provider_type.
+        - :meth:`_default_kwargs` — 1:1 ``driver_key`` mappings from the spec.
         - :meth:`_auth_kwargs` — default auth dispatch (consumers may override).
         - ``__adapter__`` — if set, adapter owns the output pipeline.
+
+    Public from 26.5.0. Previously named ``DescriptorProfile``.
     """
 
-    __descriptor__: t.ClassVar[ProfileDescriptor]
+    __spec__: t.ClassVar[ProfileSpec]
     __adapter__: t.ClassVar[
-        t.Callable[["DescriptorProfile"], dict[str, t.Any]] | None
+        t.Callable[["Profile"], dict[str, t.Any]] | None
     ] = None
 
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: t.Any) -> None:
-        """Install fields described by ``__descriptor__`` on the subclass."""
+        """Install fields described by ``__spec__`` on the subclass."""
         super().__pydantic_init_subclass__(**kwargs)
-        desc = cls.__dict__.get("__descriptor__")
-        if desc is None:
-            return  # intermediate subclass without its own descriptor
+        spec = _resolve_spec(cls)
+        if spec is None:
+            return  # intermediate subclass without its own spec
 
         new_fields: dict[str, tuple[t.Any, FieldInfo]] = {}
 
-        # 1. Descriptor parameters → pydantic fields
-        for spec in desc.parameters:
-            ptype: t.Any = SecretStr if spec.secret else spec.type
-            if spec.validator is not None:
-                ptype = t.Annotated[ptype, AfterValidator(spec.validator)]
-            if spec.default is MISSING:
+        # 1. Spec parameters → pydantic fields
+        for param in spec.parameters:
+            ptype: t.Any = SecretStr if param.secret else param.type
+            if param.validator is not None:
+                ptype = t.Annotated[ptype, AfterValidator(param.validator)]
+            if param.default is MISSING:
                 info = FieldInfo(
                     annotation=ptype,
                     default=...,
-                    description=spec.description,
+                    description=param.description,
                 )
             else:
                 info = FieldInfo(
                     annotation=ptype,
-                    default=spec.default,
-                    description=spec.description,
+                    default=param.default,
+                    description=param.description,
                 )
-            new_fields[spec.name] = (ptype, info)
+            new_fields[param.name] = (ptype, info)
 
-        # 2. auth field as discriminated union of descriptor.auth_modes
-        if desc.auth_modes:
+        # 2. auth field as discriminated union of spec.auth_modes
+        if spec.auth_modes:
             auth_union: t.Any
-            if len(desc.auth_modes) == 1:
-                auth_union = desc.auth_modes[0]
+            if len(spec.auth_modes) == 1:
+                auth_union = spec.auth_modes[0]
                 auth_info = FieldInfo(annotation=auth_union, default=...)
             else:
-                auth_union = t.Union[tuple(desc.auth_modes)]  # type: ignore[valid-type]
+                auth_union = t.Union[tuple(spec.auth_modes)]  # type: ignore[valid-type]
                 auth_info = FieldInfo(
                     annotation=auth_union,
                     default=...,
@@ -93,16 +131,16 @@ class DescriptorProfile(MountainAshBaseSettings):
 
     @property
     def profile_name(self) -> str:
-        return self.__descriptor__.name
+        return self.__spec__.name
 
     @property
     def backend(self) -> str:
         """Alias for ``profile_name`` — preserves naming from mountainash-data."""
-        return self.__descriptor__.name
+        return self.__spec__.name
 
     @property
     def provider_type(self) -> t.Any:
-        return self.__descriptor__.provider_type
+        return self.__spec__.provider_type
 
     # --- Template wiring -----------------------------------------------------
 
@@ -121,54 +159,50 @@ class DescriptorProfile(MountainAshBaseSettings):
             template_settings_parameters=template_settings_parameters,
             reinitialise=reinitialise,
         )
-        desc = type(self).__dict__.get("__descriptor__")
-        if desc is None:
-            for base in type(self).__mro__[1:]:
-                cand = base.__dict__.get("__descriptor__")
-                if cand is not None:
-                    desc = cand
-                    break
-        if desc is None:
+        spec = lookup_class_var(type(self), "__spec__")
+        if spec is None:
+            spec = lookup_class_var(type(self), "__descriptor__")
+        if spec is None:
             return
-        for spec in desc.parameters:
-            if spec.template is None:
+        for param in spec.parameters:
+            if param.template is None:
                 continue
-            current = getattr(self, spec.name, None)
+            current = getattr(self, param.name, None)
             # Only apply template when value matches the declared default
             # (caller-provided explicit values win).
-            spec_default = spec.default if spec.default is not MISSING else None
-            if current not in (spec_default, None, ""):
+            param_default = param.default if param.default is not MISSING else None
+            if current not in (param_default, None, ""):
                 continue
             new_val = self.init_setting_from_template(
-                template_str=spec.template,
+                template_str=param.template,
                 current_value=None,  # force template evaluation
                 reinitialise=reinitialise,
             )
-            object.__setattr__(self, spec.name, new_val)
+            object.__setattr__(self, param.name, new_val)
 
     # --- Kwargs helpers ------------------------------------------------------
 
     def _default_kwargs(self) -> dict[str, t.Any]:
-        """Emit 1:1 ``driver_key`` mappings from the descriptor.
+        """Emit 1:1 ``driver_key`` mappings from the spec.
 
         - Skips ``None`` values.
         - Unwraps :class:`SecretStr` via ``.get_secret_value()``.
         - Applies ``ParameterSpec.transform`` if set.
         """
         out: dict[str, t.Any] = {}
-        for spec in self.__descriptor__.parameters:
-            if spec.driver_key is None:
+        for param in self.__spec__.parameters:
+            if param.driver_key is None:
                 continue
-            val = getattr(self, spec.name, None)
+            val = getattr(self, param.name, None)
             if val is None:
                 continue
             # Accommodates both pydantic-coerced (SecretStr) and
             # setattr-bypass (raw str) construction paths.
             if isinstance(val, SecretStr):
                 val = val.get_secret_value()
-            if spec.transform is not None:
-                val = spec.transform(val)
-            out[spec.driver_key] = val
+            if param.transform is not None:
+                val = param.transform(val)
+            out[param.driver_key] = val
         return out
 
     def _auth_kwargs(self) -> dict[str, t.Any]:
