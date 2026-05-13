@@ -126,15 +126,15 @@ settings = AppSettings(
 
 ### Declarative connection profiles
 
-For database and service connections, the `DescriptorProfile` + `ProfileDescriptor` system provides typed, inspectable, driver-ready settings with automatic field installation, auth mode validation, and runtime lookup by name:
+For database and service connections, the `Profile` + `ProfileSpec` system provides typed, inspectable, driver-ready settings with automatic field installation, auth mode validation, and runtime lookup by name:
 
 ```python
 from mountainash_settings import (
-    DescriptorProfile, MISSING, ParameterSpec, ProfileDescriptor,
+    Profile, MISSING, ParameterSpec, ProfileSpec,
     Registry, NoAuth, PasswordAuth,
 )
 
-POSTGRESQL_DESCRIPTOR = ProfileDescriptor(
+POSTGRESQL_SPEC = ProfileSpec(
     name="postgresql",
     provider_type="postgresql",
     parameters=[
@@ -148,10 +148,11 @@ POSTGRESQL_DESCRIPTOR = ProfileDescriptor(
 )
 
 DATABASES = Registry("databases")
+register = DATABASES.decorator()
 
-@DATABASES.decorator()(POSTGRESQL_DESCRIPTOR)
-class PostgreSQLSettings(DescriptorProfile):
-    __descriptor__ = POSTGRESQL_DESCRIPTOR
+@register
+class PostgreSQLSettings(Profile):
+    __spec__ = POSTGRESQL_SPEC
 
 settings = PostgreSQLSettings(
     HOST="prod-db.example.com",
@@ -164,7 +165,7 @@ driver_kwargs = {**settings._default_kwargs(), **settings._auth_kwargs()}
 #  "user": "app_user", "password": "s3cr3t"}
 ```
 
-See [docs/profile-descriptor-pattern.md](docs/profile-descriptor-pattern.md) for an explanation of when and why to use this pattern over a plain subclass.
+See [docs/profile-spec-pattern.md](docs/profile-spec-pattern.md) for an explanation of when and why to use this pattern over a plain subclass.
 
 ### 13 typed auth modes
 
@@ -191,10 +192,10 @@ All authentication modes are validated pydantic models with `SecretStr` protecti
 Drop one line into a test module to get parametrised pytest coverage for every descriptor in a registry — name conventions, field uniqueness, valid auth modes, and more:
 
 ```python
-from mountainash_settings import descriptor_invariants_for
+from mountainash_settings import spec_invariants_for
 from my_package.settings import DATABASES
 
-TestDatabaseInvariants = descriptor_invariants_for(DATABASES)
+TestDatabaseInvariants = spec_invariants_for(DATABASES)
 ```
 
 New profile registrations are covered automatically.
@@ -205,7 +206,7 @@ New profile registrations are covered automatically.
 |---|---|
 | [docs/quickstart.md](docs/quickstart.md) | Step-by-step introduction — settings class, config files, templates, caching, secrets, profiles |
 | [docs/advanced-usage.md](docs/advanced-usage.md) | SettingsParameters merging, auth modes reference, invariant tests, dynamic resolution |
-| [docs/profile-descriptor-pattern.md](docs/profile-descriptor-pattern.md) | When and why to use ProfileDescriptor vs a plain subclass |
+| [docs/profile-spec-pattern.md](docs/profile-spec-pattern.md) | When and why to use ProfileSpec vs a plain subclass |
 | [examples/](examples/) | Working code: basic usage, path templating, smart merging, dynamic resolution |
 
 ## Development
