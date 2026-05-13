@@ -245,3 +245,37 @@ class TestBareRegisterDecorator:
                 @register(spec_a)
                 class DriftProfile(Profile):
                     __spec__ = spec_b
+
+
+@pytest.mark.unit
+class TestSpecDescriptorMirror:
+    """Tests for the __spec__ → __descriptor__ deprecation mirror.
+
+    During 26.5.x, Registry.register() sets both attributes to the same
+    object so downstream code reading cls.__descriptor__ keeps working.
+    This whole class is deleted in 26.6.0.
+    """
+
+    def test_bare_register_mirrors_spec_to_descriptor(self):
+        reg = Registry("mirror_test")
+        register = reg.decorator()
+
+        spec = ProfileSpec(
+            name="mirror", provider_type="mirror",
+            parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
+            auth_modes=[NoAuth],
+        )
+
+        @register
+        class MirrorProfile(Profile):
+            __spec__ = spec
+
+        # Both class-level attributes resolve to the same object
+        assert MirrorProfile.__spec__ is spec
+        assert MirrorProfile.__descriptor__ is spec
+        assert MirrorProfile.__descriptor__ is MirrorProfile.__spec__
+
+        # And on instances too
+        instance = MirrorProfile(HOST="h", auth=NoAuth())
+        assert instance.__descriptor__ is spec
+        assert instance.__spec__ is spec
