@@ -173,7 +173,13 @@ class TestSpecAttributeFallback:
 
     def test_old_descriptor_attribute_emits_warning(self):
         """A class declaring only __descriptor__ (no __spec__) still works
-        but emits DeprecationWarning at class creation."""
+        but emits DeprecationWarning at class creation.
+
+        Methods that read self.__spec__ (profile_name, backend,
+        provider_type, _default_kwargs) must keep working — _resolve_spec
+        installs cls.__spec__ as an alias for cls.__descriptor__ when
+        falling back to the old attribute.
+        """
         with pytest.warns(DeprecationWarning, match="__descriptor__.*deprecated"):
             class OldStyleProfile(Profile):
                 __descriptor__ = DUMMY_SPEC
@@ -181,6 +187,14 @@ class TestSpecAttributeFallback:
         # Field installation still works from the old attribute
         instance = OldStyleProfile(HOST="h", auth=NoAuth())
         assert instance.HOST == "h"
+
+        # Methods that read self.__spec__ must work too — these previously
+        # raised AttributeError on __descriptor__-only classes.
+        assert instance.profile_name == "dummy"
+        assert instance.backend == "dummy"
+        assert instance.provider_type == "dummy"
+        kwargs = instance._default_kwargs()
+        assert kwargs == {"host": "h", "port": 9999}
 
     def test_conflicting_spec_and_descriptor_raises(self):
         """Declaring both __spec__ and __descriptor__ with different values raises."""

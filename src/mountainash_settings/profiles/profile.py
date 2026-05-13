@@ -48,8 +48,14 @@ def _resolve_spec(cls: type) -> ProfileSpec | None:
         warnings.warn(
             f"{cls.__name__} declares '__descriptor__' (deprecated). "
             f"Rename to '__spec__' before mountainash-settings 26.6.0.",
-            DeprecationWarning, stacklevel=3,
+            DeprecationWarning, stacklevel=4,
         )
+        # Install __spec__ as an alias so instance properties and methods
+        # that read self.__spec__ keep working during the 26.5.x deprecation
+        # window. Without this, __descriptor__-only classes have fields
+        # installed but profile_name/backend/provider_type/_default_kwargs()
+        # raise AttributeError.
+        cls.__spec__ = old
         return old
     if spec is not None and old is not None and spec is not old:
         raise TypeError(
