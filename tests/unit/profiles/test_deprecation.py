@@ -11,7 +11,7 @@ import warnings
 
 import pytest
 
-from mountainash_settings.auth import NoAuth
+from fixtures.auth_stubs import StubNoAuth as NoAuth
 
 
 @pytest.mark.unit

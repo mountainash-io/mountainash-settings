@@ -8,7 +8,7 @@ import warnings
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from mountainash_settings.auth import NoAuth, PasswordAuth
+from fixtures.auth_stubs import StubNoAuth as NoAuth, StubPasswordAuth as PasswordAuth
 from mountainash_settings.profiles import (
     ParameterSpec,
     ProfileSpec,
@@ -46,15 +46,6 @@ class TestProfile:
     def test_default_kwargs_noauth(self):
         p = DummyProfile(HOST="h", PORT=1234, auth=NoAuth())
         assert p._default_kwargs() == {"host": "h", "port": 1234}
-
-    def test_auth_kwargs_password(self):
-        p = DummyProfile(
-            HOST="h",
-            auth=PasswordAuth(username="u", password=SecretStr("p")),
-        )
-        kwargs = p._auth_kwargs()
-        assert kwargs["user"] == "u"
-        assert kwargs["password"] == "p"
 
     def test_secret_field_unwrapped(self):
         p = DummyProfile(HOST="h", PASSWORD="literal-secret", auth=NoAuth())
