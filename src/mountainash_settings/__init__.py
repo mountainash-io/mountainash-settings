@@ -17,24 +17,6 @@ from .profiles import (
     lookup_class_var,
     spec_invariants_for,
 )
-from .auth import (
-    AUTH_TO_DRIVER_KWARGS,
-    AuthSpec,
-    AzureADAuth,
-    CertificateAuth,
-    IAMAuth,
-    JWTAuth,
-    KerberosAuth,
-    NoAuth,
-    OAuth1Auth,
-    OAuth2Auth,
-    OAuth2AuthCodeAuth,
-    PasswordAuth,
-    ServiceAccountAuth,
-    TokenAuth,
-    WindowsAuth,
-    auth_to_driver_kwargs,
-)
 from .secrets import (
     SecretsResolver,
     register_secrets_resolver,
@@ -63,24 +45,6 @@ __all__ = [
     "Registry",
     "lookup_class_var",
     "spec_invariants_for",
-
-    # Auth
-    "AUTH_TO_DRIVER_KWARGS",
-    "AuthSpec",
-    "AzureADAuth",
-    "CertificateAuth",
-    "IAMAuth",
-    "JWTAuth",
-    "KerberosAuth",
-    "NoAuth",
-    "OAuth1Auth",
-    "OAuth2Auth",
-    "OAuth2AuthCodeAuth",
-    "PasswordAuth",
-    "ServiceAccountAuth",
-    "TokenAuth",
-    "WindowsAuth",
-    "auth_to_driver_kwargs",
 
     # Secrets
     "SecretsResolver",
