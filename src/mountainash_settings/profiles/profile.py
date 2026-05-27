@@ -21,7 +21,6 @@ from pydantic import AfterValidator, SecretStr
 from pydantic.fields import FieldInfo
 
 from mountainash_settings import MountainAshBaseSettings
-from mountainash_settings.auth import auth_to_driver_kwargs
 
 from .lookup import lookup_class_var
 from .spec import MISSING, ProfileSpec
@@ -211,9 +210,3 @@ class Profile(MountainAshBaseSettings):
             out[param.driver_key] = val
         return out
 
-    def _auth_kwargs(self) -> dict[str, t.Any]:
-        """Default auth dispatch. Domain adapters typically override."""
-        auth = getattr(self, "auth", None)
-        if auth is None:
-            return {}
-        return auth_to_driver_kwargs(auth)
