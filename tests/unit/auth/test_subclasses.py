@@ -3,7 +3,7 @@
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from mountainash_settings.auth import (
+from mountainash_auth_client import (
     AzureADAuth,
     CertificateAuth,
     IAMAuth,

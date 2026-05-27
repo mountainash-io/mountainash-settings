@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import typing as t
 
-from mountainash_settings.auth.base import AuthSpec
+from mountainash_auth_client import AuthSpec
 
 from .registry import Registry
 

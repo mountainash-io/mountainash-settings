@@ -3,7 +3,7 @@
 import pytest
 from pydantic import SecretStr
 
-from mountainash_settings.auth import (
+from mountainash_auth_client import (
     AuthSpec,
     IAMAuth,
     JWTAuth,
@@ -12,7 +12,7 @@ from mountainash_settings.auth import (
     PasswordAuth,
     TokenAuth,
 )
-from mountainash_settings.auth.dispatch import auth_to_driver_kwargs
+from mountainash_auth_client import auth_to_driver_kwargs
 
 
 @pytest.mark.unit

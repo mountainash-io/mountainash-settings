@@ -3,7 +3,7 @@
 
 import pytest
 
-from mountainash_settings.auth import NoAuth
+from mountainash_auth_client import NoAuth
 from mountainash_settings.profiles import (
     ParameterSpec,
     ProfileDescriptor,

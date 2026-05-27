@@ -640,7 +640,7 @@ from typing import Annotated
 from pydantic import AfterValidator, Field, SecretStr
 
 from mountainash_settings import MountainAshBaseSettings
-from mountainash_settings.auth import NoAuth
+from mountainash_auth_client import NoAuth
 from mountainash_settings.profiles import (
     DescriptorProfile,
     ParameterSpec,

@@ -2,7 +2,7 @@
 
 import pytest
 
-from mountainash_settings.auth.base import AuthSpec
+from mountainash_auth_client import AuthSpec
 
 
 @pytest.mark.unit

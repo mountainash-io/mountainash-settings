@@ -86,7 +86,7 @@ dependencies = [
     # "mountainash_constants @ {root:uri}/../mountainash-constants",
     # "mountainash_utils_os @ {root:uri}/../mountainash-utils-os",
 
-
+    "mountainash-auth-client @ {root:uri}/../mountainash-auth-client",
 ]
 [envs.test.scripts]
 # ===========================================
