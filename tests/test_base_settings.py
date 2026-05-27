@@ -331,7 +331,7 @@ class TestSecretsResolution:
         _get_settings.cache_clear()
 
     def test_nested_frozen_model_secret_resolved_from_yaml(self, secrets_registry):
-        from mountainash_auth_client import PasswordAuth
+        from fixtures.auth_stubs import StubPasswordAuth as PasswordAuth
 
         class _NestedAuthSettings(MountainAshBaseSettings):
             APP_NAME: str = Field(default="default")
@@ -350,7 +350,7 @@ class TestSecretsResolution:
         assert settings.auth.password.get_secret_value() == "resolved_db/production/password"
 
     def test_nested_model_secret_in_kwargs_resolved(self, secrets_registry):
-        from mountainash_auth_client import PasswordAuth
+        from fixtures.auth_stubs import StubPasswordAuth as PasswordAuth
 
         class _NestedAuthSettings(MountainAshBaseSettings):
             APP_NAME: str = Field(default="default")

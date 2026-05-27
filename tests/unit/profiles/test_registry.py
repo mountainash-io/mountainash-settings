@@ -5,7 +5,7 @@ import warnings
 
 import pytest
 
-from mountainash_auth_client import NoAuth
+from fixtures.auth_stubs import StubNoAuth as NoAuth
 from mountainash_settings.profiles.descriptor import ProfileDescriptor
 from mountainash_settings.profiles.registry import Registry
 

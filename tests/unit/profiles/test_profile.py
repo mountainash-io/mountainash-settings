@@ -8,7 +8,7 @@ import warnings
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from mountainash_auth_client import NoAuth, PasswordAuth
+from fixtures.auth_stubs import StubNoAuth as NoAuth, StubPasswordAuth as PasswordAuth
 from mountainash_settings.profiles import (
     ParameterSpec,
     ProfileSpec,

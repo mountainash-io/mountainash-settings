@@ -3,7 +3,7 @@
 
 import pytest
 
-from mountainash_auth_client import NoAuth
+from fixtures.auth_stubs import StubNoAuth as NoAuth
 from mountainash_settings.profiles.spec import (
     MISSING,
     Missing,
