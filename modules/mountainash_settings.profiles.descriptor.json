@@ -1,0 +1,54 @@
+{
+  "id": "mountainash_settings.profiles.descriptor",
+  "path": "src/mountainash_settings/profiles/descriptor.py",
+  "summary": "Defines the declarative descriptor system: ProfileDescriptor (immutable description of a settings profile), ParameterSpec (one settings field with name, type, tier, default, driver_key, secret, transform, validator, template), and MISSING sentinel. Consumer domains declare a ProfileDescriptor once and hand it to DescriptorProfile via __descriptor__.",
+  "role": "model",
+  "visibility": "public",
+  "stability": "stable",
+  "audiences": ["users", "extension-authors", "maintainers", "contributors"],
+  "doc_priority": "essential",
+  "confidence": "high",
+  "public_api": [
+    "MISSING",
+    "ParameterSpec",
+    "ProfileDescriptor"
+  ],
+  "key_classes": ["ParameterSpec", "ProfileDescriptor"],
+  "key_functions": [],
+  "dependencies": [],
+  "dependents": [
+    "mountainash_settings.profiles.profile",
+    "mountainash_settings.profiles.registry",
+    "mountainash_settings.profiles.invariants"
+  ],
+  "extension_points": [
+    "ProfileDescriptor.metadata — domain-specific bag for extra descriptor data",
+    "ParameterSpec.template — auto-wires post_init template resolution"
+  ],
+  "lifecycle_notes": [
+    "MISSING is a singleton sentinel — use `is MISSING` not `== MISSING`",
+    "ProfileDescriptor is frozen — instantiate once and share across all profile class registrations",
+    "ParameterSpec.secret=True wraps the type as SecretStr; unwrapping happens at _default_kwargs()"
+  ],
+  "documentation_hooks": [
+    "ParameterSpec fields map directly to pydantic FieldInfo — tier and description become schema metadata",
+    "driver_key=None means domain adapter handles emission; set driver_key for 1:1 mappings"
+  ],
+  "examples": [],
+  "tests": [
+    "tests/unit/profiles/test_descriptor.py"
+  ],
+  "risks": [],
+  "open_questions": [],
+  "evidence": [
+    {"kind": "symbol", "path": "src/mountainash_settings/__init__.py", "detail": "MISSING, ParameterSpec, ProfileDescriptor in __all__"},
+    {"kind": "test", "path": "tests/unit/profiles/test_descriptor.py", "detail": "Dedicated test file"}
+  ],
+  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "manual": {
+    "notes": "",
+    "editorial_status": "",
+    "owner": "",
+    "manual_summary": ""
+  }
+}

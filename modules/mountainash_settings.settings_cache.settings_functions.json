@@ -1,0 +1,61 @@
+{
+  "id": "mountainash_settings.settings_cache.settings_functions",
+  "path": "src/mountainash_settings/settings_cache/settings_functions.py",
+  "summary": "Public entry-point functions for retrieving cached settings instances. get_settings() is the primary interface — it normalises inputs into a SettingsParameters, retrieves or creates a cached instance via _get_settings() (LRU-cached), then applies runtime overrides. get_settings_manager() returns the SettingsManager singleton.",
+  "role": "public-api",
+  "visibility": "public",
+  "stability": "stable",
+  "audiences": ["users", "maintainers", "contributors"],
+  "doc_priority": "essential",
+  "confidence": "high",
+  "public_api": [
+    "get_settings",
+    "get_settings_manager"
+  ],
+  "key_classes": [],
+  "key_functions": [
+    "get_settings",
+    "get_settings_manager",
+    "_get_settings"
+  ],
+  "dependencies": [
+    "mountainash_settings.settings_parameters.settings_parameters",
+    "mountainash_settings.settings_cache.settings_manager"
+  ],
+  "dependents": [
+    "mountainash_settings.settings.base_settings",
+    "mountainash_settings.settings_parameters.settings_parameters"
+  ],
+  "extension_points": [],
+  "lifecycle_notes": [
+    "_get_settings() is @lru_cache(maxsize=None) — unbounded cache keyed on SettingsParameters structural hash",
+    "get_settings_manager() is also @lru_cache — returns a process-wide singleton SettingsManager",
+    "Runtime kwargs are applied after cache retrieval via apply_runtime_overrides(), never polluting the cached instance"
+  ],
+  "documentation_hooks": [
+    "Two-level caching: lru_cache on _get_settings() for structural identity; SettingsManager dict as secondary store",
+    "get_settings() accepts either a pre-built SettingsParameters or individual keyword arguments"
+  ],
+  "examples": [
+    "examples/basic_usage_example.py",
+    "examples/comprehensive_patterns_example.py"
+  ],
+  "tests": [
+    "tests/test_settings_manager.py"
+  ],
+  "risks": [
+    "lru_cache is process-global and never cleared — in long-running processes, settings changes (e.g. env var mutation) will not be picked up after first load"
+  ],
+  "open_questions": [],
+  "evidence": [
+    {"kind": "symbol", "path": "src/mountainash_settings/__init__.py", "detail": "get_settings and get_settings_manager in __all__"},
+    {"kind": "test", "path": "tests/test_settings_manager.py", "detail": "Manager and function tests"}
+  ],
+  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "manual": {
+    "notes": "",
+    "editorial_status": "",
+    "owner": "",
+    "manual_summary": ""
+  }
+}
