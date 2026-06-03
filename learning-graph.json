@@ -1,0 +1,1270 @@
+{
+  "metadata": {
+    "title": "Mountainash Settings Concept Graph",
+    "description": "A concept dependency graph for the mountainash-settings typed configuration framework. 110 concepts across 10 categories covering base settings, parameters, templating, secrets, profiles, registry, auth system, caching, and app settings.",
+    "creator": "Nathaniel Ramm",
+    "date": "2026-06-03",
+    "version": "1.0",
+    "format": "Learning Graph JSON v1.0",
+    "schema": "https://raw.githubusercontent.com/dmccreary/learning-graphs/refs/heads/main/src/schema/learning-graph-schema.json",
+    "license": "CC BY-NC-SA 4.0 DEED"
+  },
+  "groups": {
+    "FOUND": {
+      "classifierName": "Foundation Concepts",
+      "color": "SteelBlue",
+      "font": {
+        "color": "white"
+      }
+    },
+    "BASE": {
+      "classifierName": "Base Settings",
+      "color": "DarkSlateBlue",
+      "font": {
+        "color": "white"
+      }
+    },
+    "PARAM": {
+      "classifierName": "Settings Parameters",
+      "color": "Teal",
+      "font": {
+        "color": "white"
+      }
+    },
+    "TEMPL": {
+      "classifierName": "Field Templating",
+      "color": "DarkGreen",
+      "font": {
+        "color": "white"
+      }
+    },
+    "SECRT": {
+      "classifierName": "Secrets Resolution",
+      "color": "Crimson",
+      "font": {
+        "color": "white"
+      }
+    },
+    "PROF": {
+      "classifierName": "Connection Profiles",
+      "color": "MediumPurple",
+      "font": {
+        "color": "white"
+      }
+    },
+    "REG": {
+      "classifierName": "Profile Registry",
+      "color": "Gold",
+      "font": {
+        "color": "black"
+      }
+    },
+    "AUTH": {
+      "classifierName": "Auth System",
+      "color": "Orange",
+      "font": {
+        "color": "black"
+      }
+    },
+    "CACHE": {
+      "classifierName": "Caching",
+      "color": "LimeGreen",
+      "font": {
+        "color": "black"
+      }
+    },
+    "APP": {
+      "classifierName": "App Settings",
+      "color": "RosyBrown",
+      "font": {
+        "color": "black"
+      }
+    }
+  },
+  "nodes": [
+    {
+      "id": 1,
+      "label": "Pydantic BaseModel",
+      "group": "FOUND",
+      "shape": "box"
+    },
+    {
+      "id": 2,
+      "label": "Pydantic BaseSettings",
+      "group": "FOUND"
+    },
+    {
+      "id": 3,
+      "label": "Field Validators",
+      "group": "FOUND"
+    },
+    {
+      "id": 4,
+      "label": "Model Config",
+      "group": "FOUND"
+    },
+    {
+      "id": 5,
+      "label": "YAML File Format",
+      "group": "FOUND",
+      "shape": "box"
+    },
+    {
+      "id": 6,
+      "label": "TOML File Format",
+      "group": "FOUND",
+      "shape": "box"
+    },
+    {
+      "id": 7,
+      "label": "JSON File Format",
+      "group": "FOUND",
+      "shape": "box"
+    },
+    {
+      "id": 8,
+      "label": "Env File Format",
+      "group": "FOUND",
+      "shape": "box"
+    },
+    {
+      "id": 9,
+      "label": "Environment Variables",
+      "group": "FOUND",
+      "shape": "box"
+    },
+    {
+      "id": 10,
+      "label": "Python Decorators",
+      "group": "FOUND",
+      "shape": "box"
+    },
+    {
+      "id": 11,
+      "label": "Discriminated Unions",
+      "group": "FOUND"
+    },
+    {
+      "id": 12,
+      "label": "SecretStr Type",
+      "group": "FOUND"
+    },
+    {
+      "id": 13,
+      "label": "MountainAshBaseSettings Class",
+      "group": "BASE"
+    },
+    {
+      "id": 14,
+      "label": "Settings Model Config",
+      "group": "BASE"
+    },
+    {
+      "id": 15,
+      "label": "Post Init Lifecycle",
+      "group": "BASE"
+    },
+    {
+      "id": 16,
+      "label": "Source Customization",
+      "group": "BASE"
+    },
+    {
+      "id": 17,
+      "label": "Validate Assignment Invariant",
+      "group": "BASE"
+    },
+    {
+      "id": 18,
+      "label": "Object Setattr Bypass",
+      "group": "BASE"
+    },
+    {
+      "id": 19,
+      "label": "Settings Source Priority",
+      "group": "BASE"
+    },
+    {
+      "id": 20,
+      "label": "Env Prefix Override",
+      "group": "BASE"
+    },
+    {
+      "id": 21,
+      "label": "Config Files Parameter",
+      "group": "BASE"
+    },
+    {
+      "id": 22,
+      "label": "Multi Format File Loading",
+      "group": "BASE"
+    },
+    {
+      "id": 23,
+      "label": "SettingsParameters Class",
+      "group": "PARAM"
+    },
+    {
+      "id": 24,
+      "label": "Structural Fields",
+      "group": "PARAM"
+    },
+    {
+      "id": 25,
+      "label": "Runtime Fields",
+      "group": "PARAM"
+    },
+    {
+      "id": 26,
+      "label": "Custom Hash And Eq",
+      "group": "PARAM"
+    },
+    {
+      "id": 27,
+      "label": "Parameter Create Factory",
+      "group": "PARAM"
+    },
+    {
+      "id": 28,
+      "label": "Merge Framework",
+      "group": "PARAM"
+    },
+    {
+      "id": 29,
+      "label": "File List Union Strategy",
+      "group": "PARAM"
+    },
+    {
+      "id": 30,
+      "label": "Scalar Last Wins Strategy",
+      "group": "PARAM"
+    },
+    {
+      "id": 31,
+      "label": "Dict Deep Merge Strategy",
+      "group": "PARAM"
+    },
+    {
+      "id": 32,
+      "label": "FileHandler Class",
+      "group": "PARAM"
+    },
+    {
+      "id": 33,
+      "label": "File Extension Dispatch",
+      "group": "PARAM"
+    },
+    {
+      "id": 34,
+      "label": "File Categorization",
+      "group": "PARAM"
+    },
+    {
+      "id": 35,
+      "label": "KwargsHandler Class",
+      "group": "PARAM"
+    },
+    {
+      "id": 36,
+      "label": "Kwargs Normalization",
+      "group": "PARAM"
+    },
+    {
+      "id": 37,
+      "label": "Template Syntax",
+      "group": "TEMPL"
+    },
+    {
+      "id": 38,
+      "label": "Field Name Placeholder",
+      "group": "TEMPL"
+    },
+    {
+      "id": 39,
+      "label": "Template Resolution",
+      "group": "TEMPL"
+    },
+    {
+      "id": 40,
+      "label": "Post Init Template Expansion",
+      "group": "TEMPL"
+    },
+    {
+      "id": 41,
+      "label": "UPath Path Derivation",
+      "group": "TEMPL"
+    },
+    {
+      "id": 42,
+      "label": "Template Priority Rules",
+      "group": "TEMPL"
+    },
+    {
+      "id": 43,
+      "label": "Nested Template Resolution",
+      "group": "TEMPL"
+    },
+    {
+      "id": 44,
+      "label": "Secrets Registry",
+      "group": "SECRT"
+    },
+    {
+      "id": 45,
+      "label": "Secret Provider Protocol",
+      "group": "SECRT"
+    },
+    {
+      "id": 46,
+      "label": "Two Pass Resolution",
+      "group": "SECRT"
+    },
+    {
+      "id": 47,
+      "label": "Kwargs Pass Resolution",
+      "group": "SECRT"
+    },
+    {
+      "id": 48,
+      "label": "Model Tree Pass Resolution",
+      "group": "SECRT"
+    },
+    {
+      "id": 49,
+      "label": "Resolve References In Dict",
+      "group": "SECRT"
+    },
+    {
+      "id": 50,
+      "label": "Resolve References In Model Tree",
+      "group": "SECRT"
+    },
+    {
+      "id": 51,
+      "label": "Secret Prefix Syntax",
+      "group": "SECRT"
+    },
+    {
+      "id": 52,
+      "label": "Vault Provider",
+      "group": "SECRT"
+    },
+    {
+      "id": 53,
+      "label": "SSM Provider",
+      "group": "SECRT"
+    },
+    {
+      "id": 54,
+      "label": "Key Vault Provider",
+      "group": "SECRT"
+    },
+    {
+      "id": 55,
+      "label": "Frozen Model Rebuild On Resolve",
+      "group": "SECRT"
+    },
+    {
+      "id": 56,
+      "label": "ProfileDescriptor Class",
+      "group": "PROF"
+    },
+    {
+      "id": 57,
+      "label": "Descriptor Identity",
+      "group": "PROF"
+    },
+    {
+      "id": 58,
+      "label": "Provider Type Field",
+      "group": "PROF"
+    },
+    {
+      "id": 59,
+      "label": "ParameterSpec Class",
+      "group": "PROF"
+    },
+    {
+      "id": 60,
+      "label": "Parameter Name Convention",
+      "group": "PROF"
+    },
+    {
+      "id": 61,
+      "label": "Parameter Python Type",
+      "group": "PROF"
+    },
+    {
+      "id": 62,
+      "label": "Parameter Tier",
+      "group": "PROF"
+    },
+    {
+      "id": 63,
+      "label": "Parameter Default Value",
+      "group": "PROF"
+    },
+    {
+      "id": 64,
+      "label": "MISSING Sentinel",
+      "group": "PROF"
+    },
+    {
+      "id": 65,
+      "label": "Driver Key Mapping",
+      "group": "PROF"
+    },
+    {
+      "id": 66,
+      "label": "Secret Parameter Flag",
+      "group": "PROF"
+    },
+    {
+      "id": 67,
+      "label": "Transform Function",
+      "group": "PROF"
+    },
+    {
+      "id": 68,
+      "label": "Validator Function",
+      "group": "PROF"
+    },
+    {
+      "id": 69,
+      "label": "DescriptorProfile Class",
+      "group": "PROF"
+    },
+    {
+      "id": 70,
+      "label": "Dynamic Field Installation",
+      "group": "PROF"
+    },
+    {
+      "id": 71,
+      "label": "Registry Class",
+      "group": "REG"
+    },
+    {
+      "id": 72,
+      "label": "Name Keyed Store",
+      "group": "REG"
+    },
+    {
+      "id": 73,
+      "label": "Decorator Registration",
+      "group": "REG"
+    },
+    {
+      "id": 74,
+      "label": "Registry Decorator Factory",
+      "group": "REG"
+    },
+    {
+      "id": 75,
+      "label": "Duplicate Prevention",
+      "group": "REG"
+    },
+    {
+      "id": 76,
+      "label": "Registry Iteration",
+      "group": "REG"
+    },
+    {
+      "id": 77,
+      "label": "Registry Lookup By Name",
+      "group": "REG"
+    },
+    {
+      "id": 78,
+      "label": "Descriptor Invariants",
+      "group": "REG"
+    },
+    {
+      "id": 79,
+      "label": "Invariant Test Generator",
+      "group": "REG"
+    },
+    {
+      "id": 80,
+      "label": "AuthSpec Base Class",
+      "group": "AUTH"
+    },
+    {
+      "id": 81,
+      "label": "Auth Kind Literal",
+      "group": "AUTH"
+    },
+    {
+      "id": 82,
+      "label": "Auth Discriminated Union",
+      "group": "AUTH"
+    },
+    {
+      "id": 83,
+      "label": "Auth Dispatch Function",
+      "group": "AUTH"
+    },
+    {
+      "id": 84,
+      "label": "Auth To Driver Kwargs Map",
+      "group": "AUTH"
+    },
+    {
+      "id": 85,
+      "label": "Default Auth Kwargs",
+      "group": "AUTH"
+    },
+    {
+      "id": 86,
+      "label": "NoneAuth Mode",
+      "group": "AUTH"
+    },
+    {
+      "id": 87,
+      "label": "PasswordAuth Mode",
+      "group": "AUTH"
+    },
+    {
+      "id": 88,
+      "label": "TokenAuth Mode",
+      "group": "AUTH"
+    },
+    {
+      "id": 89,
+      "label": "OAuth2 Client Credentials Mode",
+      "group": "AUTH"
+    },
+    {
+      "id": 90,
+      "label": "OAuth1 Mode",
+      "group": "AUTH"
+    },
+    {
+      "id": 91,
+      "label": "OAuth2 Auth Code Mode",
+      "group": "AUTH"
+    },
+    {
+      "id": 92,
+      "label": "IAM Auth Mode",
+      "group": "AUTH"
+    },
+    {
+      "id": 93,
+      "label": "Azure AD Auth Mode",
+      "group": "AUTH"
+    },
+    {
+      "id": 94,
+      "label": "Kerberos Auth Mode",
+      "group": "AUTH"
+    },
+    {
+      "id": 95,
+      "label": "Certificate Auth Mode",
+      "group": "AUTH"
+    },
+    {
+      "id": 96,
+      "label": "Service Account Auth Mode",
+      "group": "AUTH"
+    },
+    {
+      "id": 97,
+      "label": "Auth Mode Selection In Profile",
+      "group": "AUTH"
+    },
+    {
+      "id": 98,
+      "label": "Custom Auth Mode Extension",
+      "group": "AUTH"
+    },
+    {
+      "id": 99,
+      "label": "LRU Cache Decorator",
+      "group": "CACHE",
+      "shape": "box"
+    },
+    {
+      "id": 100,
+      "label": "Get Settings Function",
+      "group": "CACHE"
+    },
+    {
+      "id": 101,
+      "label": "Internal Get Settings",
+      "group": "CACHE"
+    },
+    {
+      "id": 102,
+      "label": "Structural Cache Key",
+      "group": "CACHE"
+    },
+    {
+      "id": 103,
+      "label": "Runtime Override Application",
+      "group": "CACHE"
+    },
+    {
+      "id": 104,
+      "label": "Model Copy For Overrides",
+      "group": "CACHE"
+    },
+    {
+      "id": 105,
+      "label": "SettingsManager Class",
+      "group": "CACHE"
+    },
+    {
+      "id": 106,
+      "label": "Named Settings Lookup",
+      "group": "CACHE"
+    },
+    {
+      "id": 107,
+      "label": "AppSettings Class",
+      "group": "APP"
+    },
+    {
+      "id": 108,
+      "label": "App Settings Defaults",
+      "group": "APP"
+    },
+    {
+      "id": 109,
+      "label": "App Settings Templates",
+      "group": "APP"
+    },
+    {
+      "id": 110,
+      "label": "App Settings Integration",
+      "group": "APP"
+    }
+  ],
+  "edges": [
+    {
+      "from": 2,
+      "to": 1
+    },
+    {
+      "from": 3,
+      "to": 1
+    },
+    {
+      "from": 4,
+      "to": 1
+    },
+    {
+      "from": 11,
+      "to": 1
+    },
+    {
+      "from": 12,
+      "to": 1
+    },
+    {
+      "from": 13,
+      "to": 2
+    },
+    {
+      "from": 13,
+      "to": 4
+    },
+    {
+      "from": 13,
+      "to": 9
+    },
+    {
+      "from": 14,
+      "to": 13
+    },
+    {
+      "from": 14,
+      "to": 4
+    },
+    {
+      "from": 15,
+      "to": 13
+    },
+    {
+      "from": 16,
+      "to": 13
+    },
+    {
+      "from": 16,
+      "to": 2
+    },
+    {
+      "from": 17,
+      "to": 13
+    },
+    {
+      "from": 17,
+      "to": 3
+    },
+    {
+      "from": 18,
+      "to": 17
+    },
+    {
+      "from": 19,
+      "to": 16
+    },
+    {
+      "from": 20,
+      "to": 13
+    },
+    {
+      "from": 20,
+      "to": 9
+    },
+    {
+      "from": 21,
+      "to": 13
+    },
+    {
+      "from": 22,
+      "to": 21
+    },
+    {
+      "from": 22,
+      "to": 32
+    },
+    {
+      "from": 23,
+      "to": 1
+    },
+    {
+      "from": 24,
+      "to": 23
+    },
+    {
+      "from": 25,
+      "to": 23
+    },
+    {
+      "from": 26,
+      "to": 23
+    },
+    {
+      "from": 26,
+      "to": 24
+    },
+    {
+      "from": 27,
+      "to": 23
+    },
+    {
+      "from": 28,
+      "to": 23
+    },
+    {
+      "from": 29,
+      "to": 28
+    },
+    {
+      "from": 30,
+      "to": 28
+    },
+    {
+      "from": 31,
+      "to": 28
+    },
+    {
+      "from": 32,
+      "to": 23
+    },
+    {
+      "from": 32,
+      "to": 5
+    },
+    {
+      "from": 32,
+      "to": 6
+    },
+    {
+      "from": 32,
+      "to": 7
+    },
+    {
+      "from": 32,
+      "to": 8
+    },
+    {
+      "from": 33,
+      "to": 32
+    },
+    {
+      "from": 34,
+      "to": 32
+    },
+    {
+      "from": 34,
+      "to": 33
+    },
+    {
+      "from": 35,
+      "to": 23
+    },
+    {
+      "from": 36,
+      "to": 35
+    },
+    {
+      "from": 37,
+      "to": 13
+    },
+    {
+      "from": 38,
+      "to": 37
+    },
+    {
+      "from": 39,
+      "to": 37
+    },
+    {
+      "from": 39,
+      "to": 38
+    },
+    {
+      "from": 40,
+      "to": 39
+    },
+    {
+      "from": 40,
+      "to": 15
+    },
+    {
+      "from": 41,
+      "to": 39
+    },
+    {
+      "from": 42,
+      "to": 39
+    },
+    {
+      "from": 42,
+      "to": 25
+    },
+    {
+      "from": 43,
+      "to": 39
+    },
+    {
+      "from": 44,
+      "to": 10
+    },
+    {
+      "from": 45,
+      "to": 44
+    },
+    {
+      "from": 46,
+      "to": 44
+    },
+    {
+      "from": 46,
+      "to": 13
+    },
+    {
+      "from": 47,
+      "to": 46
+    },
+    {
+      "from": 47,
+      "to": 49
+    },
+    {
+      "from": 48,
+      "to": 46
+    },
+    {
+      "from": 48,
+      "to": 50
+    },
+    {
+      "from": 49,
+      "to": 44
+    },
+    {
+      "from": 50,
+      "to": 44
+    },
+    {
+      "from": 50,
+      "to": 1
+    },
+    {
+      "from": 51,
+      "to": 44
+    },
+    {
+      "from": 52,
+      "to": 45
+    },
+    {
+      "from": 53,
+      "to": 45
+    },
+    {
+      "from": 54,
+      "to": 45
+    },
+    {
+      "from": 55,
+      "to": 48
+    },
+    {
+      "from": 55,
+      "to": 12
+    },
+    {
+      "from": 56,
+      "to": 1
+    },
+    {
+      "from": 57,
+      "to": 56
+    },
+    {
+      "from": 58,
+      "to": 56
+    },
+    {
+      "from": 59,
+      "to": 56
+    },
+    {
+      "from": 60,
+      "to": 59
+    },
+    {
+      "from": 61,
+      "to": 59
+    },
+    {
+      "from": 62,
+      "to": 59
+    },
+    {
+      "from": 63,
+      "to": 59
+    },
+    {
+      "from": 64,
+      "to": 59
+    },
+    {
+      "from": 64,
+      "to": 63
+    },
+    {
+      "from": 65,
+      "to": 59
+    },
+    {
+      "from": 66,
+      "to": 59
+    },
+    {
+      "from": 66,
+      "to": 12
+    },
+    {
+      "from": 67,
+      "to": 59
+    },
+    {
+      "from": 68,
+      "to": 59
+    },
+    {
+      "from": 68,
+      "to": 3
+    },
+    {
+      "from": 69,
+      "to": 56
+    },
+    {
+      "from": 69,
+      "to": 13
+    },
+    {
+      "from": 70,
+      "to": 69
+    },
+    {
+      "from": 70,
+      "to": 59
+    },
+    {
+      "from": 71,
+      "to": 10
+    },
+    {
+      "from": 72,
+      "to": 71
+    },
+    {
+      "from": 73,
+      "to": 71
+    },
+    {
+      "from": 73,
+      "to": 10
+    },
+    {
+      "from": 74,
+      "to": 73
+    },
+    {
+      "from": 75,
+      "to": 71
+    },
+    {
+      "from": 75,
+      "to": 72
+    },
+    {
+      "from": 76,
+      "to": 71
+    },
+    {
+      "from": 77,
+      "to": 71
+    },
+    {
+      "from": 77,
+      "to": 72
+    },
+    {
+      "from": 78,
+      "to": 56
+    },
+    {
+      "from": 78,
+      "to": 71
+    },
+    {
+      "from": 79,
+      "to": 78
+    },
+    {
+      "from": 80,
+      "to": 1
+    },
+    {
+      "from": 80,
+      "to": 11
+    },
+    {
+      "from": 81,
+      "to": 80
+    },
+    {
+      "from": 82,
+      "to": 80
+    },
+    {
+      "from": 82,
+      "to": 11
+    },
+    {
+      "from": 83,
+      "to": 82
+    },
+    {
+      "from": 83,
+      "to": 84
+    },
+    {
+      "from": 84,
+      "to": 80
+    },
+    {
+      "from": 85,
+      "to": 84
+    },
+    {
+      "from": 86,
+      "to": 80
+    },
+    {
+      "from": 87,
+      "to": 80
+    },
+    {
+      "from": 87,
+      "to": 12
+    },
+    {
+      "from": 88,
+      "to": 80
+    },
+    {
+      "from": 88,
+      "to": 12
+    },
+    {
+      "from": 89,
+      "to": 80
+    },
+    {
+      "from": 89,
+      "to": 12
+    },
+    {
+      "from": 90,
+      "to": 80
+    },
+    {
+      "from": 90,
+      "to": 12
+    },
+    {
+      "from": 91,
+      "to": 80
+    },
+    {
+      "from": 91,
+      "to": 12
+    },
+    {
+      "from": 92,
+      "to": 80
+    },
+    {
+      "from": 93,
+      "to": 80
+    },
+    {
+      "from": 93,
+      "to": 12
+    },
+    {
+      "from": 94,
+      "to": 80
+    },
+    {
+      "from": 95,
+      "to": 80
+    },
+    {
+      "from": 95,
+      "to": 12
+    },
+    {
+      "from": 96,
+      "to": 80
+    },
+    {
+      "from": 96,
+      "to": 12
+    },
+    {
+      "from": 97,
+      "to": 82
+    },
+    {
+      "from": 97,
+      "to": 56
+    },
+    {
+      "from": 97,
+      "to": 70
+    },
+    {
+      "from": 98,
+      "to": 80
+    },
+    {
+      "from": 98,
+      "to": 81
+    },
+    {
+      "from": 98,
+      "to": 84
+    },
+    {
+      "from": 100,
+      "to": 13
+    },
+    {
+      "from": 100,
+      "to": 99
+    },
+    {
+      "from": 100,
+      "to": 23
+    },
+    {
+      "from": 101,
+      "to": 100
+    },
+    {
+      "from": 101,
+      "to": 26
+    },
+    {
+      "from": 102,
+      "to": 101
+    },
+    {
+      "from": 102,
+      "to": 24
+    },
+    {
+      "from": 102,
+      "to": 26
+    },
+    {
+      "from": 103,
+      "to": 100
+    },
+    {
+      "from": 103,
+      "to": 25
+    },
+    {
+      "from": 104,
+      "to": 103
+    },
+    {
+      "from": 105,
+      "to": 100
+    },
+    {
+      "from": 106,
+      "to": 105
+    },
+    {
+      "from": 106,
+      "to": 72
+    },
+    {
+      "from": 107,
+      "to": 13
+    },
+    {
+      "from": 108,
+      "to": 107
+    },
+    {
+      "from": 109,
+      "to": 107
+    },
+    {
+      "from": 109,
+      "to": 37
+    },
+    {
+      "from": 110,
+      "to": 107
+    },
+    {
+      "from": 110,
+      "to": 100
+    }
+  ]
+}
