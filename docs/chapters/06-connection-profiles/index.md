@@ -43,6 +43,10 @@ Applications that connect to external systems -- databases, message brokers, RES
 
 The profile system solves this by separating _what_ a backend needs (declared in a `ProfileSpec`) from _how_ that translates into a Pydantic settings class (implemented by the `Profile` base class). A single spec declaration produces a fully validated, cached, template-aware settings class with zero boilerplate.
 
+<!-- concept:56 -->
+<!-- concept:57 -->
+<!-- concept:59 -->
+<!-- concept:69 -->
 ## ProfileDescriptor Class
 
 The **ProfileDescriptor** (now canonically named `ProfileSpec` as of version 26.5.0) is a frozen dataclass that captures the complete specification of a connection profile. It is the declarative blueprint from which a `Profile` settings class generates its Pydantic fields.
@@ -89,6 +93,8 @@ The **descriptor identity** consists of two fields that uniquely identify what s
 
 The `name` field is the primary lookup key in the registry system. It must be unique within a given registry, lowercase, and non-empty (the invariant system enforces these constraints). Conventionally, names match the system's package name or common abbreviation.
 
+<!-- concept:58 -->
+<!-- concept:70 -->
 ## Provider Type Field
 
 The **provider type field** is a domain-specific value that categorizes the profile within its domain. For database profiles, this might be an enum like `DatabaseType.POSTGRESQL`. For API profiles, it might be a string like `"rest_api"` or an enum member.
@@ -100,6 +106,11 @@ The provider type serves as a secondary classification beyond the name. While th
 | `name` | Unique registry key | `"postgresql"`, `"mysql"`, `"redis"` |
 | `provider_type` | Domain classification | `DatabaseType.POSTGRESQL`, `"rest_api"` |
 
+<!-- concept:60 -->
+<!-- concept:61 -->
+<!-- concept:62 -->
+<!-- concept:63 -->
+<!-- concept:66 -->
 ## ParameterSpec Class
 
 The **ParameterSpec** class is a frozen dataclass that declares a single settings field within a profile. It captures everything needed to generate a Pydantic `FieldInfo`, wire up validation, configure secret handling, and map the field to a driver keyword argument:
@@ -121,6 +132,7 @@ class ParameterSpec:
 
 Each `ParameterSpec` maps one-to-one to a Pydantic field on the generated settings class. The spec contains both the field's type information (for Pydantic) and its output mapping (for the driver kwargs). This dual role is what makes the profile system powerful -- a single declaration handles both input validation and output transformation.
 
+<!-- concept:65 -->
 #### Diagram: ParameterSpec Field Mapping
 
 <iframe src="../../sims/parameter-spec-mapping/main.html" width="100%" height="500px" scrolling="no"></iframe>
@@ -176,6 +188,7 @@ ParameterSpec(name="PORT", type=int, tier="core", default=5432)
 
 If no default is appropriate (the parameter is required), the special `MISSING` sentinel is used instead.
 
+<!-- concept:64 -->
 ## MISSING Sentinel
 
 The **MISSING sentinel** is a singleton object that indicates a parameter has no default value -- it must be explicitly provided by some configuration source. When `ParameterSpec.default` is `MISSING`, the generated field uses `Field(default=...)` (Pydantic's ellipsis marker for required fields):
@@ -252,6 +265,8 @@ The **secret parameter flag** (`ParameterSpec.secret`) controls whether the gene
 
 This flag provides a single declaration point for secret handling. The developer declares `secret=True` and the framework handles all the plumbing -- wrapping, protection from accidental exposure, and unwrapping at the output boundary.
 
+<!-- concept:67 -->
+<!-- concept:68 -->
 ## Transform Function
 
 The **transform function** (`ParameterSpec.transform`) is an optional callable applied to the field value when emitting driver kwargs. It converts the settings-facing value into the format the driver expects:

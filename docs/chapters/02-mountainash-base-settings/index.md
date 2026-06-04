@@ -36,6 +36,9 @@ The `MountainAshBaseSettings` class is the single most important type in the fra
 
 Before construction even reaches Pydantic's `BaseSettings.__init__`, `MountainAshBaseSettings` performs extensive pre-processing: it creates a `SettingsParameters` object, separates config files by type, validates their existence, resolves secret references in kwargs, and configures the model's file sources. After construction completes, it records metadata for traceability and runs a post-init lifecycle hook.
 
+<!-- concept:13 -->
+<!-- concept:14 -->
+<!-- concept:19 -->
 ## MountainAshBaseSettings Class
 
 The class inherits directly from `pydantic_settings.BaseSettings` and declares a set of meta-fields prefixed with `SETTINGS_SOURCE_` that record the provenance of every configuration value. These meta-fields enable debugging and traceability -- you can inspect any settings instance to determine exactly which files, environment prefix, and kwargs were used to construct it.
@@ -55,6 +58,8 @@ class MyAppSettings(MountainAshBaseSettings):
     database_port: int = Field(default=5432)
     debug: bool = Field(default=False)
 
+<!-- concept:20 -->
+<!-- concept:21 -->
 # Instantiate with a config file and runtime overrides
 settings = MyAppSettings(
     config_files=["config.yaml", ".env"],
@@ -101,6 +106,7 @@ Each setting serves a specific architectural purpose:
 
 The `extra="ignore"` setting is particularly important for forward compatibility. Configuration files often evolve faster than the code that reads them -- a shared YAML file might contain fields intended for multiple services. By ignoring extras rather than raising errors, mountainash-settings allows graceful degradation.
 
+<!-- concept:15 -->
 ## Post Init Lifecycle
 
 The **post-init lifecycle** is a hook method called `post_init()` that runs after all settings have been loaded, validated, and persisted to the instance. This hook is where template expansion occurs -- fields whose values depend on other fields are resolved here, after all source values have been established.
@@ -119,6 +125,7 @@ The lifecycle ordering is critical:
 
 This ordering guarantees that when `post_init()` executes, all field values from all sources are available for template interpolation. A template like `"{RUNDATE}T{RUNTIME}"` can safely reference both fields because they were populated in step 4.
 
+<!-- concept:16 -->
 ## Source Customization
 
 mountainash-settings customizes the Pydantic settings source chain by overriding `settings_customise_sources()`. This class method controls which configuration sources are consulted and in what order. The default implementation adds YAML, TOML, and JSON file sources that standard `BaseSettings` does not provide.
@@ -156,6 +163,7 @@ def settings_customise_sources(
 
 Sources earlier in the tuple take precedence over later ones. This means explicitly passed kwargs always win, environment variables override file-based config, and file-based config overrides the secrets directory.
 
+<!-- concept:17 -->
 ## Validate Assignment Invariant
 
 The **validate_assignment invariant** is established by setting `validate_assignment=True` in the model config. This ensures that every field assignment after construction passes through Pydantic's full validation pipeline -- including type coercion, `SecretStr` wrapping, enum coercion, and any declared `AfterValidator` transforms.
@@ -174,6 +182,7 @@ settings.api_key = "raw-secret"
 
 This invariant is the reason why mountainash-settings can guarantee type safety throughout the entire lifecycle of a settings instance, not just at construction time. Any code that mutates settings -- whether the `update_settings_from_dict()` method, runtime overrides, or direct assignment -- benefits from the same validation pipeline that runs during `__init__`.
 
+<!-- concept:18 -->
 ## Object Setattr Bypass
 
 The **object setattr bypass** is a deliberate exception to the validate_assignment invariant. Meta-fields (those prefixed with `SETTINGS_SOURCE_`) are populated using `object.__setattr__()` rather than the normal `setattr()` mechanism. This bypasses Pydantic's validation pipeline entirely.

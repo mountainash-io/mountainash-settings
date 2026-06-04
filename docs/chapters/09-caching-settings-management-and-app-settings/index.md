@@ -42,6 +42,8 @@ Constructing a settings instance is expensive. It involves reading configuration
 
 The caching layer solves this by constructing each unique settings configuration exactly once and serving subsequent requests from an in-memory cache. The structural/runtime split (introduced in Chapter 3) makes this efficient: the cache key includes only structural parameters, while runtime overrides are applied as a lightweight copy-on-read operation.
 
+<!-- concept:99 -->
+<!-- concept:102 -->
 ## LRU Cache Decorator
 
 The **LRU (Least Recently Used) cache decorator** from Python's `functools` module provides the caching mechanism. When applied to a function, `@lru_cache` stores the return value for each unique set of arguments and returns the cached value on subsequent calls with the same arguments.
@@ -69,6 +71,12 @@ The `maxsize=None` setting means the cache grows without bound. In practice, an 
 
 The `@lru_cache` decorator requires that function arguments are hashable. This is why `SettingsParameters` implements `__hash__` -- without it, the frozen dataclass could not serve as a cache key. The custom `__hash__` that excludes kwargs is what enables the structural/runtime split at the caching layer.
 
+<!-- concept:100 -->
+<!-- concept:101 -->
+<!-- concept:106 -->
+<!-- concept:108 -->
+<!-- concept:109 -->
+<!-- concept:110 -->
 ## Get Settings Function
 
 The **`get_settings()` function** is the primary public API for retrieving settings instances. It accepts flexible inputs (settings class, config files, env prefix, and/or a pre-built `SettingsParameters`) and returns a validated settings instance from the cache:
@@ -89,12 +97,15 @@ The function follows a two-step pattern:
 2. **Get cached + apply overrides** -- retrieve the cached base instance, then apply runtime overrides if kwargs are present
 
 ```python
+<!-- concept:105 -->
+<!-- concept:107 -->
 # Simple usage -- just class and files
 settings = get_settings(
     settings_class=DatabaseSettings,
     config_files="db.yaml"
 )
 
+<!-- concept:103 -->
 # With runtime overrides
 settings = get_settings(
     settings_class=DatabaseSettings,
@@ -191,6 +202,7 @@ When kwargs are present, the method creates a shallow copy of the cached instanc
 
 This design ensures the cached instance is never mutated. Multiple concurrent callers can safely access the same cached base instance because overrides are always applied to a fresh copy.
 
+<!-- concept:104 -->
 ## Model Copy For Overrides
 
 The **`model_copy()` method** (from Pydantic) creates a shallow copy of a settings instance. This is the mechanism that enables safe runtime overrides without mutating the cache:

@@ -35,10 +35,13 @@ This chapter covers how mountainash-settings loads configuration from files and 
 
 ---
 
+<!-- concept:38 -->
 ## From Raw Input to Validated Fields
 
 When a caller passes `config_files=["base.yaml", ".env", "overrides.toml"]` alongside keyword arguments like `debug=True`, the framework must route each input to the correct processing pipeline. File paths need to be categorized by extension and handed to the matching Pydantic settings source. Keyword arguments need to be separated into Pydantic-internal parameters, model config overrides, and user-facing attribute values. This chapter covers the two handler classes that perform this routing, the multi-format loading mechanism that ties them together, and the template system that derives field values from other fields.
 
+<!-- concept:32 -->
+<!-- concept:35 -->
 ## FileHandler Class
 
 The `SettingsFileHandler` class is a stateless utility (all methods are class methods or static methods) that manages the lifecycle of configuration file paths: normalization, classification, validation, deduplication, and format conversion.
@@ -64,6 +67,7 @@ class SettingsFiles(NamedTuple):
 
 The handler accepts flexible input types (single path, list, tuple, or None) and normalizes them consistently. This design means callers never need to pre-process their file paths -- the handler accommodates whatever shape the data arrives in.
 
+<!-- concept:33 -->
 ## File Extension Dispatch
 
 **File extension dispatch** is the mechanism by which the handler determines what type of configuration a file contains. The `FileTypeRegistry` class maintains a mapping from file extensions to logical file types:
@@ -92,6 +96,7 @@ The `identify()` method handles two distinct cases. For regular files with exten
 
 The registry is extensible via `register_type()`, allowing applications to add support for custom file extensions without modifying the handler itself.
 
+<!-- concept:34 -->
 ## File Categorization
 
 **File categorization** is the process of sorting a mixed list of configuration files into their respective type buckets. The `separate_config_files()` method orchestrates this in four steps:
@@ -107,6 +112,7 @@ files = ["base.yaml", "secrets.env", "overrides.toml", "base.yaml"]
 
 # Output: categorized and deduplicated
 result = SettingsFileHandler.separate_config_files(files)
+<!-- concept:41 -->
 # result.yaml_files == [UPath("base.yaml")]  (deduplicated)
 # result.env_files  == [UPath("secrets.env")]
 # result.toml_files == [UPath("overrides.toml")]
@@ -128,6 +134,7 @@ Type: workflow
 A directed flow showing mixed file inputs entering a pipeline of four stages: UPath normalization, FileTypeRegistry.identify() dispatch, group_files_by_type() bucketing, and deduplicate_files() cleanup. Output flows into four colored lanes (env=green, yaml=blue, toml=purple, json=orange). Clicking a file in the input list highlights its path through the pipeline. Dragging new file names into the input area runs them through the pipeline interactively. Learning objective: Trace how a mixed file list is categorized into typed buckets by the FileHandler (Bloom: Apply).
 </details>
 
+<!-- concept:36 -->
 ## KwargsHandler Class
 
 The `SettingsKwargsHandler` class normalizes keyword arguments into a consistent dictionary format. Like `SettingsFileHandler`, it is a stateless utility with class methods and static methods.
@@ -179,6 +186,7 @@ This three-way split ensures each parameter reaches its correct destination duri
 !!! tip "Debugging kwargs routing"
     If a keyword argument silently fails to populate a field, check whether it matches a key in `_reserved_pydantic_kwargs`. If so, it is being routed to Pydantic's internal machinery rather than to a field setter. Prefix it with an underscore to explicitly target the Pydantic parameter, or remove the prefix to target the field.
 
+<!-- concept:22 -->
 ## Multi Format File Loading
 
 **Multi-format file loading** is the mechanism that assigns categorized files to the correct Pydantic settings source. After the `FileHandler` produces a `SettingsFiles` tuple, the `MountainAshBaseSettings` constructor assigns each category to its destination:
@@ -197,6 +205,10 @@ This split exists because Pydantic handles `.env` files differently from structu
 
 The result is that a single `config_files` parameter from the caller can contain any mix of file types, and each type is automatically routed to its native loading mechanism. A caller does not need to know which files are YAML versus TOML versus `.env` -- the handler figures it out from the file extensions.
 
+<!-- concept:37 -->
+<!-- concept:39 -->
+<!-- concept:42 -->
+<!-- concept:43 -->
 ## Template Syntax
 
 The mountainash-settings **template syntax** uses Python's standard `str.format()` placeholders to reference other fields on the same settings instance. A template is a string containing one or more `{FIELD_NAME}` placeholders that will be replaced with the current value of the named field.
@@ -255,6 +267,7 @@ This guard implements a critical design principle: explicitly provided values al
 
 The companion method `format_template_from_settings()` always resolves the template, regardless of the current value. This method is used when the caller wants a formatted string on demand, not as part of the initialization lifecycle.
 
+<!-- concept:40 -->
 ## Post Init Template Expansion
 
 **Post-init template expansion** is the mechanism by which templates are resolved during the `post_init()` lifecycle hook. This timing is critical: templates must be expanded after all configuration sources have been loaded but before the settings instance is returned to the caller.

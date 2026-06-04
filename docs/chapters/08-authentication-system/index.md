@@ -47,6 +47,7 @@ Every external system that requires credentials presents the configuration frame
 
 mountainash-settings solves this with a discriminated union architecture: each auth mode is a Pydantic model with a `kind` literal field, and the profile system assembles these modes into a tagged union that Pydantic can efficiently parse and validate.
 
+<!-- concept:80 -->
 ## AuthSpec Base Class
 
 The **AuthSpec** base class is a Pydantic `BaseModel` that establishes the contract for all authentication modes. Every auth mode inherits from `AuthSpec` and declares its own fields alongside the shared `kind` discriminator field.
@@ -66,6 +67,7 @@ Each concrete subclass narrows the `kind` field to a specific `Literal` value, c
 
 The `AuthSpec` base depends on two foundation concepts: `BaseModel` for data validation and `Discriminated Unions` for efficient tagged parsing. This dual dependency means that the auth system gets Pydantic's full validation pipeline (type coercion, `SecretStr` wrapping, field validators) plus O(1) dispatch based on the `kind` field.
 
+<!-- concept:81 -->
 ## Auth Kind Literal
 
 The **auth kind literal** is the discriminator value that identifies which authentication mode is active. Each concrete auth mode declares `kind` as a `Literal` type constrained to a single string value:
@@ -96,6 +98,7 @@ auth:
   password: secret:db/prod/admin_pw
 ```
 
+<!-- concept:82 -->
 ## Auth Discriminated Union
 
 The **auth discriminated union** is the type that combines multiple auth modes into a single field. The `Profile` base class constructs this union automatically from the `auth_modes` list on the `ProfileSpec`:
@@ -118,6 +121,7 @@ if spec.auth_modes:
 
 When a spec declares multiple auth modes, the union uses `discriminator="kind"` so that Pydantic reads the `kind` field from the input data to determine which variant to validate against. When only one auth mode is declared, no discriminator is needed -- the field is typed directly as that single mode.
 
+<!-- concept:83 -->
 #### Diagram: Auth Discriminated Union Dispatch
 
 <iframe src="../../sims/auth-union-dispatch/main.html" width="100%" height="500px" scrolling="no"></iframe>
@@ -156,6 +160,8 @@ def _auth_kwargs(self) -> dict[str, Any]:
 
 Each branch handles the specific field layout of its auth mode. Secret fields are unwrapped via `.get_secret_value()` at this boundary -- the auth dispatch is where secrets cross from the protected settings domain to the driver domain.
 
+<!-- concept:84 -->
+<!-- concept:85 -->
 ## Auth To Driver Kwargs Map
 
 The **auth to driver kwargs map** is a mapping (typically a dictionary or a method) that translates auth mode fields to driver keyword argument names. Different drivers expect different parameter names for the same concept:
@@ -178,6 +184,7 @@ When a profile does not override `_auth_kwargs()`, the default implementation re
 
 mountainash-settings defines eleven concrete authentication modes that cover the most common authentication patterns across database, API, and cloud service connections. Each mode is a Pydantic model with its own set of typed, validated fields.
 
+<!-- concept:86 -->
 ### NoneAuth Mode
 
 **NoneAuth** represents connections that require no authentication. It is the simplest mode, containing only the `kind` discriminator:
@@ -189,6 +196,7 @@ class NoneAuth(AuthSpec):
 
 NoneAuth is required in every profile's `auth_modes` list when the backend supports unauthenticated connections (e.g., local development databases, public APIs). The invariant system enforces that `auth_modes` is never empty -- profiles that truly need no auth still declare `[NoneAuth]`.
 
+<!-- concept:87 -->
 ### PasswordAuth Mode
 
 **PasswordAuth** is the traditional username/password credential pair, the most widely supported authentication mechanism:
@@ -202,6 +210,7 @@ class PasswordAuth(AuthSpec):
 
 The `password` field is typed as `SecretStr`, ensuring it is masked in logs and serialization. The auth dispatch unwraps it via `.get_secret_value()` only at the driver boundary.
 
+<!-- concept:88 -->
 ### TokenAuth Mode
 
 **TokenAuth** represents bearer token authentication, common with REST APIs and cloud services:
@@ -212,6 +221,7 @@ class TokenAuth(AuthSpec):
     token: SecretStr
 ```
 
+<!-- concept:89 -->
 ### OAuth2 Client Credentials Mode
 
 **OAuth2 Client Credentials** supports the OAuth2 client credentials grant, used for machine-to-machine communication:
@@ -225,6 +235,7 @@ class OAuth2ClientCredentials(AuthSpec):
     scopes: list[str] = []
 ```
 
+<!-- concept:90 -->
 ### OAuth1 Mode
 
 **OAuth1** supports the older OAuth 1.0a protocol, still required by some legacy APIs (notably parts of the Twitter/X API):
@@ -238,6 +249,7 @@ class OAuth1Auth(AuthSpec):
     access_token_secret: SecretStr
 ```
 
+<!-- concept:91 -->
 ### OAuth2 Auth Code Mode
 
 **OAuth2 Auth Code** supports the authorization code grant flow, used for user-delegated access:
@@ -253,6 +265,7 @@ class OAuth2AuthCode(AuthSpec):
     scopes: list[str] = []
 ```
 
+<!-- concept:92 -->
 ### IAM Auth Mode
 
 **IAM Auth** supports AWS IAM role-based authentication, where credentials are derived from the instance's IAM role rather than explicit secrets:
@@ -264,6 +277,7 @@ class IAMAuth(AuthSpec):
     profile: str | None = None
 ```
 
+<!-- concept:93 -->
 ### Azure AD Auth Mode
 
 **Azure AD Auth** supports Microsoft Entra ID (Azure AD) token-based authentication:
@@ -277,6 +291,7 @@ class AzureADAuth(AuthSpec):
     resource: str | None = None
 ```
 
+<!-- concept:94 -->
 ### Kerberos Auth Mode
 
 **Kerberos Auth** supports Kerberos/GSSAPI ticket-based authentication, common in enterprise environments:
@@ -288,6 +303,7 @@ class KerberosAuth(AuthSpec):
     keytab: str | None = None
 ```
 
+<!-- concept:95 -->
 ### Certificate Auth Mode
 
 **Certificate Auth** supports mutual TLS (mTLS) authentication using client certificates:
@@ -300,6 +316,7 @@ class CertificateAuth(AuthSpec):
     ca_path: str | None = None
 ```
 
+<!-- concept:96 -->
 ### Service Account Auth Mode
 
 **Service Account Auth** supports Google Cloud service account authentication via JSON key files:
@@ -340,6 +357,7 @@ Type: graph-model
 A hierarchical tree showing AuthSpec at the root, with 11 child nodes for each auth mode. Nodes are colored by category: green for credential-free modes (NoneAuth, IAM, Kerberos), blue for secret-bearing modes (Password, Token, Certificate), orange for OAuth modes (OAuth1, OAuth2 CC, OAuth2 AC), purple for cloud-provider modes (Azure AD, Service Account). Clicking a node shows its fields, kind literal, and example YAML config. Hovering shows the primary use case. A filter bar at the top lets users show/hide categories. Learning objective: Classify authentication modes by their credential patterns and use cases (Bloom: Analyze).
 </details>
 
+<!-- concept:97 -->
 ## Auth Mode Selection In Profile
 
 **Auth mode selection in profile** is the mechanism by which a `ProfileSpec` declares which auth modes are valid for a given backend. The `auth_modes` list on `ProfileSpec` controls which variants appear in the generated discriminated union:
@@ -366,6 +384,7 @@ This means a PostgreSQL profile only accepts `kind: password`, `kind: certificat
 
 The auth mode selection integrates with the invariant system: the `test_auth_modes_nonempty` invariant ensures every spec declares at least one auth mode (use `[NoneAuth]` for backends that support unauthenticated access).
 
+<!-- concept:98 -->
 ## Custom Auth Mode Extension
 
 **Custom auth mode extension** is the process of creating a new auth mode for a system that does not fit the eleven built-in modes. The extension process requires three steps:

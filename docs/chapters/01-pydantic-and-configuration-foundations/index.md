@@ -33,12 +33,15 @@ None -- this is the foundational chapter.
 
 ---
 
+<!-- concept:4 -->
 ## Why Configuration Matters
 
 Every non-trivial application needs external configuration: database URLs, API keys, feature flags, file paths, and timeouts that change between development, staging, and production. Hard-coding these values into source files creates fragile systems that resist change. The mountainash-settings framework solves this problem by providing a typed, validated, multi-source configuration layer built on top of Pydantic. Before diving into the framework itself, you need a solid understanding of the building blocks it depends on.
 
 This chapter covers twelve foundational concepts grouped into three themes: Pydantic's data modelling primitives, the configuration file formats that carry settings values, and several Python language features that the framework uses internally.
 
+<!-- concept:1 -->
+<!-- concept:2 -->
 ## Pydantic BaseModel
 
 Pydantic is a Python library for data validation using type annotations. At its core is the **BaseModel** class, which acts as both a data container and a validation engine. When you define a class that inherits from `BaseModel`, each annotated attribute becomes a validated field. Pydantic parses incoming data, coerces compatible types, and raises detailed errors when values do not match the declared types.
@@ -88,6 +91,7 @@ class AppConfig(BaseSettings):
     database_url: str
     debug: bool = False
 
+<!-- concept:9 -->
 # Values loaded from environment variables automatically
 # export DATABASE_URL="postgresql://localhost/mydb"
 config = AppConfig()
@@ -95,6 +99,7 @@ config = AppConfig()
 
 mountainash-settings extends `BaseSettings` further by adding YAML, TOML, and JSON file sources, template expansion, and a caching layer -- topics covered in subsequent chapters.
 
+<!-- concept:3 -->
 ## Field Validators
 
 Pydantic provides **field validators** that run custom logic during the parsing and validation pipeline. Validators can transform values (coercion), enforce business rules (constraints), or compute derived fields. The mountainash-settings framework uses validators extensively -- for example, the profile system wires `AfterValidator` functions declared in `ParameterSpec` into dynamically installed fields.
@@ -142,6 +147,10 @@ These four settings establish the contract for every settings class in the frame
 | `arbitrary_types_allowed` | `True` | Allow non-Pydantic types (e.g. `UPath`) |
 | `validate_assignment` | `True` | Revalidate on post-construction `setattr` |
 
+<!-- concept:5 -->
+<!-- concept:6 -->
+<!-- concept:7 -->
+<!-- concept:8 -->
 ## Configuration File Formats
 
 mountainash-settings supports four file formats for externalizing configuration values. Each format has distinct strengths, and a single settings class can load from multiple formats simultaneously. Understanding the characteristics of each format helps you choose the right one for each use case.
@@ -226,6 +235,7 @@ Environment variables have two notable limitations that the file-based formats a
 
 Pydantic and mountainash-settings handle both limitations: nested models use a configurable delimiter (e.g. `__`), and Pydantic's type coercion converts string values to their declared Python types.
 
+<!-- concept:10 -->
 ## Python Decorators
 
 A **Python decorator** is a callable that wraps another callable, modifying or extending its behavior without changing its source code. Decorators use the `@` syntax and are applied at definition time. mountainash-settings uses decorators in two important contexts: the `@lru_cache` decorator for settings caching, and the registry `@register` decorator for profile registration.
@@ -248,6 +258,7 @@ Decorator factories are decorators that accept arguments and return the actual d
 - **Decorator factories** accept configuration arguments and return a decorator
 - **Class decorators** wrap entire classes, not just functions
 
+<!-- concept:11 -->
 ## Discriminated Unions
 
 A **discriminated union** (also called a tagged union) is a type that can be one of several variants, where each variant carries a literal tag field that identifies which variant is active. In Pydantic, discriminated unions use `Annotated[Union[A, B, C], Field(discriminator="kind")]` to enable efficient parsing -- Pydantic reads the discriminator field first to determine which variant to validate against, avoiding trial-and-error parsing.
@@ -288,6 +299,7 @@ Type: workflow
 A directed graph showing how Pydantic processes a discriminated union. The input data node flows to a "Read discriminator field" decision node, which branches to each variant type (PasswordAuth, TokenAuth, etc.). Clicking a variant highlights the validation path and shows the fields that would be validated. Hovering over the decision node shows the discriminator key name. Learning objective: Trace the discriminated union dispatch mechanism used by the auth system (Bloom: Understand).
 </details>
 
+<!-- concept:12 -->
 ## SecretStr Type
 
 The **SecretStr** type from Pydantic is a string wrapper that prevents accidental exposure of sensitive values. When you print a `SecretStr` instance or serialize it with `model_dump()`, the value is masked as `'**********'` rather than showing the actual content. To access the real value, you must explicitly call `.get_secret_value()`.

@@ -34,6 +34,9 @@ This chapter covers the secrets resolution subsystem that transparently resolves
 
 ---
 
+<!-- concept:44 -->
+<!-- concept:45 -->
+<!-- concept:51 -->
 ## The Secrets Problem
 
 Production applications store sensitive values -- database passwords, API keys, encryption keys, OAuth client secrets -- in dedicated secrets management systems rather than in configuration files or environment variables. However, the configuration layer still needs to know _which_ secret to retrieve. mountainash-settings solves this with a reference-based approach: configuration files and kwargs contain references like `secret:database/production/password`, and the framework resolves them transparently to their actual values during construction.
@@ -75,6 +78,9 @@ The registry enforces a deliberate asymmetry between initial registration and re
 | `replace_secrets_resolver` | Overwrites unconditionally | Test fixtures, hot-reload |
 | `clear_secrets_registry` | Empties the entire registry | Test teardown |
 
+<!-- concept:52 -->
+<!-- concept:53 -->
+<!-- concept:54 -->
 ## Secret Provider Protocol
 
 The **secret provider protocol** is defined by the `SecretsResolver` type alias:
@@ -122,6 +128,8 @@ if isinstance(value, str) and value.startswith(prefix):
 
 References can appear in any value position -- top-level fields, nested dictionary values, or `SecretStr` fields. The two-pass resolution pipeline ensures all positions are covered.
 
+<!-- concept:46 -->
+<!-- concept:47 -->
 #### Diagram: Secret Reference Resolution Flow
 
 <iframe src="../../sims/secret-reference-flow/main.html" width="100%" height="500px" scrolling="no"></iframe>
@@ -176,6 +184,7 @@ The pass calls `resolve_references_in_dict()`, which recursively walks the dicti
 
 This ordering is important. If a field is typed as `SecretStr` and the kwarg value is `"secret:db/prod/pw"`, the kwargs pass resolves it to the actual password string, and then Pydantic wraps that string in a `SecretStr` during validation. The end result is a properly wrapped secret that is protected from accidental exposure.
 
+<!-- concept:48 -->
 ## Model Tree Pass Resolution
 
 The **model tree pass** runs after `BaseSettings.__init__` has populated all fields from all sources. It walks the live model instance, inspecting every field value for secret references. This pass catches references that entered through config files, environment variables, or `.env` files -- sources that are only read during `BaseSettings.__init__`.
@@ -188,6 +197,7 @@ The pass calls `resolve_references_in_model_tree()`, which handles three value t
 
 The model tree pass deliberately skips meta-fields (those starting with `SETTINGS_SOURCE_` and the `SETTINGS_CLASS` / `SETTINGS_CLASS_NAME` fields). These contain infrastructure data, not configuration values, and should never be treated as secret references.
 
+<!-- concept:49 -->
 ## Resolve References In Dict
 
 The `resolve_references_in_dict()` function is a pure, recursive dictionary transformer. It takes a dictionary, a resolver callable, and a prefix string, and returns a new dictionary with all matching references resolved:
@@ -215,6 +225,7 @@ The function is domain-agnostic -- it does not import or reference the secrets m
 
 The function returns a new dictionary rather than modifying the input. This immutability is important because the input dictionary may be shared (for example, as a frozen dataclass field on `SettingsParameters`).
 
+<!-- concept:50 -->
 ## Resolve References In Model Tree
 
 The `resolve_references_in_model_tree()` function operates on a live Pydantic model instance, mutating it in place. Unlike the dict resolver, this function handles the complexity of Pydantic's type system -- `SecretStr` values must be unwrapped to inspect the underlying string, and nested `BaseModel` instances require recursive processing.
@@ -322,6 +333,7 @@ All three provider patterns share the same architecture: they are plain function
 | SSM | AWS Parameter Store | `/hierarchy/path` | IAM role, credentials |
 | Key Vault | Azure Key Vault | `secret-name` | DefaultAzureCredential |
 
+<!-- concept:55 -->
 ## Frozen Model Rebuild On Resolve
 
 When the model tree pass encounters a nested `BaseModel` field that contains secret references, it cannot simply modify the nested model in place -- Pydantic models may be frozen (immutable). Instead, the resolver extracts the model's fields as a raw dictionary, resolves any references in that dictionary, and rebuilds the nested model from scratch:

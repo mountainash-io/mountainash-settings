@@ -30,12 +30,14 @@ This chapter introduces the SettingsParameters class that controls how settings 
 
 ---
 
+<!-- concept:27 -->
 ## The Parameter Abstraction Layer
 
 Between the caller who says "give me database settings from this config file with debug=True" and the actual construction of a `MountainAshBaseSettings` instance, there is an important abstraction layer: the `SettingsParameters` class. This frozen dataclass captures everything needed to construct (or retrieve from cache) a settings instance. It separates the identity of a configuration -- which files, which class, which prefix -- from the transient overrides that might change on each access.
 
 Understanding `SettingsParameters` is essential because it drives the caching strategy. Two requests for the same structural configuration but different runtime overrides share a single cached base instance, with overrides applied as a thin copy-on-read layer.
 
+<!-- concept:23 -->
 ## SettingsParameters Class
 
 The `SettingsParameters` class is a frozen dataclass (immutable after construction) with six fields that together describe how to build a settings instance:
@@ -73,6 +75,8 @@ Type: diagram
 A partition diagram showing the six SettingsParameters fields divided into two groups: structural (config_files, settings_class, env_prefix, secrets_dir, secrets_provider) and runtime (kwargs). Within kwargs, a secondary partition shows the three kwarg categories: pydantic_modelconfig_kwargs, pydantic_settings_kwargs, and attribute_settings_kwargs. Clicking on each field shows its type annotation and role. A toggle button switches between "cache identity view" (highlighting structural) and "override view" (highlighting runtime). Learning objective: Classify SettingsParameters fields by their role in caching vs runtime behavior (Bloom: Analyze).
 </details>
 
+<!-- concept:24 -->
+<!-- concept:25 -->
 ## Structural Fields
 
 **Structural fields** are the parameters that define the core identity of a configuration. They determine which cached settings instance will be retrieved -- if two `SettingsParameters` have identical structural fields, they reference the same cached object regardless of differences in their runtime fields.
@@ -112,6 +116,7 @@ params_b = SettingsParameters.create(
 assert hash(params_a) == hash(params_b)
 ```
 
+<!-- concept:26 -->
 ## Custom Hash And Eq
 
 The `SettingsParameters` class overrides both `__hash__` and `__eq__` to implement the structural/runtime split at the Python object protocol level. The custom implementations consider only structural fields, deliberately excluding `kwargs`:
@@ -180,6 +185,7 @@ params = SettingsParameters.create(
 # params.kwargs == {"database_host": "localhost", "debug": True}
 ```
 
+<!-- concept:28 -->
 ## Merge Framework
 
 The **merge framework** is implemented by the `SettingsParameters.merge()` class method. It combines two `SettingsParameters` instances -- a `base` and an `other` -- into a single merged result. This operation is fundamental to the framework's layered configuration pattern, where a base set of parameters (perhaps from a global default) is merged with a caller-specific set.
@@ -210,6 +216,7 @@ Type: workflow
 A directed graph showing two SettingsParameters inputs flowing into a central "merge()" router node. From the router, five arrows lead to strategy nodes: "File List Union" (for config_files), "Validate Match" (for settings_class), "Scalar Last Wins" (for env_prefix, secrets_dir, secrets_provider), and "Dict Deep Merge" (for kwargs). Each strategy node is clickable to show a before/after example. A toggle switches between prioritise_base=False and prioritise_base=True to show how precedence changes. Learning objective: Select the appropriate merge strategy for each field type when combining SettingsParameters (Bloom: Apply).
 </details>
 
+<!-- concept:29 -->
 ## File List Union Strategy
 
 For the `config_files` field, the merge framework uses a **union strategy**: files from both `base` and `other` are combined and deduplicated. The result is the sorted union of both file sets, ensuring that all configuration sources from both parameter sets are loaded.
@@ -228,6 +235,7 @@ This strategy reflects the philosophy that configuration files are additive -- y
 
 The `prioritise_base=True` variant changes this behavior: instead of unioning, it takes `base.config_files` if non-None, otherwise falls back to `other.config_files`. This is useful when a higher-priority layer wants to declare a complete, exclusive file set.
 
+<!-- concept:30 -->
 ## Scalar Last Wins Strategy
 
 For scalar fields (`env_prefix`, `secrets_dir`, `secrets_provider`), the merge framework uses a **last-wins strategy**: the `other` value takes precedence if it is non-None, otherwise the `base` value is retained.
@@ -247,6 +255,7 @@ merged = SettingsParameters.merge(base_params, other_params, prioritise_base=Tru
 
 The `settings_class` field receives special treatment: if both `base` and `other` declare a `settings_class` and they differ, the merge raises a `ValueError`. Two parameter sets targeting different classes cannot be meaningfully merged -- this is a conflict that requires human resolution.
 
+<!-- concept:31 -->
 ## Dict Deep Merge Strategy
 
 For the `kwargs` dictionary, the merge framework uses Python's dict union operator (`|`), which performs a shallow merge where `other` values override `base` values for keys that appear in both:

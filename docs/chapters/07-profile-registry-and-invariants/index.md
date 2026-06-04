@@ -31,6 +31,9 @@ This chapter covers the profile registry that provides a centralized store for P
 
 ---
 
+<!-- concept:71 -->
+<!-- concept:74 -->
+<!-- concept:76 -->
 ## Why a Registry
 
 When an application supports multiple connection backends -- PostgreSQL, MySQL, Redis, Snowflake, BigQuery -- each backend has its own `ProfileSpec` and `Profile` subclass. Something needs to collect these registrations, prevent naming collisions, and provide runtime lookup so that a configuration file specifying `backend: postgresql` can be resolved to the correct settings class. The Registry class fills this role.
@@ -73,6 +76,7 @@ DATABASES_REGISTRY = Registry(
 )
 ```
 
+<!-- concept:72 -->
 ## Name Keyed Store
 
 The **name-keyed store** is the core data structure: two dictionaries keyed by the `ProfileSpec.name` string. The name serves as the primary identifier for all lookup and registration operations.
@@ -84,6 +88,7 @@ The store supports three access patterns:
 - **Containment check** -- `name in registry` tests whether a name is registered
 
 ```python
+<!-- concept:73 -->
 # After registration:
 assert "postgresql" in DATABASES_REGISTRY
 assert len(DATABASES_REGISTRY) == 1
@@ -143,6 +148,7 @@ class RabbitMQProfile(BrokerProfile):
 
 The factory also supports a deprecated with-argument form `@register(spec)` for backwards compatibility during the 26.5.x deprecation window. This form emits a `DeprecationWarning` and validates that the passed spec matches the class's `__spec__` if both are present. The disambiguation between the two forms is based on type: if the argument is a `type` (a class), it is the bare form; if it is a `ProfileSpec` instance, it is the deprecated with-argument form.
 
+<!-- concept:75 -->
 ## Duplicate Prevention
 
 **Duplicate prevention** ensures that no two profiles register under the same name in a single registry. The `register()` method checks `_descriptors` before adding a new entry:
@@ -188,6 +194,7 @@ if "postgresql" in DATABASES_REGISTRY:
 
 The `descriptors` property returns a copy of the internal dictionary, which means iterating or modifying the returned dict does not affect the registry. The `__contains__` method checks `isinstance(name, str)` before lookup, ensuring that non-string values always return `False` rather than raising a `TypeError`.
 
+<!-- concept:77 -->
 ## Registry Lookup By Name
 
 **Registry lookup by name** is provided by two methods that mirror the two internal dictionaries:
@@ -224,6 +231,8 @@ Type: diagram
 An interactive diagram showing a Registry instance with its two parallel dictionaries (_descriptors and _classes). Three sample profiles are registered (postgresql, mysql, redis). Clicking a profile name in either dictionary highlights the matching entry in the other dictionary and shows the spec details / class information in a side panel. The type constraint badges (spec_type, profile_type) are shown at the top with hover explanations. A search box allows filtering registered entries. Learning objective: Navigate the Registry's dual-dictionary structure and understand how specs and classes are co-indexed (Bloom: Understand).
 </details>
 
+<!-- concept:78 -->
+<!-- concept:79 -->
 ## Descriptor Invariants
 
 **Descriptor invariants** are a set of validation rules that every registered `ProfileSpec` must satisfy. They encode the naming conventions, uniqueness constraints, and structural requirements that the profile system relies on:
