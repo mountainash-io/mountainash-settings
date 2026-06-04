@@ -7,7 +7,9 @@
     "version": "1.0",
     "format": "Learning Graph JSON v1.0",
     "schema": "https://raw.githubusercontent.com/dmccreary/learning-graphs/refs/heads/main/src/schema/learning-graph-schema.json",
-    "license": "CC BY-NC-SA 4.0 DEED"
+    "license": "CC BY-NC-SA 4.0 DEED",
+    "source_commit": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+    "profile_dir": "03.profile/mountainash-settings"
   },
   "groups": {
     "FOUND": {
@@ -86,559 +88,999 @@
       "id": 1,
       "label": "Pydantic BaseModel",
       "group": "FOUND",
-      "shape": "box"
+      "shape": "box",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "01-pydantic-and-configuration-foundations",
+      "match_confidence": 0.0
     },
     {
       "id": 2,
       "label": "Pydantic BaseSettings",
-      "group": "FOUND"
+      "group": "FOUND",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "01-pydantic-and-configuration-foundations",
+      "match_confidence": 0.0
     },
     {
       "id": 3,
       "label": "Field Validators",
-      "group": "FOUND"
+      "group": "FOUND",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "01-pydantic-and-configuration-foundations",
+      "match_confidence": 0.0
     },
     {
       "id": 4,
       "label": "Model Config",
-      "group": "FOUND"
+      "group": "FOUND",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "01-pydantic-and-configuration-foundations",
+      "match_confidence": 0.0
     },
     {
       "id": 5,
       "label": "YAML File Format",
       "group": "FOUND",
-      "shape": "box"
+      "shape": "box",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "01-pydantic-and-configuration-foundations",
+      "match_confidence": 0.0
     },
     {
       "id": 6,
       "label": "TOML File Format",
       "group": "FOUND",
-      "shape": "box"
+      "shape": "box",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "01-pydantic-and-configuration-foundations",
+      "match_confidence": 0.0
     },
     {
       "id": 7,
       "label": "JSON File Format",
       "group": "FOUND",
-      "shape": "box"
+      "shape": "box",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "01-pydantic-and-configuration-foundations",
+      "match_confidence": 0.0
     },
     {
       "id": 8,
       "label": "Env File Format",
       "group": "FOUND",
-      "shape": "box"
+      "shape": "box",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "01-pydantic-and-configuration-foundations",
+      "match_confidence": 0.0
     },
     {
       "id": 9,
       "label": "Environment Variables",
       "group": "FOUND",
-      "shape": "box"
+      "shape": "box",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "01-pydantic-and-configuration-foundations",
+      "match_confidence": 0.0
     },
     {
       "id": 10,
       "label": "Python Decorators",
       "group": "FOUND",
-      "shape": "box"
+      "shape": "box",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "01-pydantic-and-configuration-foundations",
+      "match_confidence": 0.0
     },
     {
       "id": 11,
       "label": "Discriminated Unions",
-      "group": "FOUND"
+      "group": "FOUND",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "01-pydantic-and-configuration-foundations",
+      "match_confidence": 0.0
     },
     {
       "id": 12,
       "label": "SecretStr Type",
-      "group": "FOUND"
+      "group": "FOUND",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "01-pydantic-and-configuration-foundations",
+      "match_confidence": 0.0
     },
     {
       "id": 13,
       "label": "MountainAshBaseSettings Class",
-      "group": "BASE"
+      "group": "BASE",
+      "source_module": "mountainash_settings.settings.base_settings",
+      "source_path": "src/mountainash_settings/settings/base_settings.py",
+      "chapter": "02-mountainash-base-settings",
+      "match_confidence": 0.85
     },
     {
       "id": 14,
       "label": "Settings Model Config",
-      "group": "BASE"
+      "group": "BASE",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "02-mountainash-base-settings",
+      "match_confidence": 0.3
     },
     {
       "id": 15,
       "label": "Post Init Lifecycle",
-      "group": "BASE"
+      "group": "BASE",
+      "source_module": "mountainash_settings.profiles.profile",
+      "source_path": "src/mountainash_settings/profiles/profile.py",
+      "chapter": "02-mountainash-base-settings",
+      "match_confidence": 0.7
     },
     {
       "id": 16,
       "label": "Source Customization",
-      "group": "BASE"
+      "group": "BASE",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "02-mountainash-base-settings",
+      "match_confidence": 0.3
     },
     {
       "id": 17,
       "label": "Validate Assignment Invariant",
-      "group": "BASE"
+      "group": "BASE",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "02-mountainash-base-settings",
+      "match_confidence": 0.3
     },
     {
       "id": 18,
       "label": "Object Setattr Bypass",
-      "group": "BASE"
+      "group": "BASE",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "02-mountainash-base-settings",
+      "match_confidence": 0.3
     },
     {
       "id": 19,
       "label": "Settings Source Priority",
-      "group": "BASE"
+      "group": "BASE",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "02-mountainash-base-settings",
+      "match_confidence": 0.3
     },
     {
       "id": 20,
       "label": "Env Prefix Override",
-      "group": "BASE"
+      "group": "BASE",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "02-mountainash-base-settings",
+      "match_confidence": 0.3
     },
     {
       "id": 21,
       "label": "Config Files Parameter",
-      "group": "BASE"
+      "group": "BASE",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "02-mountainash-base-settings",
+      "match_confidence": 0.3
     },
     {
       "id": 22,
       "label": "Multi Format File Loading",
-      "group": "BASE"
+      "group": "BASE",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "04-file-handling-kwargs-and-field-templating",
+      "match_confidence": 0.3
     },
     {
       "id": 23,
       "label": "SettingsParameters Class",
-      "group": "PARAM"
+      "group": "PARAM",
+      "source_module": "mountainash_settings.settings_parameters.settings_parameters",
+      "source_path": "src/mountainash_settings/settings_parameters/settings_parameters.py",
+      "chapter": "03-settings-parameters-and-merge-strategies",
+      "match_confidence": 0.85
     },
     {
       "id": 24,
       "label": "Structural Fields",
-      "group": "PARAM"
+      "group": "PARAM",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "03-settings-parameters-and-merge-strategies",
+      "match_confidence": 0.3
     },
     {
       "id": 25,
       "label": "Runtime Fields",
-      "group": "PARAM"
+      "group": "PARAM",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "03-settings-parameters-and-merge-strategies",
+      "match_confidence": 0.3
     },
     {
       "id": 26,
       "label": "Custom Hash And Eq",
-      "group": "PARAM"
+      "group": "PARAM",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "03-settings-parameters-and-merge-strategies",
+      "match_confidence": 0.3
     },
     {
       "id": 27,
       "label": "Parameter Create Factory",
-      "group": "PARAM"
+      "group": "PARAM",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "03-settings-parameters-and-merge-strategies",
+      "match_confidence": 0.3
     },
     {
       "id": 28,
       "label": "Merge Framework",
-      "group": "PARAM"
+      "group": "PARAM",
+      "source_module": "mountainash_settings.settings_parameters.merge_framework",
+      "source_path": "src/mountainash_settings/settings_parameters/merge_framework.py",
+      "chapter": "03-settings-parameters-and-merge-strategies",
+      "match_confidence": 0.6
     },
     {
       "id": 29,
       "label": "File List Union Strategy",
-      "group": "PARAM"
+      "group": "PARAM",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "03-settings-parameters-and-merge-strategies",
+      "match_confidence": 0.3
     },
     {
       "id": 30,
       "label": "Scalar Last Wins Strategy",
-      "group": "PARAM"
+      "group": "PARAM",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "03-settings-parameters-and-merge-strategies",
+      "match_confidence": 0.3
     },
     {
       "id": 31,
       "label": "Dict Deep Merge Strategy",
-      "group": "PARAM"
+      "group": "PARAM",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "03-settings-parameters-and-merge-strategies",
+      "match_confidence": 0.3
     },
     {
       "id": 32,
       "label": "FileHandler Class",
-      "group": "PARAM"
+      "group": "PARAM",
+      "source_module": "mountainash_settings.settings_parameters.filehandler",
+      "source_path": "src/mountainash_settings/settings_parameters/filehandler.py",
+      "chapter": "04-file-handling-kwargs-and-field-templating",
+      "match_confidence": 0.6
     },
     {
       "id": 33,
       "label": "File Extension Dispatch",
-      "group": "PARAM"
+      "group": "PARAM",
+      "source_module": "mountainash_settings.auth.dispatch",
+      "source_path": "src/mountainash_settings/auth/dispatch.py",
+      "chapter": "04-file-handling-kwargs-and-field-templating",
+      "match_confidence": 0.6
     },
     {
       "id": 34,
       "label": "File Categorization",
-      "group": "PARAM"
+      "group": "PARAM",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "04-file-handling-kwargs-and-field-templating",
+      "match_confidence": 0.3
     },
     {
       "id": 35,
       "label": "KwargsHandler Class",
-      "group": "PARAM"
+      "group": "PARAM",
+      "source_module": "mountainash_settings.settings_parameters.kwargshandler",
+      "source_path": "src/mountainash_settings/settings_parameters/kwargshandler.py",
+      "chapter": "04-file-handling-kwargs-and-field-templating",
+      "match_confidence": 0.6
     },
     {
       "id": 36,
       "label": "Kwargs Normalization",
-      "group": "PARAM"
+      "group": "PARAM",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "04-file-handling-kwargs-and-field-templating",
+      "match_confidence": 0.3
     },
     {
       "id": 37,
       "label": "Template Syntax",
-      "group": "TEMPL"
+      "group": "TEMPL",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "04-file-handling-kwargs-and-field-templating",
+      "match_confidence": 0.3
     },
     {
       "id": 38,
       "label": "Field Name Placeholder",
-      "group": "TEMPL"
+      "group": "TEMPL",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "04-file-handling-kwargs-and-field-templating",
+      "match_confidence": 0.3
     },
     {
       "id": 39,
       "label": "Template Resolution",
-      "group": "TEMPL"
+      "group": "TEMPL",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "04-file-handling-kwargs-and-field-templating",
+      "match_confidence": 0.3
     },
     {
       "id": 40,
       "label": "Post Init Template Expansion",
-      "group": "TEMPL"
+      "group": "TEMPL",
+      "source_module": "mountainash_settings.profiles.profile",
+      "source_path": "src/mountainash_settings/profiles/profile.py",
+      "chapter": "04-file-handling-kwargs-and-field-templating",
+      "match_confidence": 0.7
     },
     {
       "id": 41,
       "label": "UPath Path Derivation",
-      "group": "TEMPL"
+      "group": "TEMPL",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "04-file-handling-kwargs-and-field-templating",
+      "match_confidence": 0.3
     },
     {
       "id": 42,
       "label": "Template Priority Rules",
-      "group": "TEMPL"
+      "group": "TEMPL",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "04-file-handling-kwargs-and-field-templating",
+      "match_confidence": 0.3
     },
     {
       "id": 43,
       "label": "Nested Template Resolution",
-      "group": "TEMPL"
+      "group": "TEMPL",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "04-file-handling-kwargs-and-field-templating",
+      "match_confidence": 0.3
     },
     {
       "id": 44,
       "label": "Secrets Registry",
-      "group": "SECRT"
+      "group": "SECRT",
+      "source_module": "mountainash_settings.secrets.registry",
+      "source_path": "src/mountainash_settings/secrets/registry.py",
+      "chapter": "05-secrets-resolution",
+      "match_confidence": 0.7
     },
     {
       "id": 45,
       "label": "Secret Provider Protocol",
-      "group": "SECRT"
+      "group": "SECRT",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "05-secrets-resolution",
+      "match_confidence": 0.3
     },
     {
       "id": 46,
       "label": "Two Pass Resolution",
-      "group": "SECRT"
+      "group": "SECRT",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "05-secrets-resolution",
+      "match_confidence": 0.3
     },
     {
       "id": 47,
       "label": "Kwargs Pass Resolution",
-      "group": "SECRT"
+      "group": "SECRT",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "05-secrets-resolution",
+      "match_confidence": 0.3
     },
     {
       "id": 48,
       "label": "Model Tree Pass Resolution",
-      "group": "SECRT"
+      "group": "SECRT",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "05-secrets-resolution",
+      "match_confidence": 0.3
     },
     {
       "id": 49,
       "label": "Resolve References In Dict",
-      "group": "SECRT"
+      "group": "SECRT",
+      "source_module": "mountainash_settings.resolve",
+      "source_path": "src/mountainash_settings/resolve.py",
+      "chapter": "05-secrets-resolution",
+      "match_confidence": 0.8
     },
     {
       "id": 50,
       "label": "Resolve References In Model Tree",
-      "group": "SECRT"
+      "group": "SECRT",
+      "source_module": "mountainash_settings.resolve",
+      "source_path": "src/mountainash_settings/resolve.py",
+      "chapter": "05-secrets-resolution",
+      "match_confidence": 0.8
     },
     {
       "id": 51,
       "label": "Secret Prefix Syntax",
-      "group": "SECRT"
+      "group": "SECRT",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "05-secrets-resolution",
+      "match_confidence": 0.3
     },
     {
       "id": 52,
       "label": "Vault Provider",
-      "group": "SECRT"
+      "group": "SECRT",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "05-secrets-resolution",
+      "match_confidence": 0.3
     },
     {
       "id": 53,
       "label": "SSM Provider",
-      "group": "SECRT"
+      "group": "SECRT",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "05-secrets-resolution",
+      "match_confidence": 0.3
     },
     {
       "id": 54,
       "label": "Key Vault Provider",
-      "group": "SECRT"
+      "group": "SECRT",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "05-secrets-resolution",
+      "match_confidence": 0.3
     },
     {
       "id": 55,
       "label": "Frozen Model Rebuild On Resolve",
-      "group": "SECRT"
+      "group": "SECRT",
+      "source_module": "mountainash_settings.resolve",
+      "source_path": "src/mountainash_settings/resolve.py",
+      "chapter": "05-secrets-resolution",
+      "match_confidence": 0.6
     },
     {
       "id": 56,
       "label": "ProfileDescriptor Class",
-      "group": "PROF"
+      "group": "PROF",
+      "source_module": "mountainash_settings.profiles.descriptor",
+      "source_path": "src/mountainash_settings/profiles/descriptor.py",
+      "chapter": "06-connection-profiles",
+      "match_confidence": 0.85
     },
     {
       "id": 57,
       "label": "Descriptor Identity",
-      "group": "PROF"
+      "group": "PROF",
+      "source_module": "mountainash_settings.profiles.descriptor",
+      "source_path": "src/mountainash_settings/profiles/descriptor.py",
+      "chapter": "06-connection-profiles",
+      "match_confidence": 0.6
     },
     {
       "id": 58,
       "label": "Provider Type Field",
-      "group": "PROF"
+      "group": "PROF",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "06-connection-profiles",
+      "match_confidence": 0.3
     },
     {
       "id": 59,
       "label": "ParameterSpec Class",
-      "group": "PROF"
+      "group": "PROF",
+      "source_module": "mountainash_settings.profiles.descriptor",
+      "source_path": "src/mountainash_settings/profiles/descriptor.py",
+      "chapter": "06-connection-profiles",
+      "match_confidence": 0.85
     },
     {
       "id": 60,
       "label": "Parameter Name Convention",
-      "group": "PROF"
+      "group": "PROF",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "06-connection-profiles",
+      "match_confidence": 0.3
     },
     {
       "id": 61,
       "label": "Parameter Python Type",
-      "group": "PROF"
+      "group": "PROF",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "06-connection-profiles",
+      "match_confidence": 0.3
     },
     {
       "id": 62,
       "label": "Parameter Tier",
-      "group": "PROF"
+      "group": "PROF",
+      "source_module": "mountainash_settings.profiles.descriptor",
+      "source_path": "src/mountainash_settings/profiles/descriptor.py",
+      "chapter": "06-connection-profiles",
+      "match_confidence": 0.62
     },
     {
       "id": 63,
       "label": "Parameter Default Value",
-      "group": "PROF"
+      "group": "PROF",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "06-connection-profiles",
+      "match_confidence": 0.3
     },
     {
       "id": 64,
       "label": "MISSING Sentinel",
-      "group": "PROF"
+      "group": "PROF",
+      "source_module": "mountainash_settings.profiles.descriptor",
+      "source_path": "src/mountainash_settings/profiles/descriptor.py",
+      "chapter": "06-connection-profiles",
+      "match_confidence": 0.7
     },
     {
       "id": 65,
       "label": "Driver Key Mapping",
-      "group": "PROF"
+      "group": "PROF",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "06-connection-profiles",
+      "match_confidence": 0.3
     },
     {
       "id": 66,
       "label": "Secret Parameter Flag",
-      "group": "PROF"
+      "group": "PROF",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "06-connection-profiles",
+      "match_confidence": 0.3
     },
     {
       "id": 67,
       "label": "Transform Function",
-      "group": "PROF"
+      "group": "PROF",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "06-connection-profiles",
+      "match_confidence": 0.3
     },
     {
       "id": 68,
       "label": "Validator Function",
-      "group": "PROF"
+      "group": "PROF",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "06-connection-profiles",
+      "match_confidence": 0.3
     },
     {
       "id": 69,
       "label": "DescriptorProfile Class",
-      "group": "PROF"
+      "group": "PROF",
+      "source_module": "mountainash_settings.profiles.profile",
+      "source_path": "src/mountainash_settings/profiles/profile.py",
+      "chapter": "06-connection-profiles",
+      "match_confidence": 0.85
     },
     {
       "id": 70,
       "label": "Dynamic Field Installation",
-      "group": "PROF"
+      "group": "PROF",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "06-connection-profiles",
+      "match_confidence": 0.3
     },
     {
       "id": 71,
       "label": "Registry Class",
-      "group": "REG"
+      "group": "REG",
+      "source_module": "mountainash_settings.profiles.registry",
+      "source_path": "src/mountainash_settings/profiles/registry.py",
+      "chapter": "07-profile-registry-and-invariants",
+      "match_confidence": 0.85
     },
     {
       "id": 72,
       "label": "Name Keyed Store",
-      "group": "REG"
+      "group": "REG",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "07-profile-registry-and-invariants",
+      "match_confidence": 0.3
     },
     {
       "id": 73,
       "label": "Decorator Registration",
-      "group": "REG"
+      "group": "REG",
+      "source_module": "mountainash_settings.profiles.registry",
+      "source_path": "src/mountainash_settings/profiles/registry.py",
+      "chapter": "07-profile-registry-and-invariants",
+      "match_confidence": 0.7
     },
     {
       "id": 74,
       "label": "Registry Decorator Factory",
-      "group": "REG"
+      "group": "REG",
+      "source_module": "mountainash_settings.profiles.registry",
+      "source_path": "src/mountainash_settings/profiles/registry.py",
+      "chapter": "07-profile-registry-and-invariants",
+      "match_confidence": 0.7
     },
     {
       "id": 75,
       "label": "Duplicate Prevention",
-      "group": "REG"
+      "group": "REG",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "07-profile-registry-and-invariants",
+      "match_confidence": 0.3
     },
     {
       "id": 76,
       "label": "Registry Iteration",
-      "group": "REG"
+      "group": "REG",
+      "source_module": "mountainash_settings.profiles.registry",
+      "source_path": "src/mountainash_settings/profiles/registry.py",
+      "chapter": "07-profile-registry-and-invariants",
+      "match_confidence": 0.7
     },
     {
       "id": 77,
       "label": "Registry Lookup By Name",
-      "group": "REG"
+      "group": "REG",
+      "source_module": "mountainash_settings.profiles.registry",
+      "source_path": "src/mountainash_settings/profiles/registry.py",
+      "chapter": "07-profile-registry-and-invariants",
+      "match_confidence": 0.7
     },
     {
       "id": 78,
       "label": "Descriptor Invariants",
-      "group": "REG"
+      "group": "REG",
+      "source_module": "mountainash_settings.profiles.invariants",
+      "source_path": "src/mountainash_settings/profiles/invariants.py",
+      "chapter": "07-profile-registry-and-invariants",
+      "match_confidence": 0.7
     },
     {
       "id": 79,
       "label": "Invariant Test Generator",
-      "group": "REG"
+      "group": "REG",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "07-profile-registry-and-invariants",
+      "match_confidence": 0.3
     },
     {
       "id": 80,
       "label": "AuthSpec Base Class",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": "mountainash_settings.auth.base",
+      "source_path": "src/mountainash_settings/auth/base.py",
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.7
     },
     {
       "id": 81,
       "label": "Auth Kind Literal",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.3
     },
     {
       "id": 82,
       "label": "Auth Discriminated Union",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.3
     },
     {
       "id": 83,
       "label": "Auth Dispatch Function",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": "mountainash_settings.auth.dispatch",
+      "source_path": "src/mountainash_settings/auth/dispatch.py",
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.6
     },
     {
       "id": 84,
       "label": "Auth To Driver Kwargs Map",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": "mountainash_settings.auth.dispatch",
+      "source_path": "src/mountainash_settings/auth/dispatch.py",
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.85
     },
     {
       "id": 85,
       "label": "Default Auth Kwargs",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": "mountainash_settings.profiles.profile",
+      "source_path": "src/mountainash_settings/profiles/profile.py",
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.7
     },
     {
       "id": 86,
       "label": "NoneAuth Mode",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": "mountainash_settings.auth.none",
+      "source_path": "src/mountainash_settings/auth/none.py",
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.6
     },
     {
       "id": 87,
       "label": "PasswordAuth Mode",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": "mountainash_settings.auth.password",
+      "source_path": "src/mountainash_settings/auth/password.py",
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.7
     },
     {
       "id": 88,
       "label": "TokenAuth Mode",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": "mountainash_settings.auth.token",
+      "source_path": "src/mountainash_settings/auth/token.py",
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.7
     },
     {
       "id": 89,
       "label": "OAuth2 Client Credentials Mode",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": "mountainash_settings.auth.oauth2",
+      "source_path": "src/mountainash_settings/auth/oauth2.py",
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.6
     },
     {
       "id": 90,
       "label": "OAuth1 Mode",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": "mountainash_settings.auth.oauth1",
+      "source_path": "src/mountainash_settings/auth/oauth1.py",
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.6
     },
     {
       "id": 91,
       "label": "OAuth2 Auth Code Mode",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": "mountainash_settings.auth.oauth2",
+      "source_path": "src/mountainash_settings/auth/oauth2.py",
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.7
     },
     {
       "id": 92,
       "label": "IAM Auth Mode",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": "mountainash_settings.auth.iam",
+      "source_path": "src/mountainash_settings/auth/iam.py",
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.7
     },
     {
       "id": 93,
       "label": "Azure AD Auth Mode",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": "mountainash_settings.auth.azure",
+      "source_path": "src/mountainash_settings/auth/azure.py",
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.7
     },
     {
       "id": 94,
       "label": "Kerberos Auth Mode",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": "mountainash_settings.auth.kerberos",
+      "source_path": "src/mountainash_settings/auth/kerberos.py",
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.7
     },
     {
       "id": 95,
       "label": "Certificate Auth Mode",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": "mountainash_settings.auth.certificate",
+      "source_path": "src/mountainash_settings/auth/certificate.py",
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.7
     },
     {
       "id": 96,
       "label": "Service Account Auth Mode",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": "mountainash_settings.auth.service_account",
+      "source_path": "src/mountainash_settings/auth/service_account.py",
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.7
     },
     {
       "id": 97,
       "label": "Auth Mode Selection In Profile",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": "mountainash_settings.profiles.profile",
+      "source_path": "src/mountainash_settings/profiles/profile.py",
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.6
     },
     {
       "id": 98,
       "label": "Custom Auth Mode Extension",
-      "group": "AUTH"
+      "group": "AUTH",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "08-authentication-system",
+      "match_confidence": 0.3
     },
     {
       "id": 99,
       "label": "LRU Cache Decorator",
       "group": "CACHE",
-      "shape": "box"
+      "shape": "box",
+      "source_module": "mountainash_settings.profiles.registry",
+      "source_path": "src/mountainash_settings/profiles/registry.py",
+      "chapter": "09-caching-settings-management-and-app-settings",
+      "match_confidence": 0.7
     },
     {
       "id": 100,
       "label": "Get Settings Function",
-      "group": "CACHE"
+      "group": "CACHE",
+      "source_module": "mountainash_settings.settings_cache.settings_functions",
+      "source_path": "src/mountainash_settings/settings_cache/settings_functions.py",
+      "chapter": "09-caching-settings-management-and-app-settings",
+      "match_confidence": 0.85
     },
     {
       "id": 101,
       "label": "Internal Get Settings",
-      "group": "CACHE"
+      "group": "CACHE",
+      "source_module": "mountainash_settings.settings_cache.settings_functions",
+      "source_path": "src/mountainash_settings/settings_cache/settings_functions.py",
+      "chapter": "09-caching-settings-management-and-app-settings",
+      "match_confidence": 0.7
     },
     {
       "id": 102,
       "label": "Structural Cache Key",
-      "group": "CACHE"
+      "group": "CACHE",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "09-caching-settings-management-and-app-settings",
+      "match_confidence": 0.3
     },
     {
       "id": 103,
       "label": "Runtime Override Application",
-      "group": "CACHE"
+      "group": "CACHE",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "09-caching-settings-management-and-app-settings",
+      "match_confidence": 0.3
     },
     {
       "id": 104,
       "label": "Model Copy For Overrides",
-      "group": "CACHE"
+      "group": "CACHE",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "09-caching-settings-management-and-app-settings",
+      "match_confidence": 0.3
     },
     {
       "id": 105,
       "label": "SettingsManager Class",
-      "group": "CACHE"
+      "group": "CACHE",
+      "source_module": "mountainash_settings.settings_cache.settings_manager",
+      "source_path": "src/mountainash_settings/settings_cache/settings_manager.py",
+      "chapter": "09-caching-settings-management-and-app-settings",
+      "match_confidence": 0.85
     },
     {
       "id": 106,
       "label": "Named Settings Lookup",
-      "group": "CACHE"
+      "group": "CACHE",
+      "source_module": null,
+      "source_path": null,
+      "chapter": "09-caching-settings-management-and-app-settings",
+      "match_confidence": 0.3
     },
     {
       "id": 107,
       "label": "AppSettings Class",
-      "group": "APP"
+      "group": "APP",
+      "source_module": "mountainash_settings.settings.app.app_settings",
+      "source_path": "src/mountainash_settings/settings/app/app_settings.py",
+      "chapter": "09-caching-settings-management-and-app-settings",
+      "match_confidence": 0.85
     },
     {
       "id": 108,
       "label": "App Settings Defaults",
-      "group": "APP"
+      "group": "APP",
+      "source_module": "mountainash_settings.settings.app.app_settings",
+      "source_path": "src/mountainash_settings/settings/app/app_settings.py",
+      "chapter": "09-caching-settings-management-and-app-settings",
+      "match_confidence": 0.7
     },
     {
       "id": 109,
       "label": "App Settings Templates",
-      "group": "APP"
+      "group": "APP",
+      "source_module": "mountainash_settings.settings.app.app_settings_templates",
+      "source_path": "src/mountainash_settings/settings/app/app_settings_templates.py",
+      "chapter": "09-caching-settings-management-and-app-settings",
+      "match_confidence": 0.8
     },
     {
       "id": 110,
       "label": "App Settings Integration",
-      "group": "APP"
+      "group": "APP",
+      "source_module": "mountainash_settings.settings.app.app_settings",
+      "source_path": "src/mountainash_settings/settings/app/app_settings.py",
+      "chapter": "09-caching-settings-management-and-app-settings",
+      "match_confidence": 0.7
     }
   ],
   "edges": [
