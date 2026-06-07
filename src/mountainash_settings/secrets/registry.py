@@ -1,37 +1,33 @@
-"""Secrets resolver registry — write-once provider mapping."""
-
+"""Secrets backend registry — write-once provider mapping."""
 from __future__ import annotations
 
-import typing as t
+from .backend import SecretsBackend
 
 __all__ = [
-    "SecretsResolver",
-    "register_secrets_resolver",
-    "get_secrets_resolver",
-    "replace_secrets_resolver",
+    "register_secrets_backend",
+    "get_secrets_backend",
+    "replace_secrets_backend",
     "clear_secrets_registry",
 ]
 
-SecretsResolver = t.Callable[[str], str]
-
-_REGISTRY: dict[str, SecretsResolver] = {}
+_REGISTRY: dict[str, SecretsBackend] = {}
 
 
-def register_secrets_resolver(provider: str, resolver: SecretsResolver) -> None:
+def register_secrets_backend(provider: str, backend: SecretsBackend) -> None:
     if provider in _REGISTRY:
         raise ValueError(
-            f"Secrets resolver '{provider}' is already registered. "
-            f"Use replace_secrets_resolver() for explicit replacement."
+            f"Secrets backend '{provider}' is already registered. "
+            f"Use replace_secrets_backend() for explicit replacement."
         )
-    _REGISTRY[provider] = resolver
+    _REGISTRY[provider] = backend
 
 
-def get_secrets_resolver(provider: str) -> SecretsResolver:
+def get_secrets_backend(provider: str) -> SecretsBackend:
     return _REGISTRY[provider]
 
 
-def replace_secrets_resolver(provider: str, resolver: SecretsResolver) -> None:
-    _REGISTRY[provider] = resolver
+def replace_secrets_backend(provider: str, backend: SecretsBackend) -> None:
+    _REGISTRY[provider] = backend
 
 
 def clear_secrets_registry() -> None:

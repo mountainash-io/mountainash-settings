@@ -1,21 +1,19 @@
-"""Secrets resolver registry — write-once provider mapping.
-
-Resolution logic lives in ``mountainash_settings.resolve`` (domain-agnostic).
-This package owns the secrets-specific provider registry only.
-"""
-
+"""Secrets backend registry and protocols."""
+from .backend import ClearableBackend, SecretsBackend
+from .filesystem import FilesystemBackend
 from .registry import (
-    SecretsResolver,
-    register_secrets_resolver,
-    get_secrets_resolver,
-    replace_secrets_resolver,
+    register_secrets_backend,
+    get_secrets_backend,
+    replace_secrets_backend,
     clear_secrets_registry,
 )
 
 __all__ = [
-    "SecretsResolver",
-    "register_secrets_resolver",
-    "get_secrets_resolver",
-    "replace_secrets_resolver",
+    "ClearableBackend",
+    "FilesystemBackend",
+    "SecretsBackend",
+    "register_secrets_backend",
+    "get_secrets_backend",
+    "replace_secrets_backend",
     "clear_secrets_registry",
 ]

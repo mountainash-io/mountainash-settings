@@ -18,10 +18,12 @@ from .profiles import (
     spec_invariants_for,
 )
 from .secrets import (
-    SecretsResolver,
-    register_secrets_resolver,
-    get_secrets_resolver,
-    replace_secrets_resolver,
+    ClearableBackend,
+    FilesystemBackend,
+    SecretsBackend,
+    register_secrets_backend,
+    get_secrets_backend,
+    replace_secrets_backend,
     clear_secrets_registry,
 )
 
@@ -47,10 +49,12 @@ __all__ = [
     "spec_invariants_for",
 
     # Secrets
-    "SecretsResolver",
-    "register_secrets_resolver",
-    "get_secrets_resolver",
-    "replace_secrets_resolver",
+    "ClearableBackend",
+    "FilesystemBackend",
+    "SecretsBackend",
+    "register_secrets_backend",
+    "get_secrets_backend",
+    "replace_secrets_backend",
     "clear_secrets_registry",
 ]
 
