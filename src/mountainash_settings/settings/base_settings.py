@@ -345,6 +345,42 @@ class MountainAshBaseSettings(BaseSettings):
 
         return params
 
+    def persist_key(self) -> str:
+        """Derive a backend key from this instance's stored meta-fields.
+
+        Format: env_prefix (stripped of trailing underscore, lowercased) + "." +
+        settings class name (lowercased). If no env_prefix, just the class name.
+        """
+        class_name = (self.SETTINGS_CLASS_NAME or type(self).__name__).lower()
+        prefix = self.SETTINGS_SOURCE_ENV_PREFIX
+        if prefix:
+            prefix = prefix.rstrip("_").lower()
+            return f"{prefix}.{class_name}"
+        return class_name
+
+    def persist(self, data: Dict[str, Any], *, key: Optional[str] = None) -> None:
+        """Write data to the registered secrets backend and update in-memory fields.
+
+        Args:
+            data: Dict of field names to values to persist.
+            key: Backend key. If None, derived via persist_key().
+
+        Raises:
+            ValueError: If no secrets_provider is configured.
+        """
+        provider = self.SETTINGS_SOURCE_SECRETS_PROVIDER
+        if not provider:
+            raise ValueError(
+                "Cannot persist: no secrets_provider configured on this settings instance. "
+                "Pass secrets_provider= when constructing the settings."
+            )
+        from mountainash_settings.secrets.registry import get_secrets_backend
+        backend = get_secrets_backend(provider)
+        if key is None:
+            key = self.persist_key()
+        backend.set(key, data)
+        self.update_settings_from_dict(data)
+
     # def __getattribute__(self, name):
     #     """
     #     Custom attribute access that handles SecretStr types by automatically extracting their values.
