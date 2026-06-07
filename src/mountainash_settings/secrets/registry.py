@@ -22,7 +22,9 @@ def register_secrets_backend(provider: str, backend: SecretsBackend) -> None:
     _REGISTRY[provider] = backend
 
 
-def get_secrets_backend(provider: str) -> SecretsBackend:
+def get_secrets_backend(provider: str|None) -> SecretsBackend|None:
+    if provider is None:
+        return None
     return _REGISTRY[provider]
 
 
