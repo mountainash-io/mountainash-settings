@@ -81,10 +81,10 @@ class MountainAshBaseSettings(BaseSettings):
 
         # Resolve prefixed references (e.g. secret:) in kwargs before pydantic validation
         if local_settings_params.secrets_provider:
-            from mountainash_settings.secrets.registry import get_secrets_resolver
+            from mountainash_settings.secrets.registry import get_secrets_backend
             from mountainash_settings.resolve import resolve_references_in_dict
-            _secrets_resolver = get_secrets_resolver(local_settings_params.secrets_provider)
-            valid_attribute_kwargs = resolve_references_in_dict(valid_attribute_kwargs, _secrets_resolver)
+            _backend = get_secrets_backend(local_settings_params.secrets_provider)
+            valid_attribute_kwargs = resolve_references_in_dict(valid_attribute_kwargs, _backend)
 
         # Handle non env config files via model_config
         self.model_config["yaml_file"] = obj_config_files.yaml_files or None
@@ -135,10 +135,10 @@ class MountainAshBaseSettings(BaseSettings):
 
         # Resolve prefixed references (e.g. secret:) in fields loaded from config files
         if local_settings_params.secrets_provider:
-            from mountainash_settings.secrets.registry import get_secrets_resolver as _get_resolver
+            from mountainash_settings.secrets.registry import get_secrets_backend as _get_backend
             from mountainash_settings.resolve import resolve_references_in_model_tree
-            _secrets_resolver = _get_resolver(local_settings_params.secrets_provider)
-            resolve_references_in_model_tree(self, _secrets_resolver)
+            _backend = _get_backend(local_settings_params.secrets_provider)
+            resolve_references_in_model_tree(self, _backend)
 
         # Initialise templated variables
         self.post_init()

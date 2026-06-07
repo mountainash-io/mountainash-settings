@@ -8,7 +8,7 @@ from upath import UPath
 
 from mountainash_settings import SettingsManager, MountainAshBaseSettings, SettingsParameters
 from mountainash_settings import get_settings_manager, get_settings
-from mountainash_settings.secrets import register_secrets_resolver, clear_secrets_registry
+from mountainash_settings.secrets import register_secrets_backend, clear_secrets_registry
 
 
 @pytest.fixture
@@ -260,15 +260,42 @@ def test_init_config_valid_init_files_override_and_kwargs_noprefix2(settings_man
 
 # --- Secrets Resolution Integration Tests ---
 
-def _test_resolver(path: str) -> str:
-    return f"resolved_{path}"
+class _TestBackendData(dict):
+    """Dict that returns 'resolved_key/field' for any field lookup."""
+    def __init__(self, key: str):
+        super().__init__()
+        self._key = key
+
+    def __contains__(self, field):
+        return True
+
+    def __getitem__(self, field):
+        return f"resolved_{self._key}/{field}"
+
+    def __len__(self):
+        return 2
+
+
+class _TestBackend:
+    def get(self, key: str) -> dict | None:
+        return _TestBackendData(key)
+
+    def set(self, key: str, data: dict) -> None:
+        pass
+
+    def delete(self, key: str) -> None:
+        pass
+
+    def transaction(self, key: str):
+        from contextlib import nullcontext
+        return nullcontext()
 
 
 @pytest.fixture
 def secrets_registry():
-    """Register a test resolver and clean up after."""
+    """Register a test backend and clean up after."""
     clear_secrets_registry()
-    register_secrets_resolver("test", _test_resolver)
+    register_secrets_backend("test", _TestBackend())
     yield
     clear_secrets_registry()
 
@@ -284,7 +311,7 @@ class TestSecretsResolution:
             settings_parameters=SettingsParameters.create(
                 settings_class=_SecretsTestSettings,
                 secrets_provider="test",
-                PASSWORD="secret:db/password",
+                PASSWORD="secret:db.password",
             )
         )
         assert settings.PASSWORD == "resolved_db/password"
@@ -302,8 +329,8 @@ class TestSecretsResolution:
         assert settings.USERNAME == "admin"
 
     def test_no_provider_leaves_secret_prefix_as_literal(self):
-        settings = _SecretsTestSettings(PASSWORD="secret:db/password")
-        assert settings.PASSWORD == "secret:db/password"
+        settings = _SecretsTestSettings(PASSWORD="secret:db.password")
+        assert settings.PASSWORD == "secret:db.password"
 
     def test_cache_hit_runtime_override_resolves_secret(self, secrets_registry):
         from mountainash_settings.settings_cache.settings_functions import _get_settings
@@ -321,7 +348,7 @@ class TestSecretsResolution:
         # Second call — cache hit with runtime override containing a secret ref
         settings2 = get_settings(
             settings_parameters=params_base,
-            PASSWORD="secret:other/password",
+            PASSWORD="secret:other.password",
         )
         assert settings2.PASSWORD == "resolved_other/password"
         # Original cached instance untouched
@@ -354,7 +381,7 @@ class TestSecretsResolution:
         )
         assert settings.APP_NAME == "test_app"
         assert settings.auth.username == "admin"
-        assert settings.auth.password.get_secret_value() == "resolved_db/production/password"
+        assert settings.auth.password.get_secret_value() == "resolved_db.production/password"
 
     def test_nested_model_secret_in_kwargs_resolved(self, secrets_registry):
         from pydantic import BaseModel, ConfigDict, SecretStr
@@ -374,7 +401,7 @@ class TestSecretsResolution:
             settings_parameters=SettingsParameters.create(
                 settings_class=_NestedAuthSettings,
                 secrets_provider="test",
-                auth={"kind": "password", "username": "admin", "password": "secret:db/password"},
+                auth={"kind": "password", "username": "admin", "password": "secret:db.password"},
             )
         )
         assert settings.auth.password.get_secret_value() == "resolved_db/password"

@@ -376,10 +376,10 @@ class SettingsParameters():
             override_kwargs = self.get_attribute_settings_kwargs()
             if override_kwargs:
                 if self.secrets_provider:
-                    from ..secrets.registry import get_secrets_resolver
+                    from ..secrets.registry import get_secrets_backend
                     from ..resolve import resolve_references_in_dict
-                    resolver = get_secrets_resolver(self.secrets_provider)
-                    override_kwargs = resolve_references_in_dict(override_kwargs, resolver)
+                    backend = get_secrets_backend(self.secrets_provider)
+                    override_kwargs = resolve_references_in_dict(override_kwargs, backend)
                 settings_copy.update_settings_from_dict(settings_dict=override_kwargs)
             return settings_copy
         return cached_settings
