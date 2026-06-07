@@ -11,8 +11,6 @@ import warnings
 
 import pytest
 
-from fixtures.auth_stubs import StubNoAuth as NoAuth
-
 
 @pytest.mark.unit
 class TestModuleLevelDeprecations:
@@ -81,7 +79,6 @@ class TestRegisterMirrorOnNewForm:
         spec = ProfileSpec(
             name="newform", provider_type="newform",
             parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
-            auth_modes=[NoAuth],
         )
 
         @register
@@ -93,5 +90,5 @@ class TestRegisterMirrorOnNewForm:
         assert NewFormProfile.__descriptor__ is spec
 
         # And instances see both
-        instance = NewFormProfile(HOST="h", auth=NoAuth())
+        instance = NewFormProfile(HOST="h")
         assert instance.__descriptor__ is spec

@@ -3,7 +3,6 @@
 
 import pytest
 
-from fixtures.auth_stubs import StubNoAuth as NoAuth
 from mountainash_settings.profiles.spec import (
     MISSING,
     Missing,
@@ -59,12 +58,10 @@ class TestProfileSpec:
             name="test",
             provider_type="test",
             parameters=[],
-            auth_modes=[NoAuth],
         )
         assert spec.name == "test"
         assert spec.provider_type == "test"
         assert spec.parameters == []
-        assert spec.auth_modes == [NoAuth]
         assert spec.metadata == {}
 
     def test_with_parameters(self):
@@ -73,7 +70,6 @@ class TestProfileSpec:
             name="test",
             provider_type="test",
             parameters=params,
-            auth_modes=[NoAuth],
         )
         assert spec.parameters == params
 
@@ -82,7 +78,6 @@ class TestProfileSpec:
             name="test",
             provider_type="test",
             parameters=[],
-            auth_modes=[NoAuth],
         )
         with pytest.raises(Exception):  # FrozenInstanceError
             spec.name = "other"
@@ -92,7 +87,6 @@ class TestProfileSpec:
             name="test",
             provider_type="test",
             parameters=[],
-            auth_modes=[NoAuth],
             metadata={"port": 5432},
         )
         assert spec.metadata == {"port": 5432}

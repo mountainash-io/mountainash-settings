@@ -3,8 +3,7 @@
 
 A subclass declares ``__spec__`` (a :class:`ProfileSpec`); this base uses
 pydantic v2's ``__pydantic_init_subclass__`` hook to materialize the spec
-into pydantic fields and compose the :class:`AuthSpec` union into the
-``auth`` field.
+into pydantic fields.
 
 During the 26.5.x deprecation window, this class also accepts the old
 ``__descriptor__`` attribute name; concrete classes that still declare
@@ -71,7 +70,6 @@ class Profile(MountainAshBaseSettings):
         - :attr:`backend` / :attr:`profile_name` — spec name.
         - :attr:`provider_type` — spec provider_type.
         - :meth:`_default_kwargs` — 1:1 ``driver_key`` mappings from the spec.
-        - :meth:`_auth_kwargs` — default auth dispatch (consumers may override).
         - ``__adapter__`` — if set, adapter owns the output pipeline.
 
     Public from 26.5.0. Previously named ``DescriptorProfile``.
@@ -110,21 +108,6 @@ class Profile(MountainAshBaseSettings):
                     description=param.description,
                 )
             new_fields[param.name] = (ptype, info)
-
-        # 2. auth field as discriminated union of spec.auth_modes
-        if spec.auth_modes:
-            auth_union: t.Any
-            if len(spec.auth_modes) == 1:
-                auth_union = spec.auth_modes[0]
-                auth_info = FieldInfo(annotation=auth_union, default=...)
-            else:
-                auth_union = t.Union[tuple(spec.auth_modes)]  # type: ignore[valid-type]
-                auth_info = FieldInfo(
-                    annotation=auth_union,
-                    default=...,
-                    discriminator="kind",
-                )
-            new_fields["auth"] = (auth_union, auth_info)
 
         for name, (annotation, info) in new_fields.items():
             cls.model_fields[name] = info

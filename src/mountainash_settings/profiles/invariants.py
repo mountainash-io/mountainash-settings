@@ -18,8 +18,6 @@ from __future__ import annotations
 
 import typing as t
 
-# from mountainash_auth_client import AuthSpec
-
 from .registry import Registry
 
 __all__ = ["spec_invariants_for"]
@@ -71,17 +69,6 @@ def spec_invariants_for(registry: Registry) -> type:
                 assert p.tier in {"core", "advanced"}, (
                     f"{name}.{p.name} has invalid tier {p.tier!r}"
                 )
-
-        def test_auth_modes_nonempty(self, name: str, spec: t.Any) -> None:
-            assert spec.auth_modes, (
-                f"{name}: auth_modes is empty — use [NoAuth] for no-auth profiles"
-            )
-
-        # def test_auth_modes_are_authspec(self, name: str, spec: t.Any) -> None:
-        #     for mode in spec.auth_modes:
-        #         assert issubclass(mode, AuthSpec), (
-        #             f"{name}.auth_modes contains non-AuthSpec: {mode}"
-        #         )
 
         def test_provider_type_not_none(self, name: str, spec: t.Any) -> None:
             assert spec.provider_type is not None, (

@@ -3,7 +3,6 @@
 
 import pytest
 
-from fixtures.auth_stubs import StubNoAuth as NoAuth
 from mountainash_settings.profiles import (
     ParameterSpec,
     ProfileDescriptor,
@@ -19,7 +18,6 @@ FAKE_DESC = ProfileDescriptor(
     parameters=[
         ParameterSpec(name="HOST", type=str, tier="core", driver_key="host"),
     ],
-    auth_modes=[NoAuth],
 )
 
 

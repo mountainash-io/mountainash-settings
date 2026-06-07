@@ -5,14 +5,13 @@ import warnings
 
 import pytest
 
-from fixtures.auth_stubs import StubNoAuth as NoAuth
 from mountainash_settings.profiles.descriptor import ProfileDescriptor
 from mountainash_settings.profiles.registry import Registry
 
 
 def _make_desc(name: str) -> ProfileDescriptor:
     return ProfileDescriptor(
-        name=name, provider_type=name, parameters=[], auth_modes=[NoAuth],
+        name=name, provider_type=name, parameters=[],
     )
 
 
@@ -129,7 +128,6 @@ class TestRegistryConstraints:
         spec = _CustomSpec(
             name="custom", provider_type="custom",
             parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
-            auth_modes=[NoAuth],
         )
         class P(Profile):
             __spec__ = spec
@@ -142,7 +140,6 @@ class TestRegistryConstraints:
         plain = ProfileSpec(
             name="plain", provider_type="plain",
             parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
-            auth_modes=[NoAuth],
         )
         class P(Profile):
             __spec__ = plain
@@ -155,7 +152,6 @@ class TestRegistryConstraints:
         spec = ProfileSpec(
             name="cm", provider_type="cm",
             parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
-            auth_modes=[NoAuth],
         )
         class P(_CustomProfile):
             __spec__ = spec
@@ -168,7 +164,6 @@ class TestRegistryConstraints:
         spec = ProfileSpec(
             name="pr", provider_type="pr",
             parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
-            auth_modes=[NoAuth],
         )
         class P(Profile):
             __spec__ = spec
@@ -187,7 +182,6 @@ class TestBareRegisterDecorator:
         spec = ProfileSpec(
             name="bare", provider_type="bare",
             parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
-            auth_modes=[NoAuth],
         )
 
         @register
@@ -213,7 +207,6 @@ class TestBareRegisterDecorator:
         spec = ProfileSpec(
             name="old", provider_type="old",
             parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
-            auth_modes=[NoAuth],
         )
 
         with pytest.warns(DeprecationWarning, match="@register\\(spec\\).*deprecated"):
@@ -231,12 +224,10 @@ class TestBareRegisterDecorator:
         spec_a = ProfileSpec(
             name="a", provider_type="a",
             parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
-            auth_modes=[NoAuth],
         )
         spec_b = ProfileSpec(
             name="b", provider_type="b",
             parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
-            auth_modes=[NoAuth],
         )
 
         with warnings.catch_warnings():
@@ -263,7 +254,6 @@ class TestSpecDescriptorMirror:
         spec = ProfileSpec(
             name="mirror", provider_type="mirror",
             parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
-            auth_modes=[NoAuth],
         )
 
         @register
@@ -276,6 +266,6 @@ class TestSpecDescriptorMirror:
         assert MirrorProfile.__descriptor__ is MirrorProfile.__spec__
 
         # And on instances too
-        instance = MirrorProfile(HOST="h", auth=NoAuth())
+        instance = MirrorProfile(HOST="h")
         assert instance.__descriptor__ is spec
         assert instance.__spec__ is spec

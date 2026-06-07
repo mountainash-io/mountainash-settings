@@ -87,7 +87,6 @@ class ProfileSpec:
         name: Short name (conventionally lowercase, e.g. ``"postgresql"``).
         provider_type: Canonical provider identifier (domain-specific enum).
         parameters: Ordered list of :class:`ParameterSpec`.
-        auth_modes: List of :class:`AuthSpec` subclasses this profile accepts.
         metadata: Bag of domain-specific metadata (e.g. port, URL scheme,
             dialect name). Domains wanting strong typing may subclass
             ``ProfileSpec`` and add typed fields instead.
@@ -98,5 +97,4 @@ class ProfileSpec:
     name: str
     provider_type: t.Any
     parameters: list[ParameterSpec]
-    auth_modes: list[type]  # list[type[AuthSpec]] — forward-refd to avoid cycle
     metadata: dict[str, t.Any] = field(default_factory=dict)

@@ -8,7 +8,6 @@ import warnings
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from fixtures.auth_stubs import StubNoAuth as NoAuth, StubPasswordAuth as PasswordAuth
 from mountainash_settings.profiles import (
     ParameterSpec,
     ProfileSpec,
@@ -25,7 +24,6 @@ DUMMY_SPEC = ProfileSpec(
         ParameterSpec(name="PASSWORD", type=str, tier="core", secret=True,
                       driver_key="password", default=None),
     ],
-    auth_modes=[NoAuth, PasswordAuth],
 )
 
 
@@ -37,38 +35,38 @@ class DummyProfile(Profile):
 class TestProfile:
     def test_required_field_enforced(self):
         with pytest.raises(ValidationError):
-            DummyProfile(auth=NoAuth())  # HOST missing
+            DummyProfile()  # HOST missing
 
     def test_default_used(self):
-        p = DummyProfile(HOST="localhost", auth=NoAuth())
+        p = DummyProfile(HOST="localhost")
         assert p.PORT == 9999
 
-    def test_default_kwargs_noauth(self):
-        p = DummyProfile(HOST="h", PORT=1234, auth=NoAuth())
+    def test_default_kwargs(self):
+        p = DummyProfile(HOST="h", PORT=1234)
         assert p._default_kwargs() == {"host": "h", "port": 1234}
 
     def test_secret_field_unwrapped(self):
-        p = DummyProfile(HOST="h", PASSWORD="literal-secret", auth=NoAuth())
+        p = DummyProfile(HOST="h", PASSWORD="literal-secret")
         kwargs = p._default_kwargs()
         assert kwargs["password"] == "literal-secret"
 
     def test_none_values_skipped(self):
-        p = DummyProfile(HOST="h", auth=NoAuth())
+        p = DummyProfile(HOST="h")
         kwargs = p._default_kwargs()
         assert "password" not in kwargs
 
     def test_backend_and_profile_name(self):
-        p = DummyProfile(HOST="h", auth=NoAuth())
+        p = DummyProfile(HOST="h")
         assert p.backend == "dummy"
         assert p.profile_name == "dummy"
 
     def test_provider_type_property(self):
-        p = DummyProfile(HOST="h", auth=NoAuth())
+        p = DummyProfile(HOST="h")
         assert p.provider_type == "dummy"
 
     def test_transform_applied(self):
         desc = ProfileSpec(
-            name="tf", provider_type="tf", auth_modes=[NoAuth],
+            name="tf", provider_type="tf",
             parameters=[
                 ParameterSpec(
                     name="FLAG", type=bool, tier="core",
@@ -81,8 +79,8 @@ class TestProfile:
         class P(Profile):
             __spec__ = desc
 
-        assert P(auth=NoAuth())._default_kwargs() == {"flag": 1}
-        assert P(FLAG=False, auth=NoAuth())._default_kwargs() == {"flag": 0}
+        assert P()._default_kwargs() == {"flag": 1}
+        assert P(FLAG=False)._default_kwargs() == {"flag": 0}
 
     def test_validator_rejects_bad_input(self):
         def _positive(v: int) -> int:
@@ -91,7 +89,7 @@ class TestProfile:
             return v
 
         desc = ProfileSpec(
-            name="val", provider_type="val", auth_modes=[NoAuth],
+            name="val", provider_type="val",
             parameters=[
                 ParameterSpec(name="N", type=int, tier="core",
                               validator=_positive),
@@ -101,9 +99,9 @@ class TestProfile:
         class P(Profile):
             __spec__ = desc
 
-        assert P(N=5, auth=NoAuth()).N == 5
+        assert P(N=5).N == 5
         with pytest.raises(ValidationError, match="must be positive"):
-            P(N=-1, auth=NoAuth())
+            P(N=-1)
 
     def test_adapter_owns_pipeline(self):
         def _adapter(profile: "Profile") -> dict:
@@ -118,13 +116,13 @@ class TestProfile:
         # Note: Profile itself has no to_driver_kwargs; adapters
         # are invoked by domain subclasses. We test the mechanism indirectly
         # by confirming the adapter attr is accessible.
-        p = Adapted(HOST="h", auth=NoAuth())
+        p = Adapted(HOST="h")
         assert type(p).__dict__.get("__adapter__") is not None
 
     def test_template_populates_derived_field(self):
         """ParameterSpec(template=...) auto-populates field in post_init."""
         desc = ProfileSpec(
-            name="tmpl", provider_type="tmpl", auth_modes=[NoAuth],
+            name="tmpl", provider_type="tmpl",
             parameters=[
                 ParameterSpec(name="HOST", type=str, tier="core"),
                 ParameterSpec(name="URL", type=str, tier="core",
@@ -136,13 +134,13 @@ class TestProfile:
         class P(Profile):
             __spec__ = desc
 
-        p = P(HOST="example.com", auth=NoAuth())
+        p = P(HOST="example.com")
         assert p.URL == "https://example.com/api"
 
     def test_template_respects_explicit_value(self):
         """If caller sets URL explicitly, the template does not overwrite."""
         desc = ProfileSpec(
-            name="tmpl2", provider_type="tmpl2", auth_modes=[NoAuth],
+            name="tmpl2", provider_type="tmpl2",
             parameters=[
                 ParameterSpec(name="HOST", type=str, tier="core"),
                 ParameterSpec(name="URL", type=str, tier="core",
@@ -154,7 +152,7 @@ class TestProfile:
         class P(Profile):
             __spec__ = desc
 
-        p = P(HOST="a.b", URL="https://override.example/", auth=NoAuth())
+        p = P(HOST="a.b", URL="https://override.example/")
         assert p.URL == "https://override.example/"
 
 
@@ -176,7 +174,7 @@ class TestSpecAttributeFallback:
                 __descriptor__ = DUMMY_SPEC
 
         # Field installation still works from the old attribute
-        instance = OldStyleProfile(HOST="h", auth=NoAuth())
+        instance = OldStyleProfile(HOST="h")
         assert instance.HOST == "h"
 
         # Methods that read self.__spec__ must work too — these previously
@@ -192,7 +190,6 @@ class TestSpecAttributeFallback:
         OTHER_SPEC = ProfileSpec(
             name="other", provider_type="other",
             parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
-            auth_modes=[NoAuth],
         )
         with pytest.raises(TypeError, match="conflicting"):
             class ConflictProfile(Profile):
