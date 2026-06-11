@@ -12,23 +12,6 @@ version: 0.08
 
 This chapter covers the profile registry that provides a centralized store for ProfileDescriptor instances. You will learn about the Registry class with its name-keyed store, decorator-based registration pattern, registry decorator factory for customizing registration, duplicate prevention, iteration and lookup by name, descriptor invariants that validate profile definitions, and the invariant test generator for automated testing.
 
-## Concepts Covered
-
-- Registry Class
-- Name Keyed Store
-- Decorator Registration
-- Registry Decorator Factory
-- Duplicate Prevention
-- Registry Iteration
-- Registry Lookup By Name
-- Descriptor Invariants
-- Invariant Test Generator
-
-## Prerequisites
-
-- Chapter 1: Pydantic and Configuration Foundations
-- Chapter 6: Connection Profiles
-
 ---
 
 <!-- concept:71 -->

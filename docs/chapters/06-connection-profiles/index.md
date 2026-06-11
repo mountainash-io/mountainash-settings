@@ -12,29 +12,6 @@ version: 0.08
 
 This chapter introduces the connection profile system that allows reusable, typed connection configurations to be defined declaratively. You will learn about the ProfileDescriptor class with its identity and provider type fields, the ParameterSpec class for defining typed parameters with name conventions, Python types, tiers, default values, the MISSING sentinel, driver key mappings, secret flags, transform functions, and validator functions. The chapter concludes with DescriptorProfile and its dynamic Pydantic field installation mechanism.
 
-## Concepts Covered
-
-- ProfileDescriptor Class
-- Descriptor Identity
-- Provider Type Field
-- ParameterSpec Class
-- Parameter Name Convention
-- Parameter Python Type
-- Parameter Tier
-- Parameter Default Value
-- MISSING Sentinel
-- Driver Key Mapping
-- Secret Parameter Flag
-- Transform Function
-- Validator Function
-- DescriptorProfile Class
-- Dynamic Field Installation
-
-## Prerequisites
-
-- Chapter 1: Pydantic and Configuration Foundations
-- Chapter 2: MountainAsh Base Settings
-
 ---
 
 ## Why Profiles Exist

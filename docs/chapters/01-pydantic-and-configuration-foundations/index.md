@@ -12,25 +12,6 @@ version: 0.08
 
 This chapter introduces the prerequisite concepts that underpin the mountainash-settings framework. You will learn about Pydantic's BaseModel and BaseSettings classes, field validators, model configuration, the four supported configuration file formats (YAML, TOML, JSON, .env), environment variables, Python decorators, discriminated unions, and the SecretStr type. These foundational concepts are essential for understanding how mountainash-settings extends Pydantic to provide a typed, multi-source configuration system.
 
-## Concepts Covered
-
-- Pydantic BaseModel
-- Pydantic BaseSettings
-- Field Validators
-- Model Config
-- YAML File Format
-- TOML File Format
-- JSON File Format
-- Env File Format
-- Environment Variables
-- Python Decorators
-- Discriminated Unions
-- SecretStr Type
-
-## Prerequisites
-
-None -- this is the foundational chapter.
-
 ---
 
 <!-- concept:4 -->

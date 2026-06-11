@@ -12,27 +12,6 @@ version: 0.08
 
 This chapter covers how mountainash-settings loads configuration from files and keyword arguments, and how field values can reference other fields via templates. You will learn about the FileHandler class with its extension-based dispatch and file categorization, the KwargsHandler for normalizing keyword arguments, multi-format file loading that ties everything together, and the template system including syntax, field name placeholders, resolution during post-init, UPath path derivation, priority rules, and nested template resolution.
 
-## Concepts Covered
-
-- FileHandler Class
-- File Extension Dispatch
-- File Categorization
-- KwargsHandler Class
-- Kwargs Normalization
-- Multi Format File Loading
-- Template Syntax
-- Field Name Placeholder
-- Template Resolution
-- Post Init Template Expansion
-- UPath Path Derivation
-- Template Priority Rules
-- Nested Template Resolution
-
-## Prerequisites
-
-- Chapter 2: MountainAsh Base Settings
-- Chapter 3: Settings Parameters and Merge Strategies
-
 ---
 
 <!-- concept:38 -->

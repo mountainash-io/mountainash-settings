@@ -12,28 +12,6 @@ version: 0.08
 
 This chapter covers the caching layer that ensures settings instances are constructed once and reused efficiently, plus the AppSettings convenience class for application-level configuration. You will learn about the LRU cache decorator, the get_settings function and its internal implementation, structural cache keys derived from parameter hash/eq, runtime override application via model_copy, the SettingsManager dictionary store with named settings lookup, and the AppSettings class with its defaults, templates, and integration with the caching system.
 
-## Concepts Covered
-
-- LRU Cache Decorator
-- Get Settings Function
-- Internal Get Settings
-- Structural Cache Key
-- Runtime Override Application
-- Model Copy For Overrides
-- SettingsManager Class
-- Named Settings Lookup
-- AppSettings Class
-- App Settings Defaults
-- App Settings Templates
-- App Settings Integration
-
-## Prerequisites
-
-- Chapter 2: MountainAsh Base Settings
-- Chapter 3: Settings Parameters and Merge Strategies
-- Chapter 4: File Handling, Kwargs, and Field Templating
-- Chapter 7: Profile Registry and Invariants (for Named Settings Lookup)
-
 ---
 
 ## The Performance Problem
