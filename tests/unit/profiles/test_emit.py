@@ -155,3 +155,29 @@ class TestEmit:
         # Not target-scoped (no __adapters__, no dict driver_keys) → emit() allowed.
         out = p.emit()
         assert out == {"host": "h", "password": "s", "legacy": True}
+
+
+@pytest.mark.unit
+class TestEmitSafety:
+    def test_emit_does_not_mutate_base_top_level(self):
+        p = BareProfile(HOST="h")
+        base = {"region": "x"}
+        p.emit(base=base)
+        # emit() shallow-copies base; caller's dict is untouched.
+        assert base == {"region": "x"}
+
+    def test_double_emit_from_shared_base_is_isolated(self):
+        # Config emit, then a credential-style adapter emit layered on top,
+        # from the same starting base. The first result must not be mutated
+        # by the second.
+        config = BareProfile(HOST="h")
+        first = config.emit(base={"timeout": 5})
+
+        cred = HttpAdaptedProfile(USERNAME="u", PASSWORD="pw")
+        second = cred.emit("http", base=first)
+
+        # first still has no Authorization header; the nested header dict the
+        # adapter built is its own (copy-on-write), not first's.
+        assert "headers" not in first
+        assert second["headers"]["Authorization"] == "u:pw"
+        assert second["timeout"] == 5 and second["host"] == "h"
