@@ -92,3 +92,66 @@ class TestAdaptersMap:
         assert "http" in Adapted.__adapters__
         # Base Profile is unaffected (no leakage across classes).
         assert BareProfile.__adapters__ == {}
+
+
+def _http_basic(profile, kw):
+    # Copy-on-write nested container; sole producer of the Authorization key.
+    token = f"{profile.USERNAME}:{profile.PASSWORD.get_secret_value()}"
+    return {**kw, "headers": {**kw.get("headers", {}), "Authorization": token}}
+
+
+# Profile that is target-scoped via an adapter only (no dict driver_keys).
+class HttpAdaptedProfile(Profile):
+    __spec__ = SCOPED_SPEC
+    __adapters__ = {"http": _http_basic}
+
+
+# Legacy owns-the-pipeline adapter (1-arg).
+def _legacy_adapter(profile):
+    kw = profile._default_kwargs()
+    kw["legacy"] = True
+    return kw
+
+
+class LegacyAdaptedProfile(Profile):
+    __spec__ = BARE_SPEC
+    __adapter__ = staticmethod(_legacy_adapter)
+
+
+@pytest.mark.unit
+class TestEmit:
+    def test_untargeted_emit_equals_default_kwargs(self):
+        p = BareProfile(HOST="h", PASSWORD="s")
+        assert p.emit() == p._default_kwargs() == {"host": "h", "password": "s"}
+
+    def test_untargeted_emit_layers_base(self):
+        p = BareProfile(HOST="h")
+        assert p.emit(base={"region": "x"}) == {"region": "x", "host": "h"}
+
+    def test_targeted_profile_no_target_raises(self):
+        p = ScopedProfile(USERNAME="u", PASSWORD="s")
+        with pytest.raises(ValueError, match="target-scoped"):
+            p.emit()
+
+    def test_targeted_profile_unknown_target_raises(self):
+        p = ScopedProfile(USERNAME="u", PASSWORD="s")
+        with pytest.raises(ValueError, match="no emission for target"):
+            p.emit("ftp")
+
+    def test_targeted_profile_known_target_emits(self):
+        p = ScopedProfile(USERNAME="u", PASSWORD="s")
+        assert p.emit("paramiko") == {"username": "u", "password": "s"}
+
+    def test_per_target_adapter_composes_onto_base(self):
+        p = HttpAdaptedProfile(USERNAME="u", PASSWORD="pw")
+        out = p.emit("http", base={"timeout": 5})
+        assert out["timeout"] == 5
+        assert out["headers"]["Authorization"] == "u:pw"
+        # SCOPED_SPEC driver_keys are paramiko-only, so no stray username/password.
+        assert "username" not in out and "password" not in out
+
+    def test_legacy_adapter_owns_pipeline(self):
+        p = LegacyAdaptedProfile(HOST="h", PASSWORD="s")
+        # Not target-scoped (no __adapters__, no dict driver_keys) → emit() allowed.
+        out = p.emit()
+        assert out == {"host": "h", "password": "s", "legacy": True}

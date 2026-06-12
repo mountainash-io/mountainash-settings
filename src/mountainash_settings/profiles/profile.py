@@ -224,3 +224,75 @@ class Profile(MountainAshBaseSettings):
             out[key] = val
         return out
 
+    # --- Targeting helpers ---------------------------------------------------
+
+    def _is_targeted(self) -> bool:
+        """True if emission depends on a target (any per-target adapter or any
+        dict-scoped ``driver_key``)."""
+        if type(self).__adapters__:
+            return True
+        return any(
+            isinstance(p.driver_key, dict) for p in self.__spec__.parameters
+        )
+
+    def _known_targets(self) -> set[t.Hashable]:
+        """Every target this profile can emit for: adapter keys ∪ dict
+        driver_key keys."""
+        targets: set[t.Hashable] = set(type(self).__adapters__)
+        for param in self.__spec__.parameters:
+            if isinstance(param.driver_key, dict):
+                targets.update(param.driver_key)
+        return targets
+
+    def _knows_target(self, target: t.Hashable) -> bool:
+        return target in self._known_targets()
+
+    # --- Emission ------------------------------------------------------------
+
+    def emit(
+        self,
+        target: t.Hashable = _UNSET,
+        *,
+        base: dict[str, t.Any] | None = None,
+    ) -> dict[str, t.Any]:
+        """Produce SDK kwargs for ``target``, layered onto ``base``.
+
+        Three-tier: ``driver_key`` renames, then the per-target adapter in
+        ``__adapters__`` (2-arg compose), else the legacy ``__adapter__``
+        (1-arg, owns-pipeline), else the merged dict.
+
+        Fail-closed: a target-scoped profile (dict driver_keys or any
+        ``__adapters__``) emitted with no explicit target raises rather than
+        silently dropping output. An unknown explicit target on such a profile
+        also raises.
+
+        ``base`` is treated as caller-owned: only a shallow copy is taken here,
+        so adapters must copy-on-write any nested container they touch.
+        """
+        if target is _UNSET:
+            if self._is_targeted():
+                raise ValueError(
+                    f"{type(self).__name__} is target-scoped; "
+                    f"call emit(<target>)."
+                )
+            target = None
+        elif (
+            target is not None
+            and self._is_targeted()
+            and not self._knows_target(target)
+        ):
+            known = sorted(self._known_targets(), key=repr)
+            raise ValueError(
+                f"{type(self).__name__} has no emission for target "
+                f"{target!r}; known: {known}."
+            )
+
+        merged = {**(base or {}), **self._default_kwargs(target)}
+
+        adapter = type(self).__adapters__.get(target)
+        if adapter is not None:
+            return adapter(self, merged)
+        if type(self).__adapter__ is not None:
+            return type(self).__adapter__(self)  # legacy 1-arg owns-pipeline
+        return merged
+
