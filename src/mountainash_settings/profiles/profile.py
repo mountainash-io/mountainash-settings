@@ -24,7 +24,17 @@ from mountainash_settings import MountainAshBaseSettings
 from .lookup import lookup_class_var
 from .spec import MISSING, ProfileSpec
 
-__all__ = ["Profile"]
+__all__ = ["Adapter", "Profile"]
+
+# A target adapter composes credential/config kwargs: it receives the profile
+# and the already-merged (base + driver_key renames) dict, and returns the final
+# dict. Distinct from the legacy 1-arg ``__adapter__`` which owns the whole
+# pipeline (see Profile docstring).
+Adapter = t.Callable[["Profile", dict[str, t.Any]], dict[str, t.Any]]
+
+# Sentinel distinguishing "no target argument passed" from an explicit ``None``
+# target, so ``emit()`` can fail closed on target-scoped profiles.
+_UNSET: t.Any = object()
 
 
 def _resolve_spec(cls: type) -> ProfileSpec | None:
@@ -70,7 +80,11 @@ class Profile(MountainAshBaseSettings):
         - :attr:`backend` / :attr:`profile_name` — spec name.
         - :attr:`provider_type` — spec provider_type.
         - :meth:`_default_kwargs` — 1:1 ``driver_key`` mappings from the spec.
-        - ``__adapter__`` — if set, adapter owns the output pipeline.
+        - :meth:`emit` — target-aware kwargs: ``driver_key`` renames →
+          per-target ``__adapters__`` (2-arg compose) → legacy ``__adapter__``
+          (1-arg, owns-pipeline) → merged dict.
+        - ``__adapters__`` — per-target adapter map (``{target: Adapter}``).
+        - ``__adapter__`` — legacy all-targets adapter; owns the output pipeline.
 
     Public from 26.5.0. Previously named ``DescriptorProfile``.
     """
@@ -79,6 +93,7 @@ class Profile(MountainAshBaseSettings):
     __adapter__: t.ClassVar[
         t.Callable[["Profile"], dict[str, t.Any]] | None
     ] = None
+    __adapters__: t.ClassVar[dict[t.Hashable, "Adapter"]] = {}
 
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: t.Any) -> None:
@@ -170,16 +185,36 @@ class Profile(MountainAshBaseSettings):
 
     # --- Kwargs helpers ------------------------------------------------------
 
-    def _default_kwargs(self) -> dict[str, t.Any]:
-        """Emit 1:1 ``driver_key`` mappings from the spec.
+    @staticmethod
+    def _resolve_driver_key(
+        driver_key: str | dict[t.Hashable, str] | None,
+        target: t.Hashable,
+    ) -> str | None:
+        """Resolve a param's output key for ``target``.
 
-        - Skips ``None`` values.
+        - ``None`` → not emitted via driver_key (adapter territory).
+        - bare ``str`` → that key for every target.
+        - ``dict`` → ``driver_key.get(target)`` (``None`` skips this param
+          for this target).
+        """
+        if driver_key is None:
+            return None
+        if isinstance(driver_key, str):
+            return driver_key
+        return driver_key.get(target)
+
+    def _default_kwargs(self, target: t.Hashable = None) -> dict[str, t.Any]:
+        """Emit ``driver_key`` mappings from the spec for ``target``.
+
+        - Resolves each param's key via :meth:`_resolve_driver_key`.
+        - Skips params whose resolved key is ``None`` and ``None`` values.
         - Unwraps :class:`SecretStr` via ``.get_secret_value()``.
         - Applies ``ParameterSpec.transform`` if set.
         """
         out: dict[str, t.Any] = {}
         for param in self.__spec__.parameters:
-            if param.driver_key is None:
+            key = self._resolve_driver_key(param.driver_key, target)
+            if key is None:
                 continue
             val = getattr(self, param.name, None)
             if val is None:
@@ -190,6 +225,79 @@ class Profile(MountainAshBaseSettings):
                 val = val.get_secret_value()
             if param.transform is not None:
                 val = param.transform(val)
-            out[param.driver_key] = val
+            out[key] = val
         return out
+
+    # --- Targeting helpers ---------------------------------------------------
+
+    def _is_targeted(self) -> bool:
+        """True if emission depends on a target (any per-target adapter or any
+        dict-scoped ``driver_key``)."""
+        if type(self).__adapters__:
+            return True
+        return any(
+            isinstance(p.driver_key, dict) for p in self.__spec__.parameters
+        )
+
+    def _known_targets(self) -> set[t.Hashable]:
+        """Every target this profile can emit for: adapter keys ∪ dict
+        driver_key keys."""
+        targets: set[t.Hashable] = set(type(self).__adapters__)
+        for param in self.__spec__.parameters:
+            if isinstance(param.driver_key, dict):
+                targets.update(param.driver_key)
+        return targets
+
+    def _knows_target(self, target: t.Hashable) -> bool:
+        return target in self._known_targets()
+
+    # --- Emission ------------------------------------------------------------
+
+    def emit(
+        self,
+        target: t.Hashable = _UNSET,
+        *,
+        base: dict[str, t.Any] | None = None,
+    ) -> dict[str, t.Any]:
+        """Produce SDK kwargs for ``target``, layered onto ``base``.
+
+        Three-tier: ``driver_key`` renames, then the per-target adapter in
+        ``__adapters__`` (2-arg compose), else the legacy ``__adapter__``
+        (1-arg, owns-pipeline), else the merged dict.
+
+        Fail-closed: a target-scoped profile (dict driver_keys or any
+        ``__adapters__``) emitted with no explicit target raises rather than
+        silently dropping output. An unknown explicit target on such a profile
+        also raises.
+
+        ``base`` is treated as caller-owned: only a shallow copy is taken here,
+        so adapters must copy-on-write any nested container they touch.
+        """
+        if target is _UNSET:
+            if self._is_targeted():
+                raise ValueError(
+                    f"{type(self).__name__} is target-scoped; "
+                    f"call emit(<target>)."
+                )
+            target = None
+        elif self._is_targeted() and not self._knows_target(target):
+            # An explicit target the profile cannot serve fails closed —
+            # including an explicit ``None`` that is not a registered target,
+            # which would otherwise resolve every dict driver_key to nothing
+            # and emit silently. ``None`` is permitted only when it is a known
+            # target (``__adapters__={None: ...}`` / ``driver_key={None: ...}``).
+            known = sorted(self._known_targets(), key=repr)
+            raise ValueError(
+                f"{type(self).__name__} has no emission for target "
+                f"{target!r}; known: {known}."
+            )
+
+        merged = {**(base or {}), **self._default_kwargs(target)}
+
+        adapter = type(self).__adapters__.get(target)
+        if adapter is not None:
+            return adapter(self, merged)
+        if type(self).__adapter__ is not None:
+            return type(self).__adapter__(self)  # legacy 1-arg owns-pipeline
+        return merged
 

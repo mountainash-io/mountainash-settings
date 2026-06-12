@@ -56,7 +56,11 @@ class ParameterSpec:
         tier: ``"core"`` or ``"advanced"`` — audit-style severity tier.
         default: Default value; :data:`MISSING` means the field is required.
         description: Optional docstring for generated schemas / help output.
-        driver_key: Output-kwarg name for 1:1 mappings (e.g. ``"sslcert"``).
+        driver_key: Output-kwarg name for 1:1 mappings. A bare ``str`` (e.g.
+            ``"sslcert"``) maps for every target. A ``dict[Hashable, str]``
+            scopes the mapping per emission target — e.g.
+            ``{TargetFamily.PARAMIKO: "password"}`` emits only when
+            ``emit(PARAMIKO)`` / ``_default_kwargs(PARAMIKO)`` is called.
             ``None`` means a domain adapter handles emission.
         secret: If ``True``, wrap ``type`` as :class:`pydantic.SecretStr` and
             auto-unwrap via ``.get_secret_value()`` at the kwargs boundary.
@@ -72,7 +76,10 @@ class ParameterSpec:
     tier: t.Literal["core", "advanced"]
     default: t.Any = MISSING
     description: str = ""
-    driver_key: str | None = None
+    # dict driver_keys are unhashable; ParameterSpec is a frozen dataclass whose
+    # auto __hash__ would crash on a dict field. Exclude driver_key from the hash
+    # (it stays in __eq__) so dict-scoped specs remain hashable.
+    driver_key: str | dict[t.Hashable, str] | None = field(default=None, hash=False)
     secret: bool = False
     transform: t.Callable[[t.Any], t.Any] | None = None
     validator: t.Callable[[t.Any], t.Any] | None = None
