@@ -61,8 +61,32 @@ def spec_invariants_for(registry: Registry) -> type:
                 assert p.name, f"{name}: ParameterSpec.name is empty"
 
         def test_driver_keys_unique(self, name: str, spec: t.Any) -> None:
-            keys = [p.driver_key for p in spec.parameters if p.driver_key]
-            assert len(keys) == len(set(keys)), f"duplicate driver_key in {name}"
+            # Per-target output keys must be unique. A bare-string driver_key
+            # applies to every target; a dict driver_key applies per named
+            # target. (dicts are unhashable, so a set() over raw values would
+            # crash — resolve to per-target keys first.)
+            from collections import defaultdict
+
+            bare: list[str] = []
+            per_target: dict[t.Hashable, list[str]] = defaultdict(list)
+            for p in spec.parameters:
+                dk = p.driver_key
+                if not dk:
+                    continue
+                if isinstance(dk, str):
+                    bare.append(dk)
+                else:  # dict[Hashable, str]
+                    for target, key in dk.items():
+                        per_target[target].append(key)
+
+            assert len(bare) == len(set(bare)), (
+                f"duplicate bare driver_key in {name}"
+            )
+            for target, keys in per_target.items():
+                combined = keys + bare  # bare keys apply to every target
+                assert len(combined) == len(set(combined)), (
+                    f"duplicate driver_key for target {target!r} in {name}"
+                )
 
         def test_parameter_tiers_valid(self, name: str, spec: t.Any) -> None:
             for p in spec.parameters:

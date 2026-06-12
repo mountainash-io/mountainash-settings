@@ -7,7 +7,9 @@ import pytest
 from pydantic import SecretStr
 
 from mountainash_settings.profiles import ParameterSpec, ProfileSpec
+from mountainash_settings.profiles.invariants import spec_invariants_for
 from mountainash_settings.profiles.profile import Profile
+from mountainash_settings.profiles.registry import Registry
 
 
 # A bare-string spec — behaves exactly as before this change.
@@ -226,3 +228,46 @@ class TestExports:
 
     def test_adapter_exported_from_package_root(self):
         from mountainash_settings import Adapter  # noqa: F401
+
+
+@pytest.mark.unit
+class TestInvariantsDictDriverKeys:
+    def _invariant_instance(self):
+        # spec_invariants_for only needs the registry for parametrize IDs and
+        # registry.name; we call the method directly with (name, spec).
+        return spec_invariants_for(Registry("tmp"))()
+
+    def test_dict_scoped_distinct_targets_not_a_collision(self):
+        inst = self._invariant_instance()
+        spec = ProfileSpec(name="ok", provider_type="ok", parameters=[
+            ParameterSpec(name="A", type=str, tier="core", driver_key={"http": "x"}),
+            ParameterSpec(name="B", type=str, tier="core", driver_key={"boto": "x"}),
+        ])
+        inst.test_driver_keys_unique("ok", spec)  # must not raise
+
+    def test_same_key_same_target_is_a_collision(self):
+        inst = self._invariant_instance()
+        spec = ProfileSpec(name="bad", provider_type="bad", parameters=[
+            ParameterSpec(name="A", type=str, tier="core", driver_key={"http": "x"}),
+            ParameterSpec(name="B", type=str, tier="core", driver_key={"http": "x"}),
+        ])
+        with pytest.raises(AssertionError, match="duplicate driver_key for target"):
+            inst.test_driver_keys_unique("bad", spec)
+
+    def test_bare_key_collides_within_each_target(self):
+        inst = self._invariant_instance()
+        spec = ProfileSpec(name="mix", provider_type="mix", parameters=[
+            ParameterSpec(name="A", type=str, tier="core", driver_key="x"),
+            ParameterSpec(name="B", type=str, tier="core", driver_key={"http": "x"}),
+        ])
+        with pytest.raises(AssertionError, match="duplicate driver_key for target"):
+            inst.test_driver_keys_unique("mix", spec)
+
+    def test_bare_keys_still_checked(self):
+        inst = self._invariant_instance()
+        spec = ProfileSpec(name="bare2", provider_type="bare2", parameters=[
+            ParameterSpec(name="A", type=str, tier="core", driver_key="x"),
+            ParameterSpec(name="B", type=str, tier="core", driver_key="x"),
+        ])
+        with pytest.raises(AssertionError, match="duplicate bare driver_key"):
+            inst.test_driver_keys_unique("bare2", spec)
