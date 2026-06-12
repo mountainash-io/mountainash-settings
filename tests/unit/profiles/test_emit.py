@@ -181,3 +181,39 @@ class TestEmitSafety:
         assert "headers" not in first
         assert second["headers"]["Authorization"] == "u:pw"
         assert second["timeout"] == 5 and second["host"] == "h"
+
+
+@pytest.mark.unit
+class TestBackCompat:
+    def test_existing_default_kwargs_call_sites_unbroken(self):
+        # Domain code calls _default_kwargs() with no args; still valid.
+        p = BareProfile(HOST="h", PASSWORD="s")
+        assert p._default_kwargs() == {"host": "h", "password": "s"}
+
+    def test_secret_unwrapped_under_target_resolution(self):
+        # SecretStr unwrap still happens for a target-scoped secret field.
+        p = ScopedProfile(USERNAME="u", PASSWORD="s")
+        out = p._default_kwargs("paramiko")
+        assert out["password"] == "s"
+        assert not isinstance(out["password"], SecretStr)
+
+    def test_dict_driver_key_constructs_and_installs_fields(self):
+        # A spec with a dict driver_key builds its pydantic fields normally.
+        p = ScopedProfile(USERNAME="u", PASSWORD="s")
+        assert p.USERNAME == "u"
+        assert isinstance(p.PASSWORD, SecretStr)
+
+    def test_transform_applies_under_target(self):
+        spec = ProfileSpec(
+            name="tf2", provider_type="tf2",
+            parameters=[
+                ParameterSpec(name="FLAG", type=bool, tier="core", default=True,
+                              driver_key={"boto": "flag"},
+                              transform=lambda v: 1 if v else 0),
+            ],
+        )
+
+        class P(Profile):
+            __spec__ = spec
+
+        assert P(FLAG=True).emit("boto") == {"flag": 1}
