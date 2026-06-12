@@ -170,16 +170,36 @@ class Profile(MountainAshBaseSettings):
 
     # --- Kwargs helpers ------------------------------------------------------
 
-    def _default_kwargs(self) -> dict[str, t.Any]:
-        """Emit 1:1 ``driver_key`` mappings from the spec.
+    @staticmethod
+    def _resolve_driver_key(
+        driver_key: str | dict[t.Hashable, str] | None,
+        target: t.Hashable,
+    ) -> str | None:
+        """Resolve a param's output key for ``target``.
 
-        - Skips ``None`` values.
+        - ``None`` → not emitted via driver_key (adapter territory).
+        - bare ``str`` → that key for every target.
+        - ``dict`` → ``driver_key.get(target)`` (``None`` skips this param
+          for this target).
+        """
+        if driver_key is None:
+            return None
+        if isinstance(driver_key, str):
+            return driver_key
+        return driver_key.get(target)
+
+    def _default_kwargs(self, target: t.Hashable = None) -> dict[str, t.Any]:
+        """Emit ``driver_key`` mappings from the spec for ``target``.
+
+        - Resolves each param's key via :meth:`_resolve_driver_key`.
+        - Skips params whose resolved key is ``None`` and ``None`` values.
         - Unwraps :class:`SecretStr` via ``.get_secret_value()``.
         - Applies ``ParameterSpec.transform`` if set.
         """
         out: dict[str, t.Any] = {}
         for param in self.__spec__.parameters:
-            if param.driver_key is None:
+            key = self._resolve_driver_key(param.driver_key, target)
+            if key is None:
                 continue
             val = getattr(self, param.name, None)
             if val is None:
@@ -190,6 +210,6 @@ class Profile(MountainAshBaseSettings):
                 val = val.get_secret_value()
             if param.transform is not None:
                 val = param.transform(val)
-            out[param.driver_key] = val
+            out[key] = val
         return out
 
