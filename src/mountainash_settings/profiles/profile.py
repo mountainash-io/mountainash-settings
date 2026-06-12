@@ -280,11 +280,12 @@ class Profile(MountainAshBaseSettings):
                     f"call emit(<target>)."
                 )
             target = None
-        elif (
-            target is not None
-            and self._is_targeted()
-            and not self._knows_target(target)
-        ):
+        elif self._is_targeted() and not self._knows_target(target):
+            # An explicit target the profile cannot serve fails closed —
+            # including an explicit ``None`` that is not a registered target,
+            # which would otherwise resolve every dict driver_key to nothing
+            # and emit silently. ``None`` is permitted only when it is a known
+            # target (``__adapters__={None: ...}`` / ``driver_key={None: ...}``).
             known = sorted(self._known_targets(), key=repr)
             raise ValueError(
                 f"{type(self).__name__} has no emission for target "

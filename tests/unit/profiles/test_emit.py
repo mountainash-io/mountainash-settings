@@ -140,6 +140,13 @@ class TestEmit:
         with pytest.raises(ValueError, match="no emission for target"):
             p.emit("ftp")
 
+    def test_targeted_profile_explicit_none_target_raises(self):
+        # Explicit None is not the same as _UNSET: on a target-scoped profile
+        # it must fail closed, not silently emit {} via .get(None) misses.
+        p = ScopedProfile(USERNAME="u", PASSWORD="s")
+        with pytest.raises(ValueError, match="no emission for target"):
+            p.emit(None)
+
     def test_targeted_profile_known_target_emits(self):
         p = ScopedProfile(USERNAME="u", PASSWORD="s")
         assert p.emit("paramiko") == {"username": "u", "password": "s"}
