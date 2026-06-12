@@ -24,7 +24,17 @@ from mountainash_settings import MountainAshBaseSettings
 from .lookup import lookup_class_var
 from .spec import MISSING, ProfileSpec
 
-__all__ = ["Profile"]
+__all__ = ["Adapter", "Profile"]
+
+# A target adapter composes credential/config kwargs: it receives the profile
+# and the already-merged (base + driver_key renames) dict, and returns the final
+# dict. Distinct from the legacy 1-arg ``__adapter__`` which owns the whole
+# pipeline (see Profile docstring).
+Adapter = t.Callable[["Profile", dict[str, t.Any]], dict[str, t.Any]]
+
+# Sentinel distinguishing "no target argument passed" from an explicit ``None``
+# target, so ``emit()`` can fail closed on target-scoped profiles.
+_UNSET: t.Any = object()
 
 
 def _resolve_spec(cls: type) -> ProfileSpec | None:
@@ -79,6 +89,7 @@ class Profile(MountainAshBaseSettings):
     __adapter__: t.ClassVar[
         t.Callable[["Profile"], dict[str, t.Any]] | None
     ] = None
+    __adapters__: t.ClassVar[dict[t.Hashable, "Adapter"]] = {}
 
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: t.Any) -> None:

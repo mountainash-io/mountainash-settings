@@ -73,3 +73,22 @@ class TestTargetAwareDriverKey:
         param = ParameterSpec(name="X", type=str, tier="core",
                               driver_key={"paramiko": "x"})
         assert isinstance(hash(param), int)
+
+
+@pytest.mark.unit
+class TestAdaptersMap:
+    def test_adapters_default_empty(self):
+        # A profile that declares no adapters has an empty map.
+        assert BareProfile.__adapters__ == {}
+
+    def test_adapters_declarable(self):
+        def _http(profile, kw):
+            return {**kw, "marker": "http"}
+
+        class Adapted(Profile):
+            __spec__ = BARE_SPEC
+            __adapters__ = {"http": _http}
+
+        assert "http" in Adapted.__adapters__
+        # Base Profile is unaffected (no leakage across classes).
+        assert BareProfile.__adapters__ == {}
