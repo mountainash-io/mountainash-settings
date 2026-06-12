@@ -8,6 +8,7 @@ from .settings_cache.settings_manager import SettingsManager
 # --- Profiles + auth (2026-04-16 promotion) ---------------------------------
 
 from .profiles import (
+    Adapter,
     MISSING,
     Missing,
     ParameterSpec,
@@ -39,6 +40,7 @@ __all__ = [
     "get_settings_manager",
 
     # Profiles
+    "Adapter",
     "MISSING",
     "Missing",
     "ParameterSpec",

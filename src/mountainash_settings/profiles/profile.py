@@ -80,7 +80,11 @@ class Profile(MountainAshBaseSettings):
         - :attr:`backend` / :attr:`profile_name` — spec name.
         - :attr:`provider_type` — spec provider_type.
         - :meth:`_default_kwargs` — 1:1 ``driver_key`` mappings from the spec.
-        - ``__adapter__`` — if set, adapter owns the output pipeline.
+        - :meth:`emit` — target-aware kwargs: ``driver_key`` renames →
+          per-target ``__adapters__`` (2-arg compose) → legacy ``__adapter__``
+          (1-arg, owns-pipeline) → merged dict.
+        - ``__adapters__`` — per-target adapter map (``{target: Adapter}``).
+        - ``__adapter__`` — legacy all-targets adapter; owns the output pipeline.
 
     Public from 26.5.0. Previously named ``DescriptorProfile``.
     """

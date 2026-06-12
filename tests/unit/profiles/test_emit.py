@@ -217,3 +217,12 @@ class TestBackCompat:
             __spec__ = spec
 
         assert P(FLAG=True).emit("boto") == {"flag": 1}
+
+
+@pytest.mark.unit
+class TestExports:
+    def test_adapter_exported_from_profiles(self):
+        from mountainash_settings.profiles import Adapter  # noqa: F401
+
+    def test_adapter_exported_from_package_root(self):
+        from mountainash_settings import Adapter  # noqa: F401
