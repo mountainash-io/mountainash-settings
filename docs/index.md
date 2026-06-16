@@ -1,35 +1,25 @@
 ---
 title: 'Mountainash Settings'
-description: 'An intelligent textbook for mountainash-settings — a typed configuration framework for Python applications'
+description: 'A practitioner manual for mountainash-settings — typed configuration for Python applications built on Pydantic v2'
 ---
 
+
+[← Back to Ecosystem](../)
 # Mountainash Settings
 
-An intelligent textbook for mountainash-settings — a typed configuration framework for Python applications
+Define fully-typed application settings with Pydantic, load configuration from YAML, TOML, JSON, or .env files, and retrieve a cached instance with a single call.
 
-## Getting Started
+## Why a Guided Manual?
 
-This is an intelligent textbook built with MkDocs Material. Use the navigation
-sidebar on the left to explore chapters, the learning graph, MicroSims, and
-supporting reference content.
+The API reference tells you *what* each class and function does. This manual explains *why* you would use them — when to reach for field templating instead of a custom validator, how the merge framework decides which value wins, and what happens inside the two-pass secrets resolution pipeline. It is the difference between knowing the interface and understanding the design.
 
-## Front Matter
+## What's Inside
 
-- **About** — audience, prerequisites, and how to read the book
-- **Course Description** — the seed document used to generate the learning graph
+- **[Chapters](chapters/index.md)** — 9 chapters covering foundations through caching and app settings, each building on the last
+- **[MicroSims](sims/index.md)** — Interactive simulations that let you experiment with configuration concepts in the browser
+- **[Learning Graph](learning-graph/index.md)** — A dependency map showing how concepts relate and the order they should be learned
+- **[API Reference](api/index.md)** — Auto-generated documentation for 6 modules including profiles, secrets, settings, and cache
 
-## Chapters
+## Who This Is For
 
-The main body of the book lives under [Chapters](chapters/index.md). Each
-chapter has its own folder with a two-digit prefix (e.g. `01-introduction`).
-
-## Learning Graph
-
-The [Learning Graph](learning-graph/index.md) shows how concepts depend on each
-other. Concepts are introduced in dependency order so prerequisites are always
-covered before they are used.
-
-## MicroSims
-
-Interactive simulations live under [MicroSims](sims/index.md). Each MicroSim
-focuses on one concept and is embeddable as an iframe inside chapter content.
+Python developers and platform engineers who configure applications, data pipelines, or multi-service platforms. If you have used Pydantic BaseSettings before and wished it handled secrets, connection profiles, and multi-file merging out of the box, start with [About](about.md) for a fuller picture of what to expect.

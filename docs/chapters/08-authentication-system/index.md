@@ -12,33 +12,6 @@ version: 0.08
 
 This chapter covers the pluggable authentication system that provides 11 concrete auth modes as a discriminated union. You will learn about the AuthSpec base class with its kind literal, how the discriminated union is assembled, the auth dispatch function and driver kwargs mapping, default auth kwargs, and each concrete mode: NoneAuth, PasswordAuth, TokenAuth, OAuth2 Client Credentials, OAuth1, OAuth2 Auth Code, IAM, Azure AD, Kerberos, Certificate, and Service Account. The chapter concludes with auth mode selection in profiles and extending the system with custom auth modes.
 
-## Concepts Covered
-
-- AuthSpec Base Class
-- Auth Kind Literal
-- Auth Discriminated Union
-- Auth Dispatch Function
-- Auth To Driver Kwargs Map
-- Default Auth Kwargs
-- NoneAuth Mode
-- PasswordAuth Mode
-- TokenAuth Mode
-- OAuth2 Client Credentials Mode
-- OAuth1 Mode
-- OAuth2 Auth Code Mode
-- IAM Auth Mode
-- Azure AD Auth Mode
-- Kerberos Auth Mode
-- Certificate Auth Mode
-- Service Account Auth Mode
-- Auth Mode Selection In Profile
-- Custom Auth Mode Extension
-
-## Prerequisites
-
-- Chapter 1: Pydantic and Configuration Foundations
-- Chapter 6: Connection Profiles (for Auth Mode Selection In Profile)
-
 ---
 
 ## The Authentication Challenge

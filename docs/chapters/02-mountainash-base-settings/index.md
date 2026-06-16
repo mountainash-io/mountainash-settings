@@ -12,22 +12,6 @@ version: 0.08
 
 This chapter covers the core MountainAshBaseSettings class that forms the heart of the framework. You will learn how it extends Pydantic BaseSettings with a custom model config, a post-init lifecycle for template resolution and secrets, source customization for controlling where configuration is loaded from, the validate_assignment invariant with its object setattr bypass, settings source priority ordering, environment prefix overrides, and config file parameter declarations.
 
-## Concepts Covered
-
-- MountainAshBaseSettings Class
-- Settings Model Config
-- Post Init Lifecycle
-- Source Customization
-- Validate Assignment Invariant
-- Object Setattr Bypass
-- Settings Source Priority
-- Env Prefix Override
-- Config Files Parameter
-
-## Prerequisites
-
-- Chapter 1: Pydantic and Configuration Foundations
-
 ---
 
 ## The Central Abstraction

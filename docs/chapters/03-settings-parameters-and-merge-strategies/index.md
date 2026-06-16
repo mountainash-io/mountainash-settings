@@ -12,22 +12,6 @@ version: 0.08
 
 This chapter introduces the SettingsParameters class that controls how settings instances are constructed and cached. You will learn about the structural/runtime field split, custom hash and equality semantics for cache key generation, the parameter create factory, and the merge framework with its three strategies: file list union, scalar last-wins, and dict deep-merge.
 
-## Concepts Covered
-
-- SettingsParameters Class
-- Structural Fields
-- Runtime Fields
-- Custom Hash And Eq
-- Parameter Create Factory
-- Merge Framework
-- File List Union Strategy
-- Scalar Last Wins Strategy
-- Dict Deep Merge Strategy
-
-## Prerequisites
-
-- Chapter 1: Pydantic and Configuration Foundations
-
 ---
 
 <!-- concept:27 -->

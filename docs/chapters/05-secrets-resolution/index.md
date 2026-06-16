@@ -12,26 +12,6 @@ version: 0.08
 
 This chapter covers the secrets resolution subsystem that transparently resolves secret references in configuration values. You will learn about the secrets registry, the secret provider protocol for implementing pluggable backends, the two-pass resolution pipeline (kwargs pass and model tree pass), helper functions for resolving references in dicts and model trees, secret prefix syntax for identifying references, the three built-in providers (Vault, SSM, Key Vault), and how frozen models are rebuilt after resolution.
 
-## Concepts Covered
-
-- Secrets Registry
-- Secret Provider Protocol
-- Two Pass Resolution
-- Kwargs Pass Resolution
-- Model Tree Pass Resolution
-- Resolve References In Dict
-- Resolve References In Model Tree
-- Secret Prefix Syntax
-- Vault Provider
-- SSM Provider
-- Key Vault Provider
-- Frozen Model Rebuild On Resolve
-
-## Prerequisites
-
-- Chapter 1: Pydantic and Configuration Foundations
-- Chapter 2: MountainAsh Base Settings
-
 ---
 
 <!-- concept:44 -->

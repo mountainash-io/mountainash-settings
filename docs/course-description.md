@@ -1,14 +1,11 @@
 ---
-title: Mountainash Settings Package Description
-description: A detailed description of the mountainash-settings typed configuration framework for Python applications
-quality_score: 87
+title: Package Overview
+description: 'What mountainash-settings does, who it is for, and what this manual covers'
 ---
 
-# Mountainash Settings Package Description
+# Package Overview
 
-## Title
-
-Mountainash Settings: Typed Configuration Framework for Python Applications
+mountainash-settings is a typed configuration framework for Python applications built on Pydantic v2. It loads configuration from multiple file formats, resolves secrets transparently, supports field templating for derived values, and provides a profile system for building reusable connection configurations. The auth system offers 10+ pluggable authentication modes as a discriminated union. Intelligent LRU caching ensures settings are constructed once and reused efficiently.
 
 ## Target Audience
 
@@ -21,20 +18,19 @@ Python developers and platform engineers who need a validated, multi-source conf
 - Basic understanding of configuration file formats (YAML, TOML, JSON, .env)
 - Awareness of secrets management concepts (Vault, SSM, Key Vault)
 
-## Topics Covered
+## What This Manual Covers
 
-1. **Foundation** — Pydantic BaseSettings, multi-format file loading (YAML, TOML, JSON, .env), environment variables
-2. **Base Settings** — MountainAshBaseSettings class, post_init lifecycle, source customization, validate_assignment invariant
-3. **Settings Parameters** — SettingsParameters with structural hash/eq, merge framework, FileHandler, KwargsHandler
-4. **Field Templating** — {FIELD_NAME} template syntax, template resolution in post_init, UPath path derivation
+1. **Pydantic and Configuration Foundations** — Pydantic BaseSettings, multi-format file loading (YAML, TOML, JSON, .env), environment variables
+2. **MountainAsh Base Settings** — MountainAshBaseSettings class, post_init lifecycle, source customization, validate_assignment invariant
+3. **Settings Parameters and Merge Strategies** — SettingsParameters with structural hash/eq, merge framework, FileHandler, KwargsHandler
+4. **File Handling, Kwargs, and Field Templating** — {FIELD_NAME} template syntax, template resolution in post_init, UPath path derivation
 5. **Secrets Resolution** — Secrets registry, two-pass resolution pipeline, pluggable providers (Vault, SSM, Key Vault)
 6. **Connection Profiles** — ProfileDescriptor, ParameterSpec, MISSING sentinel, dynamic Pydantic field installation, DescriptorProfile
-7. **Profile Registry** — Name-keyed store, @decorator registration pattern, duplicate prevention, invariant testing
-8. **Auth System** — AuthSpec base with kind literal, 10+ concrete auth modes as discriminated union, dispatch to driver kwargs
-9. **Caching** — LRU cache on _get_settings, SettingsManager dictionary store, runtime overrides via model_copy
-10. **App Settings** — AppSettings convenience class, app settings templates
+7. **Profile Registry and Invariants** — Name-keyed store, @decorator registration pattern, duplicate prevention, invariant testing
+8. **Authentication System** — AuthSpec base with kind literal, 10+ concrete auth modes as discriminated union, dispatch to driver kwargs
+9. **Caching, Settings Management, and App Settings** — LRU cache on _get_settings, SettingsManager dictionary store, runtime overrides via model_copy, AppSettings convenience class
 
-## Topics Excluded
+## What This Manual Does Not Cover
 
 - Application-specific business logic
 - Cloud provider account setup and IAM policy authoring
@@ -42,44 +38,20 @@ Python developers and platform engineers who need a validated, multi-source conf
 - Database driver internals and connection pooling
 - Pydantic internals beyond what the framework extends
 
-## Learning Outcomes
+## Key Capabilities
 
-After studying this package, developers will be able to:
+**Any config source, one base class** — YAML, TOML, JSON, .env files, and environment variables all flow into the same typed settings class. Pydantic validates everything — type coercion, required fields, constrained values. The config file format becomes a deployment choice, not an application concern.
 
-### Remember
+**Fields that build on each other** — Template syntax lets fields reference other fields: `log_file = 'logs/{APP_NAME}/{RUNDATE}.log'`. Connection strings build from host, port, and database fields. Paths compose from base directories and environment-specific suffixes. The derivation is declarative and transparent.
 
-- List the four configuration file formats supported (YAML, TOML, JSON, .env)
-- Name the 10+ built-in authentication modes
-- Identify the structural vs runtime parameter split in SettingsParameters
+**Secrets that resolve themselves** — Write `secret:path/to/value` in a config file or environment variable. Register a secrets provider — AWS SSM, HashiCorp Vault, Azure Key Vault, or your own. The secret resolves before Pydantic validation, so the settings class sees the real value and validates it normally. No special handling in application code.
 
-### Understand
+**Connection profiles that know their databases** — Define a profile descriptor once and the framework installs Pydantic fields, auth options, and template wiring automatically. Each database backend gets typed settings with auto-derived connection parameters and driver kwargs.
 
-- Explain the two-pass secrets resolution pipeline (kwargs then model tree)
-- Describe how ProfileDescriptor dynamically installs Pydantic fields at class creation
-- Explain the LRU caching strategy keyed by structural parameters
+**Auth modes that cover every backend** — From password through OAuth2 to service accounts to Kerberos to "none", every auth mode is a Pydantic model with SecretStr-protected credentials. The discriminated union validates that the auth mode matches what the backend expects.
 
-### Apply
-
-- Subclass MountainAshBaseSettings to define typed application configuration
-- Use {FIELD_NAME} templates to derive field values from other settings
-- Register and retrieve cached settings instances via get_settings()
-
-### Analyze
-
-- Compare merge strategies for file lists (union), scalars (last-wins), and dicts (deep-merge)
-- Analyze the auth discriminated union assembly from a descriptor's auth_modes list
-
-### Evaluate
-
-- Assess which auth mode suits a given backend's credential requirements
-- Evaluate ParameterSpec tier and secret/template configuration for profile designs
-
-### Create
-
-- Implement new ProfileDescriptor definitions with typed parameters and auth modes
-- Build custom secrets providers for the secrets registry
-- Design new AuthSpec subclasses for proprietary authentication schemes
+**Smart caching for pipelines** — `get_settings()` returns the same instance on every call for the same configuration. Runtime overrides for batch IDs or run-specific parameters get their own instance without polluting the cache.
 
 ## Context
 
-Mountainash-settings provides a typed configuration framework for Python applications built on Pydantic v2. It loads configuration from multiple file formats, resolves secrets transparently, supports field templating for derived values, and provides a profile system for building reusable connection configurations. The auth system offers 10+ pluggable authentication modes as a discriminated union. Intelligent LRU caching ensures settings are constructed once and reused efficiently.
+mountainash-settings is part of the [mountainash](https://github.com/mountainash-io/mountainash) project, a collection of typed Python libraries for data engineering and platform development. It serves as the configuration layer that other mountainash packages depend on for settings management, connection configuration, and secrets resolution.
