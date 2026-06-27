@@ -110,23 +110,30 @@ The whole sequence below runs under a module-level `threading.RLock` (see §3.5)
    message (catches a 1-arg legacy `__adapter__` passed by mistake). For C
    callables / builtins where `inspect.signature` raises `ValueError`, fall back to
    accepting on the bare `callable()` check (cannot introspect; do not guess). [F-2]
-2. **Copy-on-write the class dict:** if `"__adapters__" not in cls.__dict__`, set
-   `cls.__adapters__ = dict(cls.__adapters__)` — snapshot inherited entries into a
-   fresh per-`cls` dict, fully built before rebinding (so a concurrent `emit()`
-   reads either the old or the complete new dict, never a partial one). Core safety
-   step (§1 hazard).
-3. **Idempotent / conflict rules (by object identity):**
-   - `target` absent → insert.
+2. **Snapshot into `new_map`:** `new_map = dict(cls.__adapters__)` — copy-on-write
+   off whatever dict `cls` currently sees (own or inherited). All subsequent reads
+   and the insert operate on this private copy; `cls.__adapters__` is not touched
+   until step 4's single atomic rebind. Core safety step (§1 hazard). [F-5]
+3. **Idempotent / conflict rules on `new_map` (by object identity):**
+   - `target` absent → proceed to insert.
    - `target` present and mapped to the **same adapter object** (`is`) → no-op
-     (safe under module re-import).
+     (safe under module re-import). The raise below is skipped; step 4 still
+     rebinds with an identical copy, which is harmless.
    - `target` present mapped to a **different** object → `ValueError` unless
-     `overwrite=True`.
+     `overwrite=True`. The raise precedes step 4, so `cls.__adapters__` is never
+     mutated on conflict.
    - Identity is intentional and documented: pass **module-level singleton
      callables**. A freshly-built `functools.partial` or bound method
      (`obj.method`) is a new object each access, so re-registering one trips the
      conflict check even when behaviour is identical — use a module-level wrapper
      instead. [F-3]
-4. **Insert** `cls.__adapters__[target] = adapter`.
+4. **Insert then single atomic rebind:** `new_map[target] = adapter` then
+   `cls.__adapters__ = new_map` as the final statement. The rebind is the **only**
+   write to class state and it happens after the map is fully built. A lock-free
+   `emit()` — whether it reads `__adapters__.get(target)` or iterates the dict in
+   `_known_targets()` — observes either the old complete dict or the new complete
+   dict, never a partially mutated one. This is unconditionally true: on first
+   registration (no own dict yet) and on re-registration (own dict already exists).
 
 No change to `emit()`: it already reads `type(self).__adapters__.get(target)`
 (profile.py:297) and derives `_is_targeted()` / `_known_targets()` from the same
@@ -175,13 +182,15 @@ absent); see §6.
 
 Registration is import-time and therefore serialized by Python's import lock in
 practice. As defence-in-depth and to make the contract explicit, the
-copy-on-write + conflict-check + insert sequence (§3.2 steps 2–4) runs under a
+snapshot → conflict-check → insert → rebind sequence (§3.2 steps 2–4) runs under a
 module-level `threading.RLock`, so two registrations for the same `(cls, target)`
 cannot both observe "absent" and race past the conflict check. `emit()` is **not**
-locked (it only reads); because each copy-on-write builds the new dict fully before
-rebinding, a concurrent `emit()` always sees a consistent dict. Documented
-assumption: **all registration completes during import, before concurrent `emit()`
-traffic.**
+locked (it only reads); the single atomic rebind at the end of step 4 means a
+lock-free `emit()` — whether reading `__adapters__.get()` or iterating the dict in
+`_known_targets()` — **unconditionally** observes either the old complete dict or the
+new complete dict, never a partially mutated one. This holds on every registration
+(first or re-registration), not only on first registration. Documented assumption:
+**all registration completes during import, before concurrent `emit()` traffic.**
 
 ### 3.6 Target hygiene [F-6]
 

@@ -164,17 +164,23 @@ class Profile(MountainAshBaseSettings):
             raise TypeError(f"target must be hashable, got {target!r}") from exc
 
         with _REGISTER_LOCK:
-            # Copy-on-write: ensure cls owns its __adapters__ before mutating, so
-            # we never touch Profile's shared default or a parent's map.
-            if "__adapters__" not in cls.__dict__:
-                cls.__adapters__ = dict(cls.__adapters__)
-            existing = cls.__adapters__.get(target, _UNSET)
+            # Build the new adapter map in full, then rebind in a single atomic
+            # assignment (last statement). Copy-on-write off the inherited/own map
+            # snapshots existing entries; the conflict check and insert run on the
+            # *copy*, so a lock-free emit() — whether it reads __adapters__.get() or
+            # iterates it in _known_targets() — only ever observes the old complete
+            # dict or the new complete dict, never a partially mutated one, even on
+            # re-registration. This also never touches Profile's shared default or a
+            # parent's map.
+            new_map = dict(cls.__adapters__)
+            existing = new_map.get(target, _UNSET)
             if existing is not _UNSET and existing is not adapter and not overwrite:
                 raise ValueError(
                     f"{cls.__name__} already has an adapter for target {target!r}; "
                     f"pass overwrite=True to replace it."
                 )
-            cls.__adapters__[target] = adapter
+            new_map[target] = adapter
+            cls.__adapters__ = new_map
 
     @classmethod
     def registered_adapters(cls) -> dict[t.Hashable, "Adapter"]:

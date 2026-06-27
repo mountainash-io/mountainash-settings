@@ -114,10 +114,14 @@ class TestRegisterAdapter:
         assert cls.__adapters__["t1"] is _adapter
 
     def test_concurrent_conflicting_registration_serialized(self):
-        # The RLock makes copy-on-write + conflict-check + insert atomic: two
-        # threads racing different adapters onto the same target → exactly one
-        # wins, the other sees the conflict. Without the lock both could observe
-        # "absent" and insert, yielding zero errors.
+        # Asserts the observable registration contract under contention: when two
+        # threads race different adapters onto the same target, exactly one wins and
+        # the other sees the conflict (never zero or two errors). This locks in the
+        # contract; it does not by itself prove _REGISTER_LOCK is load-bearing —
+        # under CPython's GIL this short critical section usually serializes even
+        # unlocked. The lock's necessity is argued by inspection (atomic
+        # read-check-write across the copy-and-rebind), and is defence-in-depth for
+        # any future non-CPython / free-threaded runtime.
         import threading
 
         cls = _make_cls()
