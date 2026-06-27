@@ -26,7 +26,7 @@ from mountainash_settings import MountainAshBaseSettings
 from .lookup import lookup_class_var
 from .spec import MISSING, ProfileSpec
 
-__all__ = ["Adapter", "Profile"]
+__all__ = ["Adapter", "Profile", "emit_adapter"]
 
 # A target adapter composes credential/config kwargs: it receives the profile
 # and the already-merged (base + driver_key renames) dict, and returns the final
@@ -390,4 +390,22 @@ class Profile(MountainAshBaseSettings):
         if type(self).__adapter__ is not None:
             return type(self).__adapter__(self)  # legacy 1-arg owns-pipeline
         return merged
+
+
+def emit_adapter(
+    profile_cls: type["Profile"],
+    target: t.Hashable,
+    *,
+    overwrite: bool = False,
+) -> t.Callable[["Adapter"], "Adapter"]:
+    """Decorator form of :meth:`Profile.register_adapter`.
+
+    Registers the decorated 2-arg adapter on ``profile_cls`` for ``target`` and
+    returns it unchanged.
+    """
+    def _wrap(fn: "Adapter") -> "Adapter":
+        profile_cls.register_adapter(target, fn, overwrite=overwrite)
+        return fn
+
+    return _wrap
 

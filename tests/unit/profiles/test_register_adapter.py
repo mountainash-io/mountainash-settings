@@ -7,7 +7,7 @@ import functools
 
 import pytest
 
-from mountainash_settings.profiles import ParameterSpec, ProfileSpec
+from mountainash_settings.profiles import ParameterSpec, ProfileSpec, emit_adapter
 from mountainash_settings.profiles.profile import Profile
 
 SPEC = ProfileSpec(
@@ -163,3 +163,26 @@ class TestRegisteredAdapters:
         cls = _make_cls()
         # No own registration yet → reflects the inherited (empty) default.
         assert cls.registered_adapters() == dict(Profile.__adapters__)
+
+
+@pytest.mark.unit
+class TestEmitAdapterDecorator:
+    def test_decorator_registers_and_returns_fn(self):
+        cls = _make_cls()
+
+        @emit_adapter(cls, "t1")
+        def my_adapter(profile, merged):
+            return {**merged, "via": "decorator"}
+
+        assert cls.__adapters__["t1"] is my_adapter
+        assert my_adapter.__name__ == "my_adapter"  # returned unchanged
+
+    def test_decorator_honors_overwrite(self):
+        cls = _make_cls()
+        cls.register_adapter("t1", _adapter)
+
+        @emit_adapter(cls, "t1", overwrite=True)
+        def replacement(profile, merged):
+            return merged
+
+        assert cls.__adapters__["t1"] is replacement
