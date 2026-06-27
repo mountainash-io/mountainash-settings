@@ -172,3 +172,25 @@ The pattern is not free. Compared to a plain subclass:
 - **Slightly more ceremony to set up** — you need a `ProfileSpec`, at least one `ParameterSpec` per field, a `Registry`, and a `Profile` subclass, before you have a working settings class.
 
 For a single application-specific settings class, none of this is worth it. For a library or any code where you manage more than two or three similar profiles, the structural guarantees pay for themselves quickly.
+
+## Extending emission: `register_adapter`
+
+`emit()` targets are any `Hashable`, so other domains can add their own. To
+register an `emit()` adapter for a target on a profile class after definition:
+
+```python
+from mountainash_settings.profiles import emit_adapter
+
+@emit_adapter(PasswordAuthProfile, MyTarget.POSTGRES)
+def _postgres(auth, base):
+    return {**base, "user": auth.USERNAME,
+            "password": auth.PASSWORD.get_secret_value()}
+```
+
+`Profile.register_adapter(target, adapter, *, overwrite=False)` is the
+non-decorator form. It is copy-on-write-safe (never mutates a parent/shared
+adapter map), idempotent for the same adapter object, and raises on a conflicting
+re-registration. Register on the **concrete** class you mean (registering on a
+base does not propagate to a child that already registered). Use a
+package-namespaced target type (an `Enum` / frozen dataclass), never bare strings.
+`registered_adapters()` returns a read-only copy for introspection.
