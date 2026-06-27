@@ -95,35 +95,103 @@ def register_adapter(
 
 ### 3.2 Behavior
 
-1. **Validate `adapter`** is callable; reject with `TypeError` otherwise. Best-effort
-   arity check via `inspect.signature` — must accept ≥2 positional params (or
-   `*args`); reject clearly if it cannot (catches a 1-arg legacy `__adapter__`
-   passed by mistake).
+The whole sequence below runs under a module-level `threading.RLock` (see §3.5).
+
+0. **Reject root registration:** if `cls is Profile`, raise `TypeError`
+   (`"register on a concrete Profile subclass, not Profile itself"`). `Profile`
+   already holds `__adapters__` in its own `__dict__` (profile.py:96), so the
+   copy-on-write guard would *not* fire and the registration would mutate the
+   canonical shared dict that every adapter-less subclass inherits — the exact
+   pollution §1 warns about. [F-1]
+1. **Validate `adapter` is two-positional-callable.** First `callable(adapter)` →
+   `TypeError` if not. Then a **trial-bind**: `inspect.signature(adapter).bind(
+   _SENTINEL_PROFILE, _SENTINEL_KW)` inside `try/except TypeError` — a binding
+   failure (wrong arity, keyword-only 3rd param, …) → `TypeError` with a clear
+   message (catches a 1-arg legacy `__adapter__` passed by mistake). For C
+   callables / builtins where `inspect.signature` raises `ValueError`, fall back to
+   accepting on the bare `callable()` check (cannot introspect; do not guess). [F-2]
 2. **Copy-on-write the class dict:** if `"__adapters__" not in cls.__dict__`, set
    `cls.__adapters__ = dict(cls.__adapters__)` — snapshot inherited entries into a
-   fresh per-`cls` dict. This is the core safety step (§1 hazard).
-3. **Idempotent / conflict rules:**
+   fresh per-`cls` dict, fully built before rebinding (so a concurrent `emit()`
+   reads either the old or the complete new dict, never a partial one). Core safety
+   step (§1 hazard).
+3. **Idempotent / conflict rules (by object identity):**
    - `target` absent → insert.
-   - `target` present and maps to the **same `adapter` object** → no-op (safe under
-     module re-import).
-   - `target` present mapping to a **different** adapter → raise `ValueError` unless
+   - `target` present and mapped to the **same adapter object** (`is`) → no-op
+     (safe under module re-import).
+   - `target` present mapped to a **different** object → `ValueError` unless
      `overwrite=True`.
+   - Identity is intentional and documented: pass **module-level singleton
+     callables**. A freshly-built `functools.partial` or bound method
+     (`obj.method`) is a new object each access, so re-registering one trips the
+     conflict check even when behaviour is identical — use a module-level wrapper
+     instead. [F-3]
 4. **Insert** `cls.__adapters__[target] = adapter`.
 
 No change to `emit()`: it already reads `type(self).__adapters__.get(target)`
-(profile.py:297) and treats `_is_targeted()` / `_known_targets()` off the same
+(profile.py:297) and derives `_is_targeted()` / `_known_targets()` from the same
 dict, so a registered target immediately participates in fail-closed semantics
 (unknown target → raises; registered target → served).
 
-### 3.3 Inheritance semantics
+### 3.3 Inheritance semantics — and the registration-timing limitation [F-4]
 
-Registration on `cls` affects `cls` and any subclass that does not shadow
-`__adapters__` with its own literal — consistent with how `emit()` resolves
-`type(self).__adapters__`. Registering on a base (e.g. `PasswordAuthProfile`)
-propagates to its subclasses; a subclass that needs a different adapter for the
-same target registers its own (triggering its own copy-on-write).
+`emit()` resolves adapters from a **single class dict** (`type(self).__adapters__.get`,
+profile.py:297) — there is **no MRO merge**. Combined with copy-on-write, this gives
+a precise but order-sensitive rule that the spec states explicitly rather than
+papering over:
 
-### 3.4 Optional ergonomic decorator (recommended, thin)
+- A subclass that never registers and never declares a literal `__adapters__`
+  inherits its nearest ancestor's dict live — so registering on a base **does**
+  reach such subclasses.
+- **The moment a subclass registers anything (or declares a literal), it snapshots
+  its own `__adapters__` and permanently severs live inheritance** from ancestors.
+  A *later* registration on the parent will **not** propagate to that child.
+
+Consequence — **child-first vs parent-first ordering is observable**: if
+`Child.register_adapter(t1)` runs before `Parent.register_adapter(t2)`, `Child`
+will not see `t2`. Both orderings are covered by tests (§6).
+
+**Guidance for consumers:** register each adapter on the **exact class** that should
+serve it. mountainash-data's auth adapters are registered directly on the concrete
+auth-profile classes they bind (`PasswordAuthProfile`, `TokenAuthProfile`, …), which
+are effectively leaves for this purpose, so the timing split does not bite. We do
+**not** rely on parent→child propagation.
+
+**Escalation (out of scope, no consumer needs it):** if a future consumer genuinely
+needs live cross-hierarchy adapter inheritance, the fix is to make `emit()` /
+`_known_targets()` walk the MRO and merge `__adapters__` (nearest-wins), a change to
+emit() semantics tracked separately — not bolted onto `register_adapter`.
+
+### 3.4 Introspection [F-7]
+
+Add a read-only `registered_adapters(cls) -> dict[Hashable, Adapter]` classmethod
+returning a **copy** of the effective adapter map for `cls` (its own dict, or the
+inherited one). Low-cost, supports both consumer debugging and the test fixture
+(§6). No public `unregister` — test isolation is handled by a fixture that records
+and restores `cls.__dict__`'s `__adapters__` state (present-with-contents vs
+absent); see §6.
+
+### 3.5 Concurrency [F-5]
+
+Registration is import-time and therefore serialized by Python's import lock in
+practice. As defence-in-depth and to make the contract explicit, the
+copy-on-write + conflict-check + insert sequence (§3.2 steps 2–4) runs under a
+module-level `threading.RLock`, so two registrations for the same `(cls, target)`
+cannot both observe "absent" and race past the conflict check. `emit()` is **not**
+locked (it only reads); because each copy-on-write builds the new dict fully before
+rebinding, a concurrent `emit()` always sees a consistent dict. Documented
+assumption: **all registration completes during import, before concurrent `emit()`
+traffic.**
+
+### 3.6 Target hygiene [F-6]
+
+Targets are opaque `Hashable`s owned by their domains, so collision avoidance is the
+caller's responsibility. The docs and examples require a **package-namespaced target
+type** — a package-owned `Enum` or frozen dataclass (e.g. mountainash-data's
+`IbisDialectTarget`) — **never bare strings** like `"postgres"`, which two unrelated
+packages could register on the same profile class and collide.
+
+### 3.7 Optional ergonomic decorator (recommended, thin)
 
 ```python
 def emit_adapter(profile_cls, target, *, overwrite=False):
@@ -153,12 +221,15 @@ A one-line convenience over the classmethod; same semantics. Exported from
 
 | Case | Result |
 |---|---|
+| `cls is Profile` (root registration) | `TypeError` — register on a concrete subclass [F-1] |
 | `adapter` not callable | `TypeError` |
-| `adapter` cannot accept 2 positional args | `TypeError` (clear message; likely a 1-arg `__adapter__` mistake) |
-| `target` re-registered with identical adapter | no-op (idempotent) |
-| `target` re-registered with different adapter, `overwrite=False` | `ValueError` |
-| `target` unhashable | `TypeError` (from the dict insert; pre-check for a clearer message) |
+| `adapter` fails the two-positional trial-bind | `TypeError` (clear message; likely a 1-arg `__adapter__` mistake) [F-2] |
+| `adapter` is a C callable (`signature` unavailable) | accepted after `callable()` check (cannot introspect) [F-2] |
+| `target` re-registered with the **same** adapter object | no-op (idempotent) [F-3] |
+| `target` re-registered with a **different** object, `overwrite=False` | `ValueError` |
+| `target` unhashable | `TypeError` (pre-check for a clear message before the dict insert) |
 | Registering on a class inheriting the shared default | fresh per-class dict created first; shared default untouched |
+| Concurrent same-`(cls, target)` registration | serialized by the module RLock; one inserts, the other hits idempotent/conflict path [F-5] |
 
 ---
 
@@ -167,17 +238,31 @@ A one-line convenience over the classmethod; same semantics. Exported from
 - Copy-on-write isolation: register on a profile that inherits the shared default
   (e.g. a test `Profile` subclass with no `__adapters__`); assert the sibling and
   `Profile.__adapters__` are **unchanged**.
+- **Root rejection:** `Profile.register_adapter(...)` → `TypeError`; assert
+  `Profile.__adapters__` untouched. [F-1]
 - Idempotency: double-register same `(target, adapter)` → no error, one entry.
 - Conflict: re-register different adapter → `ValueError`; with `overwrite=True` →
   replaced.
-- Validation: non-callable and 1-arg callable → `TypeError`.
+- Validation: non-callable → `TypeError`; 1-arg callable → `TypeError` (trial-bind);
+  a 2-positional function and a `*args` callable → accepted; a builtin/C callable →
+  accepted. [F-2]
+- Identity caveat: registering a freshly-built `functools.partial`/bound method
+  twice → `ValueError` (documents the identity contract); a module-level singleton
+  → idempotent. [F-3]
+- **Inheritance ordering:** parent-first (child sees parent's target) **and**
+  child-first (child registers `t1`, then parent registers `t2`; assert child does
+  **not** see `t2`) — locks in the documented §3.3 semantics. [F-4]
+- Introspection: `registered_adapters()` returns a copy reflecting registered +
+  inherited entries; mutating the returned dict does not affect the class. [F-7]
 - End-to-end: register an adapter for a fresh `target`, then `emit(target, base=…)`
   routes through it and composes on `base` + `driver_key`; `emit(unknown_target)`
   still fails closed.
 - Decorator form mirrors the classmethod.
-- **Test isolation fixture:** a fixture that snapshots `cls.__dict__["__adapters__"]`
-  (and its absence) before a test and restores after, so registration tests don't
-  leak class state across the suite.
+- **Test isolation fixture:** a fixture that records whether `cls.__dict__` has its
+  own `__adapters__` and, if so, its contents — then restores exactly (re-`del`s a
+  test-created local dict, or restores prior contents), distinguishing
+  "originally-absent" from "originally-present-and-empty" so tests don't leak class
+  state. [F-7]
 - Gate: settings' existing `hatch run test:test`, `mypy:check`, `ruff:check` green.
 
 ---
@@ -207,5 +292,32 @@ three-package sequence; auth-client (docs) and mountainash-data (consumer) follo
 ## 9. Open Questions
 
 None outstanding. (Home = settings; form = classmethod + thin decorator; conflict
-policy = idempotent-or-raise; unregister = out, fixture handles test isolation.)
-</content>
+policy = idempotent-or-raise by identity; root registration rejected; unregister =
+out, fixture handles test isolation; targets must be package-namespaced.)
+
+---
+
+## 10. Adversarial review (Codex) — incorporated
+
+A Codex design review (2026-06-27, fresh thread) confirmed the design is
+directionally sound (no redesign) and that **pydantic v2 does not relocate
+`__adapters__` out of `cls.__dict__`, so the `__dict__` copy-on-write check is
+reliable**. All seven findings are resolved:
+
+- **F-1 (major)** root-class registration would mutate the shared canonical dict →
+  reject `cls is Profile` with `TypeError` (§3.2.0, §5).
+- **F-2 (major)** brittle arity check / C callables → trial-bind two positional args;
+  fall back to `callable()` for un-introspectable C callables (§3.2.1, §5).
+- **F-3 (minor)** identity-based idempotence trips on `partial`/bound methods →
+  documented; require module-level singleton callables (§3.2.3).
+- **F-4 (major)** child-first registration severs live parent inheritance →
+  documented as explicit order-sensitive semantics + both-ordering tests; consumers
+  register on the exact (leaf) class; MRO-merge in `emit()` noted as the only
+  escalation, out of scope (§3.3, §6).
+- **F-5 (major)** unlocked read-check-write → module `RLock` over CoW+check+insert;
+  `emit()` stays lock-free and consistent; import-time assumption documented (§3.5).
+- **F-6 (minor)** bare-string target collisions → require package-namespaced target
+  types (Enum/frozen dataclass) (§3.6).
+- **F-7 (minor)** test-isolation/introspection gap → add read-only
+  `registered_adapters()` + a record-and-restore fixture distinguishing
+  absent-vs-empty (§3.4, §6).
