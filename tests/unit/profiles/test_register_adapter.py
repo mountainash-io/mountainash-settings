@@ -233,4 +233,5 @@ class TestEmitIntegration:
             pass
 
         Parent.register_adapter("p", _adapter)  # child has no own dict yet
-        assert "p" in Child.registered_adapters()  # inherits live
+        assert "__adapters__" not in Child.__dict__  # Child never copied — pure MRO
+        assert "p" in Child.registered_adapters()  # inherits live through Parent
