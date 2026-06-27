@@ -13,6 +13,8 @@ correctly. Removed in 26.6.0.
 
 from __future__ import annotations
 
+import inspect
+import threading
 import typing as t
 import warnings
 
@@ -35,6 +37,29 @@ Adapter = t.Callable[["Profile", dict[str, t.Any]], dict[str, t.Any]]
 # Sentinel distinguishing "no target argument passed" from an explicit ``None``
 # target, so ``emit()`` can fail closed on target-scoped profiles.
 _UNSET: t.Any = object()
+
+# Serializes register_adapter's copy-on-write + conflict-check + insert. Registration
+# is import-time (already serialized by the import lock); this is defence-in-depth.
+_REGISTER_LOCK = threading.RLock()
+
+
+def _check_two_positional(adapter: t.Callable[..., t.Any]) -> None:
+    """Raise ``TypeError`` unless ``adapter`` can be called with two positional args.
+
+    For C callables / builtins where ``inspect.signature`` is unavailable, accept
+    after the caller's ``callable()`` check rather than guess.
+    """
+    try:
+        sig = inspect.signature(adapter)
+    except (ValueError, TypeError):
+        return  # cannot introspect (C callable) — accept
+    try:
+        sig.bind(_UNSET, _UNSET)
+    except TypeError as exc:
+        raise TypeError(
+            "adapter must accept two positional args (profile, merged); "
+            f"{getattr(adapter, '__name__', adapter)!r} does not: {exc}"
+        ) from None
 
 
 def _resolve_spec(cls: type) -> ProfileSpec | None:
@@ -94,6 +119,62 @@ class Profile(MountainAshBaseSettings):
         t.Callable[["Profile"], dict[str, t.Any]] | None
     ] = None
     __adapters__: t.ClassVar[dict[t.Hashable, "Adapter"]] = {}
+
+    @classmethod
+    def register_adapter(
+        cls,
+        target: t.Hashable,
+        adapter: "Adapter",
+        *,
+        overwrite: bool = False,
+    ) -> None:
+        """Register a per-target ``emit()`` adapter on this Profile subclass.
+
+        ``adapter`` has the 2-arg compose signature ``(profile, merged) -> dict``
+        (the same shape as inline ``__adapters__`` entries). After registration,
+        ``instance.emit(target, base=...)`` routes through it.
+
+        Safe to call at import time from a downstream package: copies
+        ``__adapters__`` onto ``cls`` first if ``cls`` is still inheriting an
+        ancestor's map, so registration never mutates a shared/parent dict.
+
+        Idempotent by identity: re-registering the *same* adapter object is a
+        no-op; a *different* adapter for an existing target raises unless
+        ``overwrite=True``.
+
+        Raises:
+            TypeError: if called on ``Profile`` itself, if ``adapter`` is not a
+                two-positional-arg callable, or if ``target`` is unhashable.
+            ValueError: if ``target`` is already registered to a different
+                adapter and ``overwrite`` is False.
+        """
+        if cls is Profile:
+            raise TypeError(
+                "register_adapter must be called on a concrete Profile subclass, "
+                "not Profile itself (would mutate the shared default adapter map)."
+            )
+        if not callable(adapter):
+            raise TypeError(
+                f"adapter must be callable, got {type(adapter).__name__}"
+            )
+        _check_two_positional(adapter)
+        try:
+            hash(target)
+        except TypeError as exc:
+            raise TypeError(f"target must be hashable, got {target!r}") from exc
+
+        with _REGISTER_LOCK:
+            # Copy-on-write: ensure cls owns its __adapters__ before mutating, so
+            # we never touch Profile's shared default or a parent's map.
+            if "__adapters__" not in cls.__dict__:
+                cls.__adapters__ = dict(cls.__adapters__)
+            existing = cls.__adapters__.get(target, _UNSET)
+            if existing is not _UNSET and existing is not adapter and not overwrite:
+                raise ValueError(
+                    f"{cls.__name__} already has an adapter for target {target!r}; "
+                    f"pass overwrite=True to replace it."
+                )
+            cls.__adapters__[target] = adapter
 
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: t.Any) -> None:
