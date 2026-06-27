@@ -186,3 +186,51 @@ class TestEmitAdapterDecorator:
             return merged
 
         assert cls.__adapters__["t1"] is replacement
+
+
+@pytest.mark.unit
+class TestEmitIntegration:
+    def test_registered_adapter_routes_through_emit(self):
+        cls = _make_cls()
+
+        def layer(profile, merged):
+            return {**merged, "token": "abc"}
+
+        cls.register_adapter("dbx", layer)
+        p = cls(HOST="h")
+        # emit merges driver_key (_default_kwargs) then runs the adapter.
+        assert p.emit("dbx", base={"timeout": 5}) == {
+            "timeout": 5, "host": "h", "token": "abc",
+        }
+
+    def test_unregistered_target_fails_closed(self):
+        cls = _make_cls()
+        cls.register_adapter("dbx", _adapter)  # makes the profile target-scoped
+        p = cls(HOST="h")
+        with pytest.raises(ValueError):
+            p.emit("not-registered")
+
+    def test_child_first_severs_parent_propagation(self):
+        # Documents the F-4 ordering semantics: a child that registers first owns
+        # its own dict and does NOT see a target the parent registers later.
+        class Parent(Profile):
+            __spec__ = SPEC
+
+        class Child(Parent):
+            pass
+
+        Child.register_adapter("c", _adapter)   # child snapshots its own dict
+        Parent.register_adapter("p", _adapter)  # later parent registration
+        assert "c" in Child.registered_adapters()
+        assert "p" not in Child.registered_adapters()   # severed
+        assert "p" in Parent.registered_adapters()
+
+    def test_parent_first_propagates_to_unregistered_child(self):
+        class Parent(Profile):
+            __spec__ = SPEC
+
+        class Child(Parent):
+            pass
+
+        Parent.register_adapter("p", _adapter)  # child has no own dict yet
+        assert "p" in Child.registered_adapters()  # inherits live
