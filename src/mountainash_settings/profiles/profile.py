@@ -177,6 +177,15 @@ class Profile(MountainAshBaseSettings):
             cls.__adapters__[target] = adapter
 
     @classmethod
+    def registered_adapters(cls) -> dict[t.Hashable, "Adapter"]:
+        """Return a copy of the effective ``__adapters__`` map for ``cls``.
+
+        Read-only snapshot (own or inherited entries); mutating it does not
+        affect the class.
+        """
+        return dict(cls.__adapters__)
+
+    @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: t.Any) -> None:
         """Install fields described by ``__spec__`` on the subclass."""
         super().__pydantic_init_subclass__(**kwargs)

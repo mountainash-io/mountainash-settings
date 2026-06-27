@@ -148,3 +148,18 @@ class TestRegisterAdapter:
 
         assert len(errors) == 1                    # exactly one conflict
         assert cls.__adapters__["t1"] in (a, b)    # one winner recorded
+
+
+@pytest.mark.unit
+class TestRegisteredAdapters:
+    def test_returns_copy_not_live_dict(self):
+        cls = _make_cls()
+        cls.register_adapter("t1", _adapter)
+        snapshot = cls.registered_adapters()
+        snapshot["t2"] = _adapter        # mutate the returned copy
+        assert "t2" not in cls.__adapters__  # class map unaffected
+
+    def test_reflects_inherited_entries(self):
+        cls = _make_cls()
+        # No own registration yet → reflects the inherited (empty) default.
+        assert cls.registered_adapters() == dict(Profile.__adapters__)
