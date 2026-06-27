@@ -98,7 +98,7 @@ class TestRegisterAdapter:
         cls.register_adapter("t1", _adapter)
         assert Profile.__adapters__ == before          # shared default untouched
         assert "__adapters__" not in sibling.__dict__   # sibling unaffected
-        assert sibling.registered_adapters() == before
+        assert dict(sibling.__adapters__) == before
 
     def test_root_registration_rejected(self):
         before = dict(Profile.__adapters__)
@@ -119,7 +119,7 @@ class TestRegisterAdapter:
     def test_star_args_callable_accepted(self):
         cls = _make_cls()
         cls.register_adapter("t1", lambda *a: {})
-        assert "t1" in cls.registered_adapters()
+        assert "t1" in cls.__adapters__
 
     def test_idempotent_same_object(self):
         cls = _make_cls()
@@ -150,6 +150,56 @@ class TestRegisterAdapter:
         cls.register_adapter("t1", a)
         with pytest.raises(ValueError, match="already has an adapter"):
             cls.register_adapter("t1", b)  # distinct partial objects
+
+    def test_uninspectable_callable_accepted(self, monkeypatch):
+        # C/builtin callables where inspect.signature raises ValueError must be
+        # accepted after the callable() check (spec §3.2 step 1 fallback).
+        cls = _make_cls()
+
+        def boom(_obj):
+            raise ValueError("no signature for C callables")
+
+        monkeypatch.setattr(
+            "mountainash_settings.profiles.profile.inspect.signature", boom
+        )
+        cls.register_adapter("t1", _adapter)  # would reject if the fallback were missing
+        assert cls.__adapters__["t1"] is _adapter
+
+    def test_concurrent_conflicting_registration_serialized(self):
+        # The RLock makes copy-on-write + conflict-check + insert atomic: two
+        # threads racing different adapters onto the same target → exactly one
+        # wins, the other sees the conflict. Without the lock both could observe
+        # "absent" and insert, yielding zero errors.
+        import threading
+
+        cls = _make_cls()
+        barrier = threading.Barrier(2)
+        errors: list[ValueError] = []
+
+        def a(p, m):
+            return m
+
+        def b(p, m):
+            return m
+
+        def worker(adapter):
+            barrier.wait()  # maximize contention
+            try:
+                cls.register_adapter("t1", adapter)
+            except ValueError as exc:
+                errors.append(exc)
+
+        threads = [
+            threading.Thread(target=worker, args=(a,)),
+            threading.Thread(target=worker, args=(b,)),
+        ]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join()
+
+        assert len(errors) == 1                    # exactly one conflict
+        assert cls.__adapters__["t1"] in (a, b)    # one winner recorded
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -588,7 +638,8 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ## Self-Review
 
 **Spec coverage:**
-- §3.1 API classmethod → Task 1. §3.2 behavior (root reject [F-1], trial-bind validation [F-2], copy-on-write, identity idempotence [F-3], conflict) → Task 1. §3.3 inheritance + ordering [F-4] → Task 4. §3.4 introspection [F-7] → Task 2. §3.5 concurrency [F-5] → `_REGISTER_LOCK` in Task 1. §3.6 namespaced targets [F-6] → doc note Task 5. §3.7 decorator → Task 3. §6 tests → Tasks 1-4. §7 rollout → commits per task. Test-isolation fixture: replaced by per-test local subclasses (simpler, fully isolated) — covered in every test.
+- §3.1 API classmethod → Task 1. §3.2 behavior (root reject [F-1] + test; trial-bind validation [F-2] + uninspectable-callable fallback test; copy-on-write; identity idempotence [F-3]; conflict) → Task 1. §3.3 inheritance + ordering [F-4] → Task 4. §3.4 introspection [F-7] → Task 2. §3.5 concurrency [F-5] → `_REGISTER_LOCK` in Task 1, exercised by `test_concurrent_conflicting_registration_serialized`. §3.6 namespaced targets [F-6] → doc note Task 5. §3.7 decorator → Task 3. §6 tests → Tasks 1-4. §7 rollout → commits per task. Test-isolation fixture: formally retired in spec §6 — per-test local subclasses give full isolation.
+- Task 1 tests do **not** forward-reference `registered_adapters()` (Task 2's method); they inspect `__adapters__` / `__dict__` directly, so each task is runnable in isolation.
 - No spec requirement left without a task.
 
 **Placeholder scan:** none — every code/test step shows complete code; every run step gives the exact command + expected result.

@@ -258,11 +258,14 @@ A one-line convenience over the classmethod; same semantics. Exported from
   routes through it and composes on `base` + `driver_key`; `emit(unknown_target)`
   still fails closed.
 - Decorator form mirrors the classmethod.
-- **Test isolation fixture:** a fixture that records whether `cls.__dict__` has its
-  own `__adapters__` and, if so, its contents — then restores exactly (re-`del`s a
-  test-created local dict, or restores prior contents), distinguishing
-  "originally-absent" from "originally-present-and-empty" so tests don't leak class
-  state. [F-7]
+- **Test isolation — via fresh per-test subclasses (record/restore fixture
+  retired).** Tests define a **new local `Profile` subclass per test** (a fresh
+  class has no own `__adapters__` and is garbage-collected after the test), so no
+  test mutates a shared/real profile class and no record-and-restore fixture is
+  needed. The "originally-absent vs originally-present-empty" restore concern only
+  arises when mutating a long-lived class; if a future test must do that, add a
+  small helper that snapshots `"__adapters__" in cls.__dict__` plus its contents
+  and restores exactly. [F-7]
 - Gate: settings' existing `hatch run test:test`, `mypy:check`, `ruff:check` green.
 
 ---
