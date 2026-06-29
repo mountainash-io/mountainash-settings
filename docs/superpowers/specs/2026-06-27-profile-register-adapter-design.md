@@ -1,7 +1,7 @@
 # Design Spec: `Profile.register_adapter` — post-hoc emit-adapter registration
 
 **Date:** 2026-06-27
-**Status:** Draft — for review
+**Status:** SUPERSEDED (2026-06-29) — the `register_adapter` registry was removed as built-but-unused and architecturally overkill (zero callers; consumers use a consumer-owned dispatch table instead). See `mountainash-central/01.principles/mountainash-settings/h.backlog/remove-register-adapter-registry.md` and the removal PR. The original draft is retained below for history.
 **Repo:** mountainash-settings
 **Author:** Nathaniel Ramm (with Claude)
 
