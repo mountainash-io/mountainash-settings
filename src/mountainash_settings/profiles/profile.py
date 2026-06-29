@@ -13,8 +13,6 @@ correctly. Removed in 26.6.0.
 
 from __future__ import annotations
 
-import inspect
-import threading
 import typing as t
 import warnings
 
@@ -26,7 +24,7 @@ from mountainash_settings import MountainAshBaseSettings
 from .lookup import lookup_class_var
 from .spec import MISSING, ProfileSpec
 
-__all__ = ["Adapter", "Profile", "emit_adapter"]
+__all__ = ["Adapter", "Profile"]
 
 # A target adapter composes credential/config kwargs: it receives the profile
 # and the already-merged (base + driver_key renames) dict, and returns the final
@@ -37,29 +35,6 @@ Adapter = t.Callable[["Profile", dict[str, t.Any]], dict[str, t.Any]]
 # Sentinel distinguishing "no target argument passed" from an explicit ``None``
 # target, so ``emit()`` can fail closed on target-scoped profiles.
 _UNSET: t.Any = object()
-
-# Serializes register_adapter's copy-on-write + conflict-check + insert. Registration
-# is import-time (already serialized by the import lock); this is defence-in-depth.
-_REGISTER_LOCK = threading.RLock()
-
-
-def _check_two_positional(adapter: t.Callable[..., t.Any]) -> None:
-    """Raise ``TypeError`` unless ``adapter`` can be called with two positional args.
-
-    For C callables / builtins where ``inspect.signature`` is unavailable, accept
-    after the caller's ``callable()`` check rather than guess.
-    """
-    try:
-        sig = inspect.signature(adapter)
-    except (ValueError, TypeError):
-        return  # cannot introspect (C callable) — accept
-    try:
-        sig.bind(_UNSET, _UNSET)
-    except TypeError as exc:
-        raise TypeError(
-            "adapter must accept two positional args (profile, merged); "
-            f"{getattr(adapter, '__name__', adapter)!r} does not: {exc}"
-        ) from None
 
 
 def _resolve_spec(cls: type) -> ProfileSpec | None:
@@ -119,77 +94,6 @@ class Profile(MountainAshBaseSettings):
         t.Callable[["Profile"], dict[str, t.Any]] | None
     ] = None
     __adapters__: t.ClassVar[dict[t.Hashable, "Adapter"]] = {}
-
-    @classmethod
-    def register_adapter(
-        cls,
-        target: t.Hashable,
-        adapter: "Adapter",
-        *,
-        overwrite: bool = False,
-    ) -> None:
-        """Register a per-target ``emit()`` adapter on this Profile subclass.
-
-        ``adapter`` has the 2-arg compose signature ``(profile, merged) -> dict``
-        (the same shape as inline ``__adapters__`` entries). After registration,
-        ``instance.emit(target, base=...)`` routes through it.
-
-        Safe to call at import time from a downstream package: copies
-        ``__adapters__`` onto ``cls`` first if ``cls`` is still inheriting an
-        ancestor's map, so registration never mutates a shared/parent dict.
-
-        Idempotent by identity: re-registering the *same* adapter object is a
-        no-op; a *different* adapter for an existing target raises unless
-        ``overwrite=True``.
-
-        Raises:
-            TypeError: if called on ``Profile`` itself, if ``adapter`` is not a
-                two-positional-arg callable, or if ``target`` is unhashable.
-            ValueError: if ``target`` is already registered to a different
-                adapter and ``overwrite`` is False.
-        """
-        if cls is Profile:
-            raise TypeError(
-                "register_adapter must be called on a concrete Profile subclass, "
-                "not Profile itself (would mutate the shared default adapter map)."
-            )
-        if not callable(adapter):
-            raise TypeError(
-                f"adapter must be callable, got {type(adapter).__name__}"
-            )
-        _check_two_positional(adapter)
-        try:
-            hash(target)
-        except TypeError as exc:
-            raise TypeError(f"target must be hashable, got {target!r}") from exc
-
-        with _REGISTER_LOCK:
-            # Build the new adapter map in full, then rebind in a single atomic
-            # assignment (last statement). Copy-on-write off the inherited/own map
-            # snapshots existing entries; the conflict check and insert run on the
-            # *copy*, so a lock-free emit() — whether it reads __adapters__.get() or
-            # iterates it in _known_targets() — only ever observes the old complete
-            # dict or the new complete dict, never a partially mutated one, even on
-            # re-registration. This also never touches Profile's shared default or a
-            # parent's map.
-            new_map = dict(cls.__adapters__)
-            existing = new_map.get(target, _UNSET)
-            if existing is not _UNSET and existing is not adapter and not overwrite:
-                raise ValueError(
-                    f"{cls.__name__} already has an adapter for target {target!r}; "
-                    f"pass overwrite=True to replace it."
-                )
-            new_map[target] = adapter
-            cls.__adapters__ = new_map
-
-    @classmethod
-    def registered_adapters(cls) -> dict[t.Hashable, "Adapter"]:
-        """Return a copy of the effective ``__adapters__`` map for ``cls``.
-
-        Read-only snapshot (own or inherited entries); mutating it does not
-        affect the class.
-        """
-        return dict(cls.__adapters__)
 
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: t.Any) -> None:
@@ -396,22 +300,4 @@ class Profile(MountainAshBaseSettings):
         if type(self).__adapter__ is not None:
             return type(self).__adapter__(self)  # legacy 1-arg owns-pipeline
         return merged
-
-
-def emit_adapter(
-    profile_cls: type["Profile"],
-    target: t.Hashable,
-    *,
-    overwrite: bool = False,
-) -> t.Callable[["Adapter"], "Adapter"]:
-    """Decorator form of :meth:`Profile.register_adapter`.
-
-    Registers the decorated 2-arg adapter on ``profile_cls`` for ``target`` and
-    returns it unchanged.
-    """
-    def _wrap(fn: "Adapter") -> "Adapter":
-        profile_cls.register_adapter(target, fn, overwrite=overwrite)
-        return fn
-
-    return _wrap
 

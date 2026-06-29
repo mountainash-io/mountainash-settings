@@ -1,5 +1,7 @@
 # Profile.register_adapter Implementation Plan
 
+> **SUPERSEDED (2026-06-29):** The `register_adapter` registry this plan built was removed as built-but-unused and architecturally overkill (zero callers). See `mountainash-central/01.principles/mountainash-settings/h.backlog/remove-register-adapter-registry.md` and the removal PR. Retained for history.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a generic, copy-on-write-safe `Profile.register_adapter` primitive to mountainash-settings so downstream packages can register an `emit()` adapter for a `Hashable` target on an existing `Profile` subclass after class definition.
