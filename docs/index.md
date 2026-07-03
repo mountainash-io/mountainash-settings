@@ -18,7 +18,6 @@ The API reference tells you *what* each class and function does. This manual exp
 - **[Chapters](chapters/index.md)** — 9 chapters covering foundations through caching and app settings, each building on the last
 - **[MicroSims](sims/index.md)** — Interactive simulations that let you experiment with configuration concepts in the browser
 - **[Learning Graph](learning-graph/index.md)** — A dependency map showing how concepts relate and the order they should be learned
-- **[API Reference](api/index.md)** — Auto-generated documentation for 6 modules including profiles, secrets, settings, and cache
 
 ## Who This Is For
 

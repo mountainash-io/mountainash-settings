@@ -54,14 +54,6 @@ nav:
   - MicroSims:
       - List of MicroSims: sims/index.md
 
-  - API Reference:
-      - Overview: api/index.md
-      - Profiles: api/profiles.md
-      - Secrets: api/secrets.md
-      - Settings: api/settings.md
-      - Settings Cache: api/settings_cache.md
-      - Settings Parameters: api/settings_parameters.md
-      - Resolve: api/resolve.md
 
   - License: license.md
   - Contact: contact.md
@@ -93,17 +85,6 @@ theme:
 # Plugins
 plugins:
   - search
-  - mkdocstrings:
-      handlers:
-        python:
-          paths: ["../../../mountainash-settings/src"]
-          options:
-            show_source: true
-            show_bases: true
-            show_root_heading: true
-            show_root_full_path: false
-            heading_level: 2
-            members_order: source
   # Uncomment after running `pip install "mkdocs-material[imaging]"`:
   # - social
   # Uncomment after running `pip install mkdocs-glightbox`:
