@@ -370,6 +370,33 @@ class _RejectResolvedRootSettings(MountainAshBaseSettings):
             raise ValueError(f"resolved value rejected: {value}")
         return value
 
+class _RejectTypeErrorNestedModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    token: str
+
+    @field_validator("token")
+    @classmethod
+    def reject_resolved_value(cls, value: str) -> str:
+        if value == "resolved_type_nested/value":
+            raise TypeError(f"resolved value rejected: {value}")
+        return value
+
+
+class _SettingsWithRejectTypeErrorNested(MountainAshBaseSettings):
+    values: list[_RejectTypeErrorNestedModel]
+
+
+class _RejectTypeErrorRootSettings(MountainAshBaseSettings):
+    token: str
+
+    @field_validator("token")
+    @classmethod
+    def reject_resolved_value(cls, value: str) -> str:
+        if value == "resolved_type_root/value":
+            raise TypeError(f"resolved value rejected: {value}")
+        return value
+
+
 @pytest.mark.unit
 class TestResolveReferencesInModelTreeNested:
     def test_resolves_nested_model_str_field(self):
@@ -554,6 +581,36 @@ class TestResolveReferencesInModelTreeNested:
         assert "_RejectResolvedRootSettings" in str(error)
         assert "token" in str(error)
         assert "resolved_root/value" not in str(error)
+        assert "resolved value rejected" not in str(error)
+        assert error.__cause__ is None
+        assert error.__context__ is None
+
+    def test_nested_type_errors_are_sanitized(self):
+        settings = _SettingsWithRejectTypeErrorNested(
+            values=[{"token": "secret:type_nested.value"}],
+        )
+
+        with pytest.raises(ValueError) as caught:
+            resolve_references_in_model_tree(settings, _test_backend)
+
+        error = caught.value
+        assert "_RejectTypeErrorNestedModel" in str(error)
+        assert "token" in str(error)
+        assert "resolved_type_nested/value" not in str(error)
+        assert "resolved value rejected" not in str(error)
+        assert error.__cause__ is None
+        assert error.__context__ is None
+
+    def test_root_assignment_type_errors_are_sanitized(self):
+        settings = _RejectTypeErrorRootSettings(token="secret:type_root.value")
+
+        with pytest.raises(ValueError) as caught:
+            resolve_references_in_model_tree(settings, _test_backend)
+
+        error = caught.value
+        assert "_RejectTypeErrorRootSettings" in str(error)
+        assert "token" in str(error)
+        assert "resolved_type_root/value" not in str(error)
         assert "resolved value rejected" not in str(error)
         assert error.__cause__ is None
         assert error.__context__ is None

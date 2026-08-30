@@ -364,7 +364,7 @@ def _resolve_reference_value(
         validation_failed = False
         try:
             rebuilt = type(value).model_validate(payload)
-        except ValidationError:
+        except Exception:
             validation_failed = True
         if validation_failed:
             _raise_sanitized_resolution_error(type(value), changed_field_names)
@@ -424,7 +424,7 @@ def resolve_references_in_model_tree(
             assignment_failed = False
             try:
                 setattr(instance, field_name, resolved)
-            except ValidationError:
+            except Exception:
                 assignment_failed = True
             if assignment_failed:
                 _raise_sanitized_resolution_error(type(instance), [field_name])
