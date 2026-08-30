@@ -259,6 +259,42 @@ class _SettingsWithAliasedContainers(MountainAshBaseSettings):
     paths: list[_AliasPathSecretModel]
 
 
+
+class _AliasChoicesCollisionModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    first: SecretStr = Field(
+        validation_alias=AliasChoices("shared", "first"),
+    )
+    second: SecretStr = Field(
+        validation_alias=AliasChoices("shared", "second"),
+    )
+
+
+class _SettingsWithAliasChoicesCollision(MountainAshBaseSettings):
+    values: list[_AliasChoicesCollisionModel]
+
+
+class _PositiveIndexedAliasModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    token: SecretStr = Field(
+        validation_alias=AliasPath("items", 1),
+    )
+
+
+class _SettingsWithPositiveIndexedAlias(MountainAshBaseSettings):
+    values: list[_PositiveIndexedAliasModel]
+
+
+class _NegativeIndexedAliasModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    token: SecretStr = Field(
+        validation_alias=AliasPath("items", -1),
+    )
+
+
+class _SettingsWithNegativeIndexedAlias(MountainAshBaseSettings):
+    values: list[_NegativeIndexedAliasModel]
+
 @pytest.mark.unit
 class TestResolveReferencesInModelTreeNested:
     def test_resolves_nested_model_str_field(self):
@@ -340,3 +376,34 @@ class TestResolveReferencesInModelTreeNested:
         assert settings.aliases[0].token.get_secret_value() == "resolved_alias/token"
         assert settings.paths[0].token.get_secret_value() == "resolved_path/token"
         assert settings.paths[0].choice.get_secret_value() == "resolved_choice/token"
+
+    def test_alias_choices_rebuild_without_colliding_paths(self):
+        settings = _SettingsWithAliasChoicesCollision(
+            values=[{
+                "first": "secret:first.token",
+                "second": "secret:second.token",
+            }],
+        )
+
+        resolve_references_in_model_tree(settings, _test_backend)
+
+        assert settings.values[0].first.get_secret_value() == "resolved_first/token"
+        assert settings.values[0].second.get_secret_value() == "resolved_second/token"
+
+    def test_positive_alias_path_index_rebuilds(self):
+        settings = _SettingsWithPositiveIndexedAlias(
+            values=[{"items": [None, "secret:positive.token"]}],
+        )
+
+        resolve_references_in_model_tree(settings, _test_backend)
+
+        assert settings.values[0].token.get_secret_value() == "resolved_positive/token"
+
+    def test_negative_alias_path_index_rebuilds(self):
+        settings = _SettingsWithNegativeIndexedAlias(
+            values=[{"items": ["secret:negative.token"]}],
+        )
+
+        resolve_references_in_model_tree(settings, _test_backend)
+
+        assert settings.values[0].token.get_secret_value() == "resolved_negative/token"

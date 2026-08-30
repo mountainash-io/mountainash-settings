@@ -39,15 +39,84 @@ def _resolve_value(ref: str, backend: SecretsBackend) -> str:
     return str(result[field])
 
 
-def _validation_path(field_name: str, field: FieldInfo) -> tuple[str | int, ...]:
+def _validation_paths(
+    field_name: str,
+    field: FieldInfo,
+) -> tuple[tuple[str | int, ...], ...]:
     alias = field.validation_alias
     if isinstance(alias, AliasChoices):
-        alias = alias.choices[0]
-    if isinstance(alias, AliasPath):
-        return tuple(alias.path)
-    if isinstance(alias, str):
-        return (alias,)
-    return (field_name,)
+        aliases = alias.choices
+    elif alias is None:
+        aliases = (field_name,)
+    else:
+        aliases = (alias,)
+
+    paths: list[tuple[str | int, ...]] = []
+    for alias_choice in aliases:
+        if isinstance(alias_choice, AliasPath):
+            paths.append(tuple(alias_choice.path))
+        else:
+            paths.append((alias_choice,))
+    return tuple(paths)
+
+
+def _paths_conflict(
+    path: tuple[str | int, ...],
+    other: tuple[str | int, ...],
+) -> bool:
+    shared_length = min(len(path), len(other))
+    return path[:shared_length] == other[:shared_length]
+
+
+def _selected_paths_are_unambiguous(
+    candidates: list[
+        tuple[str, tuple[tuple[str | int, ...], ...]]
+    ],
+    selected: tuple[tuple[str | int, ...], ...],
+) -> bool:
+    for (_, paths), selected_path in zip(candidates, selected):
+        for path in paths:
+            if path == selected_path:
+                break
+            if any(_paths_conflict(path, other) for other in selected):
+                return False
+        else:
+            return False
+    return True
+
+
+def _select_validation_paths(
+    fields: list[tuple[str, FieldInfo]],
+) -> tuple[tuple[str | int, ...], ...]:
+    candidates = [
+        (field_name, _validation_paths(field_name, field))
+        for field_name, field in fields
+    ]
+
+    def choose(
+        index: int,
+        selected: tuple[tuple[str | int, ...], ...],
+    ) -> tuple[tuple[str | int, ...], ...] | None:
+        if index == len(candidates):
+            if _selected_paths_are_unambiguous(candidates, selected):
+                return selected
+            return None
+        _, paths = candidates[index]
+        for path in paths:
+            if any(_paths_conflict(path, previous) for previous in selected):
+                continue
+            result = choose(index + 1, (*selected, path))
+            if result is not None:
+                return result
+        return None
+
+    selected = choose(0, ())
+    if selected is None:
+        field_names = [field_name for field_name, _ in fields]
+        raise ValueError(
+            f"Could not construct non-conflicting validation aliases for {field_names!r}"
+        )
+    return selected
 
 
 def _set_validation_path(
@@ -62,8 +131,12 @@ def _set_validation_path(
         if isinstance(segment, int):
             if not isinstance(current, list):
                 raise TypeError(f"Alias path requires list at {path[:index]!r}")
-            while len(current) <= segment:
-                current.append(None)
+            if segment < 0:
+                while len(current) < -segment:
+                    current.append(None)
+            else:
+                while len(current) <= segment:
+                    current.append(None)
             if last:
                 current[segment] = value
                 return
@@ -103,23 +176,23 @@ def _resolve_reference_value(
         return value, False
 
     if isinstance(value, BaseModel):
-        payload: dict[str, t.Any] = {}
+        resolved_fields: list[tuple[str, t.Any, bool]] = []
         changed = False
-        for field_name, field in type(value).model_fields.items():
+        model_fields = list(type(value).model_fields.items())
+        for field_name, _ in model_fields:
             resolved, field_changed = _resolve_reference_value(
                 getattr(value, field_name), backend, prefix
             )
-            _set_validation_path(
-                payload,
-                _validation_path(field_name, field),
-                resolved,
-            )
+            resolved_fields.append((field_name, resolved, field_changed))
             changed = changed or field_changed
-        return (
-            (type(value).model_validate(payload), True)
-            if changed
-            else (value, False)
-        )
+        if not changed:
+            return value, False
+
+        selected_paths = _select_validation_paths(model_fields)
+        payload: dict[str, t.Any] = {}
+        for (_, resolved, _), path in zip(resolved_fields, selected_paths):
+            _set_validation_path(payload, path, resolved)
+        return type(value).model_validate(payload), True
 
     if isinstance(value, dict):
         resolved_dict: dict[t.Any, t.Any] = {}
