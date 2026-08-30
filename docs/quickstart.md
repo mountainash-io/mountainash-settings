@@ -22,6 +22,7 @@ class AppSettings(MountainAshBaseSettings):
     PORT: int = Field(default=8000)
     DATABASE_URL: str = Field(default="sqlite:///app.db")
     DATABASE: dict[str, str] = Field(default_factory=dict)
+```
 
 Instantiate directly and your settings are ready:
 

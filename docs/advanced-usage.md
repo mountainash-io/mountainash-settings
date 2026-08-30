@@ -2,6 +2,7 @@
 
 This guide covers the topics listed in the quickstart's "What's next" section:
 
+- [Merging settings parameters](#merging-settings-parameters)
 - [Container secret references](#container-secret-references)
 - [Auth modes reference](#auth-modes-reference)
 - [Profile invariant tests](#profile-invariant-tests)
