@@ -197,8 +197,24 @@ def test_init_file_prefix3(settings_manager: SettingsManager):
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
     with check:
-        assert app_settings.TEST_VAL_1 == None
-        assert app_settings.TEST_VAL_2 == None
+        assert app_settings.TEST_VAL_1 is None
+        assert app_settings.TEST_VAL_2 is None
+
+def test_init_file_prefix_prefers_prefixed_value(settings_manager, tmp_path):
+    env_file = tmp_path / "both.env"
+    env_file.write_text(
+        'TEST_VAL_1="unprefixed"\n'
+        'PREFIX_TEST_VAL_1="prefixed"\n'
+    )
+    params = SettingsParameters.create(
+        settings_class=TestSettings,
+        config_files=[env_file],
+        env_prefix="PREFIX_",
+    )
+
+    settings = get_test_settings(settings_parameters=params)
+
+    assert settings.TEST_VAL_1 == "prefixed"
 
 
 
@@ -224,8 +240,8 @@ def test_init_config_valid_init_files_reverse_noprefix(settings_manager: Setting
 
     #TEST_VAL_2 was 000002 in the file, but over-ridden by the kwarg
     with check:
-        assert app_settings.TEST_VAL_1 == "TEST_VAL_1_File_2"
-        assert app_settings.TEST_VAL_2 == "TEST_VAL_2_File_2"
+        assert app_settings.TEST_VAL_1 == "TEST_VAL_1_File_1"
+        assert app_settings.TEST_VAL_2 == "TEST_VAL_2_File_1"
 
 
 
@@ -305,6 +321,11 @@ class _SecretsTestSettings(MountainAshBaseSettings):
     PASSWORD: str = Field(default="default_pass")
 
 
+
+class _ContainerSecretsSettings(MountainAshBaseSettings):
+    CONNECTION: dict[str, Any] = Field(default_factory=dict)
+    ENDPOINTS: list[Any] = Field(default_factory=list)
+
 class TestSecretsResolution:
     def test_kwargs_secret_resolved_on_construction(self, secrets_registry):
         settings = _SecretsTestSettings(
@@ -355,6 +376,40 @@ class TestSecretsResolution:
         assert settings1.PASSWORD == "resolved_db/password"
 
         # Cleanup: clear the lru_cache entry we just created
+        _get_settings.cache_clear()
+
+    def test_config_file_container_secrets_resolve(self, secrets_registry, tmp_path):
+        config = tmp_path / "containers.toml"
+        config.write_text(
+            'ENDPOINTS = ["secret:api.token"]\n'
+            '[CONNECTION]\n'
+            'password = "secret:db.password"\n'
+        )
+        settings = _ContainerSecretsSettings(
+            settings_parameters=SettingsParameters.create(
+                settings_class=_ContainerSecretsSettings,
+                secrets_provider="test",
+                config_files=[config],
+            )
+        )
+        assert settings.CONNECTION == {"password": "resolved_db/password"}
+        assert settings.ENDPOINTS == ["resolved_api/token"]
+
+    def test_cache_hit_container_override_resolves(self, secrets_registry):
+        from mountainash_settings.settings_cache.settings_functions import _get_settings
+
+        params = SettingsParameters.create(
+            settings_class=_ContainerSecretsSettings,
+            secrets_provider="test",
+        )
+        get_settings(settings_parameters=params)
+
+        overridden = get_settings(
+            settings_parameters=params,
+            CONNECTION={"password": "secret:other.password"},
+        )
+
+        assert overridden.CONNECTION == {"password": "resolved_other/password"}
         _get_settings.cache_clear()
 
     def test_nested_frozen_model_secret_resolved_from_yaml(self, secrets_registry):

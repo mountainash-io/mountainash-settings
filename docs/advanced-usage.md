@@ -3,6 +3,7 @@
 This guide covers the topics listed in the quickstart's "What's next" section:
 
 - [Merging settings parameters](#merging-settings-parameters)
+- [Container secret references](#container-secret-references)
 - [Auth modes reference](#auth-modes-reference)
 - [Profile invariant tests](#profile-invariant-tests)
 - [Dynamic settings resolution](#dynamic-settings-resolution)
@@ -17,12 +18,35 @@ This guide covers the topics listed in the quickstart's "What's next" section:
 
 | Field | Default behaviour | With `prioritise_base=True` |
 |---|---|---|
-| `config_files` | Union + dedup (both kept) | First set wins; second ignored if first present |
+| `config_files` | Base order, then unseen files from `other` | Base files win when present |
 | `settings_class` | Must be equal — raises `ValueError` if both set to different classes | Same |
 | `env_prefix` | `other` wins | `base` wins |
 | `secrets_dir` | `other` wins | `base` wins |
 | `secrets_provider` | `other` wins | `base` wins |
 | `kwargs` | Dict merge — `other` overwrites duplicate keys | `base` value kept for duplicate keys |
+
+`config_files` keeps the first occurrence of each path. The merge does not sort paths.
+With `prioritise_base=True`, the base file list stays in place when it is not empty.
+
+### Structured config file merge
+
+Files of one structured format use caller order. Later mappings merge recursively.
+Later lists and scalar values replace earlier values. Lists do not concatenate.
+
+The source priority, from highest to lowest, is:
+
+1. init values
+2. environment variables
+3. dotenv files
+4. YAML files
+5. TOML files
+6. JSON files
+7. Pydantic secret files
+8. field defaults
+
+A dotenv file is read twice. The first read uses the configured `env_prefix`.
+The second read uses no prefix and fills values that the first read does not set.
+A prefixed key wins when both forms exist. Environment variables have higher priority than both dotenv reads.
 
 ### Layered configuration example
 
@@ -127,7 +151,29 @@ def get_service(name: str, **runtime_overrides):
     return get_settings(settings_parameters=base)
 ```
 
+## Container secret references
+
+Use the `secret:` prefix for a value that a secrets backend resolves.
+The resolver walks nested values in dictionaries, lists, tuples, and Pydantic models.
+
+References resolve inside:
+
+- Declared string (`str`) fields.
+- Declared `SecretStr` fields.
+- Nested Pydantic models.
+- Dictionary fields.
+- List fields.
+- Tuple values supplied through init values or runtime overrides.
+
+A tuple remains a tuple after resolution. A resolved `SecretStr` remains wrapped as `SecretStr`.
+Nested model validation aliases remain supported, including `AliasChoices` and `AliasPath`.
+The resolver creates new dictionaries, lists, and tuples. It does not mutate input dictionaries or containers.
+
+The resolver rebuilds a nested model only when a reference changes one of its values.
+Pydantic validation runs during that rebuild.
+
 ---
+
 
 ## Auth modes reference
 

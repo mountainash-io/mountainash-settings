@@ -21,6 +21,7 @@ class AppSettings(MountainAshBaseSettings):
     DEBUG: bool = Field(default=False)
     PORT: int = Field(default=8000)
     DATABASE_URL: str = Field(default="sqlite:///app.db")
+    DATABASE: dict[str, str] = Field(default_factory=dict)
 ```
 
 Instantiate directly and your settings are ready:
@@ -47,13 +48,16 @@ Pass one or more config files via `config_files`. YAML, TOML, JSON, and `.env` f
 settings = AppSettings(config_files=["config/base.yaml", "config/production.yaml"])
 ```
 
-Files are merged in order — later files override earlier ones. Environment variables override everything.
+Files of one structured format use caller order. Later mappings merge recursively.
+Later lists and scalar values replace earlier values. Lists do not concatenate.
 
 **`config/base.yaml`:**
 
 ```yaml
 APP_NAME: MyApp
 PORT: 8000
+DATABASE:
+  HOST: db.internal
 ```
 
 **`config/production.yaml`:**
@@ -61,9 +65,26 @@ PORT: 8000
 ```yaml
 PORT: 443
 DATABASE_URL: postgresql://prod-db.example.com/myapp
+DATABASE:
+  PORT: "5432"
 ```
 
-The priority order (highest to lowest) is: **kwargs → environment variables → config files → Field defaults**.
+The resulting `DATABASE` value keeps `HOST` from the base file and adds `PORT` from the production file.
+
+The source priority, from highest to lowest, is:
+
+1. init values
+2. environment variables
+3. dotenv files
+4. YAML files
+5. TOML files
+6. JSON files
+7. Pydantic secret files
+8. field defaults
+
+A dotenv file is read twice. The first read uses the configured `env_prefix`.
+The second read uses no prefix and fills values that the first read does not set.
+A prefixed key wins when both forms exist. Environment variables have higher priority than both dotenv reads.
 
 ### Using SettingsParameters for reusable config
 
@@ -181,7 +202,16 @@ settings = AppSettings(
 # settings.DATABASE_URL is now the resolved value from Vault
 ```
 
-The prefix is stripped before your resolver is called — it receives `"db/production/url"`, not `"secret:db/production/url"`.
+The prefix is stripped before your resolver is called. It receives `"db/production/url"`, not `"secret:db/production/url"`.
+
+References resolve inside declared string (`str`) and `SecretStr` fields, nested Pydantic models, dictionaries, lists, and tuple values.
+Tuple values resolve when they come from init values or runtime overrides.
+A resolved `SecretStr` remains wrapped as `SecretStr`.
+Nested model validation aliases remain supported, including `AliasChoices` and `AliasPath`.
+The resolver creates new dictionaries, lists, and tuples. It does not mutate input dictionaries or containers.
+
+The same source priority applies when references come from settings sources.
+Init values have the highest priority, followed by environment variables, dotenv files, YAML, TOML, JSON, Pydantic secret files, and field defaults.
 
 ## 6. Build typed connection profiles
 

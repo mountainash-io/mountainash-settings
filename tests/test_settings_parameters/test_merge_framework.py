@@ -60,6 +60,23 @@ class TestMergeConfigFiles:
         config_files_str = tuple(str(f) for f in result.config_files)
         assert config_files_str == ("config1.yaml", "config2.yaml", "config3.yaml")
 
+    def test_config_files_preserve_base_then_other_order(self):
+        base = SettingsParameters.create(
+            settings_class=TestSettings,
+            config_files=["z-base.toml"],
+        )
+        other = SettingsParameters.create(
+            settings_class=TestSettings,
+            config_files=["a-local.toml", "z-base.toml"],
+        )
+
+        result = SettingsParameters.merge(base, other)
+
+        assert tuple(str(path) for path in result.config_files) == (
+            "z-base.toml",
+            "a-local.toml",
+        )
+
     @pytest.mark.unit
     def test_both_none_config_files_produces_none(self):
         """Test that both None config_files produces None."""

@@ -235,8 +235,15 @@ class SettingsParameters():
         elif prioritise_base:
             merged_config_files = base.config_files or other.config_files
         else:
-            merged = set(base.config_files or ()) | set(other.config_files or ())
-            merged_config_files = tuple(sorted(str(p) for p in merged)) if merged else None
+            ordered_files = [
+                *(base.config_files or ()),
+                *(other.config_files or ()),
+            ]
+            merged_config_files = (
+                tuple(dict.fromkeys(str(path) for path in ordered_files))
+                if ordered_files
+                else None
+            )
 
         # Settings class: validate compatibility
         if base.settings_class is not None and other.settings_class is not None:
