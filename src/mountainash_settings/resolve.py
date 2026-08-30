@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import typing as t
 
-from pydantic import AliasChoices, AliasPath, BaseModel, SecretStr, ValidationError
+from pydantic import AliasChoices, AliasPath, BaseModel, SecretStr
 from pydantic.fields import FieldInfo
 
 from mountainash_settings.secrets.backend import SecretsBackend
