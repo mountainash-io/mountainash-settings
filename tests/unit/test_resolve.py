@@ -10,6 +10,7 @@ from pydantic import (
     ConfigDict,
     Field,
     SecretStr,
+    field_validator,
 )
 
 from mountainash_settings.resolve import (
@@ -320,6 +321,55 @@ class _SettingsWithSharedIndexedAliases(MountainAshBaseSettings):
     forward: list[_PositiveNegativeIndexedAliasModel]
     reverse: list[_NegativePositiveIndexedAliasModel]
 
+
+class _CompatibleSharedAliasModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    first: SecretStr = Field(validation_alias="shared")
+    second: SecretStr = Field(validation_alias="shared")
+
+
+class _SettingsWithCompatibleSharedAlias(MountainAshBaseSettings):
+    values: list[_CompatibleSharedAliasModel]
+
+
+class _CompatibleOverlappingAliasModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    auth: dict[str, t.Any] = Field(validation_alias="auth")
+    token: SecretStr = Field(
+        validation_alias=AliasPath("auth", "token"),
+    )
+
+
+class _SettingsWithCompatibleOverlappingAlias(MountainAshBaseSettings):
+    values: list[_CompatibleOverlappingAliasModel]
+
+
+class _RejectResolvedNestedModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    token: str
+
+    @field_validator("token")
+    @classmethod
+    def reject_resolved_value(cls, value: str) -> str:
+        if value == "resolved_nested/value":
+            raise ValueError(f"resolved value rejected: {value}")
+        return value
+
+
+class _SettingsWithRejectResolvedNested(MountainAshBaseSettings):
+    values: list[_RejectResolvedNestedModel]
+
+
+class _RejectResolvedRootSettings(MountainAshBaseSettings):
+    token: str
+
+    @field_validator("token")
+    @classmethod
+    def reject_resolved_value(cls, value: str) -> str:
+        if value == "resolved_root/value":
+            raise ValueError(f"resolved value rejected: {value}")
+        return value
+
 @pytest.mark.unit
 class TestResolveReferencesInModelTreeNested:
     def test_resolves_nested_model_str_field(self):
@@ -457,3 +507,53 @@ class TestResolveReferencesInModelTreeNested:
         assert settings.forward[0].negative.get_secret_value() == "resolved_negative/token"
         assert settings.reverse[0].positive.get_secret_value() == "resolved_positive/token"
         assert settings.reverse[0].negative.get_secret_value() == "resolved_negative/token"
+
+    def test_compatible_identical_alias_paths_coalesce(self):
+        settings = _SettingsWithCompatibleSharedAlias(
+            values=[{"shared": "secret:shared.token"}],
+        )
+
+        resolve_references_in_model_tree(settings, _test_backend)
+
+        assert settings.values[0].first.get_secret_value() == "resolved_shared/token"
+        assert settings.values[0].second.get_secret_value() == "resolved_shared/token"
+
+    def test_compatible_overlapping_alias_paths_merge(self):
+        settings = _SettingsWithCompatibleOverlappingAlias(
+            values=[{"auth": {"token": "secret:shared.token"}}],
+        )
+
+        resolve_references_in_model_tree(settings, _test_backend)
+
+        assert settings.values[0].auth == {"token": "resolved_shared/token"}
+        assert settings.values[0].token.get_secret_value() == "resolved_shared/token"
+
+    def test_nested_validation_errors_are_sanitized(self):
+        settings = _SettingsWithRejectResolvedNested(
+            values=[{"token": "secret:nested.value"}],
+        )
+
+        with pytest.raises(ValueError) as caught:
+            resolve_references_in_model_tree(settings, _test_backend)
+
+        error = caught.value
+        assert "_RejectResolvedNestedModel" in str(error)
+        assert "token" in str(error)
+        assert "resolved_nested/value" not in str(error)
+        assert "resolved value rejected" not in str(error)
+        assert error.__cause__ is None
+        assert error.__context__ is None
+
+    def test_root_assignment_validation_errors_are_sanitized(self):
+        settings = _RejectResolvedRootSettings(token="secret:root.value")
+
+        with pytest.raises(ValueError) as caught:
+            resolve_references_in_model_tree(settings, _test_backend)
+
+        error = caught.value
+        assert "_RejectResolvedRootSettings" in str(error)
+        assert "token" in str(error)
+        assert "resolved_root/value" not in str(error)
+        assert "resolved value rejected" not in str(error)
+        assert error.__cause__ is None
+        assert error.__context__ is None

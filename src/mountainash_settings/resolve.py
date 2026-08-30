@@ -3,10 +3,14 @@ from __future__ import annotations
 
 import typing as t
 
-from pydantic import AliasChoices, AliasPath, BaseModel, SecretStr
+from pydantic import AliasChoices, AliasPath, BaseModel, SecretStr, ValidationError
 from pydantic.fields import FieldInfo
 
 from mountainash_settings.secrets.backend import SecretsBackend
+
+
+class _ValidationPathConflict(Exception):
+    """Internal signal for incompatible overlapping validation paths."""
 
 __all__ = ["resolve_references_in_dict", "resolve_references_in_model_tree"]
 
@@ -60,7 +64,11 @@ def _validation_paths(
     return tuple(paths)
 
 
-def _paths_conflict(
+_MISSING = object()
+_INVALID = object()
+
+
+def _paths_overlap(
     path: tuple[str | int, ...],
     other: tuple[str | int, ...],
 ) -> bool:
@@ -68,18 +76,83 @@ def _paths_conflict(
     return path[:shared_length] == other[:shared_length]
 
 
+def _values_compatible(left: t.Any, right: t.Any) -> bool:
+    if isinstance(left, SecretStr):
+        left = left.get_secret_value()
+    if isinstance(right, SecretStr):
+        right = right.get_secret_value()
+    if left is None or right is None:
+        return True
+    if isinstance(left, dict) and isinstance(right, dict):
+        return all(
+            key not in right or _values_compatible(value, right[key])
+            for key, value in left.items()
+        )
+    if isinstance(left, list) and isinstance(right, list):
+        return all(
+            index >= len(right)
+            or _values_compatible(value, right[index])
+            for index, value in enumerate(left)
+        )
+    return left == right
+
+
+def _value_at_suffix(value: t.Any, suffix: tuple[str | int, ...]) -> t.Any:
+    current = value
+    for segment in suffix:
+        if isinstance(current, dict):
+            if segment not in current:
+                return _MISSING
+            current = current[segment]
+        elif isinstance(current, list) and isinstance(segment, int):
+            try:
+                current = current[segment]
+            except IndexError:
+                return _MISSING
+        else:
+            return _INVALID
+    return current
+
+
+def _paths_are_compatible(
+    path: tuple[str | int, ...],
+    value: t.Any,
+    other: tuple[str | int, ...],
+    other_value: t.Any,
+) -> bool:
+    if not _paths_overlap(path, other):
+        return True
+    if path == other:
+        return _values_compatible(value, other_value)
+    if len(path) < len(other):
+        nested = _value_at_suffix(value, other[len(path):])
+        if nested is _INVALID:
+            return False
+        return nested is _MISSING or _values_compatible(nested, other_value)
+    nested = _value_at_suffix(other_value, path[len(other):])
+    if nested is _INVALID:
+        return False
+    return nested is _MISSING or _values_compatible(nested, value)
+
+
 def _selected_paths_are_unambiguous(
     candidates: list[
-        tuple[str, tuple[tuple[str | int, ...], ...]]
+        tuple[str, tuple[tuple[str | int, ...], ...], t.Any]
     ],
-    selected: tuple[tuple[str | int, ...], ...],
+    selected: tuple[tuple[tuple[str | int, ...], t.Any], ...],
 ) -> bool:
-    for (_, paths), selected_path in zip(candidates, selected):
+    for (_, paths, value), (selected_path, _) in zip(candidates, selected):
         for path in paths:
             if path == selected_path:
                 break
-            if any(_paths_conflict(path, other) for other in selected):
-                return False
+            for other_path, other_value in selected:
+                if _paths_overlap(path, other_path) and not _paths_are_compatible(
+                    path,
+                    value,
+                    other_path,
+                    other_value,
+                ):
+                    return False
         else:
             return False
     return True
@@ -87,25 +160,35 @@ def _selected_paths_are_unambiguous(
 
 def _select_validation_paths(
     fields: list[tuple[str, FieldInfo]],
+    values: list[t.Any],
 ) -> tuple[tuple[str | int, ...], ...]:
     candidates = [
-        (field_name, _validation_paths(field_name, field))
-        for field_name, field in fields
+        (field_name, _validation_paths(field_name, field), value)
+        for (field_name, field), value in zip(fields, values)
     ]
 
     def choose(
         index: int,
-        selected: tuple[tuple[str | int, ...], ...],
-    ) -> tuple[tuple[str | int, ...], ...] | None:
+        selected: tuple[tuple[tuple[str | int, ...], t.Any], ...],
+    ) -> tuple[tuple[tuple[str | int, ...], t.Any], ...] | None:
         if index == len(candidates):
             if _selected_paths_are_unambiguous(candidates, selected):
                 return selected
             return None
-        _, paths = candidates[index]
+        _, paths, value = candidates[index]
         for path in paths:
-            if any(_paths_conflict(path, previous) for previous in selected):
+            if any(
+                _paths_overlap(path, previous_path)
+                and not _paths_are_compatible(
+                    path,
+                    value,
+                    previous_path,
+                    previous_value,
+                )
+                for previous_path, previous_value in selected
+            ):
                 continue
-            result = choose(index + 1, (*selected, path))
+            result = choose(index + 1, (*selected, (path, value)))
             if result is not None:
                 return result
         return None
@@ -114,9 +197,9 @@ def _select_validation_paths(
     if selected is None:
         field_names = [field_name for field_name, _ in fields]
         raise ValueError(
-            f"Could not construct non-conflicting validation aliases for {field_names!r}"
+            f"Could not construct compatible validation aliases for {field_names!r}"
         )
-    return selected
+    return tuple(path for path, _ in selected)
 
 
 def _list_sizes_for_paths(
@@ -139,6 +222,30 @@ def _list_sizes_for_paths(
         else:
             sizes[parent] = max(negative)
     return sizes
+
+
+def _merge_validation_values(existing: t.Any, value: t.Any) -> t.Any:
+    if existing is None:
+        return value
+    if value is None:
+        return existing
+    if isinstance(existing, dict) and isinstance(value, dict):
+        for key, child in value.items():
+            if key in existing:
+                existing[key] = _merge_validation_values(existing[key], child)
+            else:
+                existing[key] = child
+        return existing
+    if isinstance(existing, list) and isinstance(value, list):
+        for index, child in enumerate(value):
+            if index < len(existing):
+                existing[index] = _merge_validation_values(existing[index], child)
+            else:
+                existing.append(child)
+        return existing
+    if _values_compatible(existing, value):
+        return existing
+    raise _ValidationPathConflict
 
 
 def _set_validation_path(
@@ -165,7 +272,7 @@ def _set_validation_path(
                 while len(current) <= segment:
                     current.append(None)
             if last:
-                current[segment] = value
+                current[segment] = _merge_validation_values(current[segment], value)
                 return
             child = current[segment]
             if child is None:
@@ -177,13 +284,30 @@ def _set_validation_path(
         if not isinstance(current, dict):
             raise TypeError(f"Alias path requires mapping at {path[:index]!r}")
         if last:
-            current[segment] = value
+            if segment in current:
+                current[segment] = _merge_validation_values(current[segment], value)
+            else:
+                current[segment] = value
             return
         child = current.get(segment)
         if child is None:
             child = [] if next_is_index else {}
             current[segment] = child
         current = child
+
+
+def _raise_sanitized_resolution_error(
+    model_type: type[BaseModel],
+    field_names: list[str],
+) -> t.NoReturn:
+    error = ValueError(
+        f"Secret resolution validation failed for {model_type.__name__} "
+        f"field(s): {', '.join(field_names)}"
+    )
+    error.__cause__ = None
+    error.__context__ = None
+    error.__suppress_context__ = True
+    raise error
 
 
 def _resolve_reference_value(
@@ -215,12 +339,36 @@ def _resolve_reference_value(
         if not changed:
             return value, False
 
-        selected_paths = _select_validation_paths(model_fields)
+        changed_field_names = [
+            field_name for field_name, _, field_changed in resolved_fields if field_changed
+        ]
+        resolved_values = [resolved for _, resolved, _ in resolved_fields]
+        selection_failed = False
+        try:
+            selected_paths = _select_validation_paths(model_fields, resolved_values)
+        except ValueError:
+            selection_failed = True
+        if selection_failed:
+            _raise_sanitized_resolution_error(type(value), changed_field_names)
+
         list_sizes = _list_sizes_for_paths(selected_paths)
         payload: dict[str, t.Any] = {}
-        for (_, resolved, _), path in zip(resolved_fields, selected_paths):
-            _set_validation_path(payload, path, resolved, list_sizes)
-        return type(value).model_validate(payload), True
+        path_failed = False
+        try:
+            for (_, resolved, _), path in zip(resolved_fields, selected_paths):
+                _set_validation_path(payload, path, resolved, list_sizes)
+        except (TypeError, _ValidationPathConflict):
+            path_failed = True
+        if path_failed:
+            _raise_sanitized_resolution_error(type(value), changed_field_names)
+        validation_failed = False
+        try:
+            rebuilt = type(value).model_validate(payload)
+        except ValidationError:
+            validation_failed = True
+        if validation_failed:
+            _raise_sanitized_resolution_error(type(value), changed_field_names)
+        return rebuilt, True
 
     if isinstance(value, dict):
         resolved_dict: dict[t.Any, t.Any] = {}
@@ -273,4 +421,10 @@ def resolve_references_in_model_tree(
             getattr(instance, field_name), backend, prefix
         )
         if changed:
-            setattr(instance, field_name, resolved)
+            assignment_failed = False
+            try:
+                setattr(instance, field_name, resolved)
+            except ValidationError:
+                assignment_failed = True
+            if assignment_failed:
+                _raise_sanitized_resolution_error(type(instance), [field_name])
