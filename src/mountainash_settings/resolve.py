@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import typing as t
 
-from pydantic import BaseModel, SecretStr
+from pydantic import AliasChoices, AliasPath, BaseModel, SecretStr
+from pydantic.fields import FieldInfo
 
 from mountainash_settings.secrets.backend import SecretsBackend
 
@@ -38,70 +39,137 @@ def _resolve_value(ref: str, backend: SecretsBackend) -> str:
     return str(result[field])
 
 
+def _validation_path(field_name: str, field: FieldInfo) -> tuple[str | int, ...]:
+    alias = field.validation_alias
+    if isinstance(alias, AliasChoices):
+        alias = alias.choices[0]
+    if isinstance(alias, AliasPath):
+        return tuple(alias.path)
+    if isinstance(alias, str):
+        return (alias,)
+    return (field_name,)
+
+
+def _set_validation_path(
+    payload: dict[str, t.Any],
+    path: tuple[str | int, ...],
+    value: t.Any,
+) -> None:
+    current: dict[str, t.Any] | list[t.Any] = payload
+    for index, segment in enumerate(path):
+        last = index == len(path) - 1
+        next_is_index = not last and isinstance(path[index + 1], int)
+        if isinstance(segment, int):
+            if not isinstance(current, list):
+                raise TypeError(f"Alias path requires list at {path[:index]!r}")
+            while len(current) <= segment:
+                current.append(None)
+            if last:
+                current[segment] = value
+                return
+            child = current[segment]
+            if child is None:
+                child = [] if next_is_index else {}
+                current[segment] = child
+            current = child
+            continue
+
+        if not isinstance(current, dict):
+            raise TypeError(f"Alias path requires mapping at {path[:index]!r}")
+        if last:
+            current[segment] = value
+            return
+        child = current.get(segment)
+        if child is None:
+            child = [] if next_is_index else {}
+            current[segment] = child
+        current = child
+
+
+def _resolve_reference_value(
+    value: t.Any,
+    backend: SecretsBackend,
+    prefix: str,
+) -> tuple[t.Any, bool]:
+    if isinstance(value, SecretStr):
+        raw = value.get_secret_value()
+        if raw.startswith(prefix):
+            return SecretStr(_resolve_value(raw[len(prefix):], backend)), True
+        return value, False
+
+    if isinstance(value, str):
+        if value.startswith(prefix):
+            return _resolve_value(value[len(prefix):], backend), True
+        return value, False
+
+    if isinstance(value, BaseModel):
+        payload: dict[str, t.Any] = {}
+        changed = False
+        for field_name, field in type(value).model_fields.items():
+            resolved, field_changed = _resolve_reference_value(
+                getattr(value, field_name), backend, prefix
+            )
+            _set_validation_path(
+                payload,
+                _validation_path(field_name, field),
+                resolved,
+            )
+            changed = changed or field_changed
+        return (
+            (type(value).model_validate(payload), True)
+            if changed
+            else (value, False)
+        )
+
+    if isinstance(value, dict):
+        resolved_dict: dict[t.Any, t.Any] = {}
+        changed = False
+        for key, item in value.items():
+            resolved, item_changed = _resolve_reference_value(item, backend, prefix)
+            resolved_dict[key] = resolved
+            changed = changed or item_changed
+        return resolved_dict, changed
+
+    if isinstance(value, list):
+        resolved_list: list[t.Any] = []
+        changed = False
+        for item in value:
+            resolved, item_changed = _resolve_reference_value(item, backend, prefix)
+            resolved_list.append(resolved)
+            changed = changed or item_changed
+        return resolved_list, changed
+
+    if isinstance(value, tuple):
+        resolved_items: list[t.Any] = []
+        changed = False
+        for item in value:
+            resolved, item_changed = _resolve_reference_value(item, backend, prefix)
+            resolved_items.append(resolved)
+            changed = changed or item_changed
+        return tuple(resolved_items), changed
+
+    return value, False
+
+
 def resolve_references_in_dict(
     data: dict[str, t.Any],
     backend: SecretsBackend,
     prefix: str = "secret:",
 ) -> dict[str, t.Any]:
-    resolved: dict[str, t.Any] = {}
-    for key, value in data.items():
-        if isinstance(value, dict):
-            resolved[key] = resolve_references_in_dict(value, backend, prefix)
-        elif isinstance(value, str) and value.startswith(prefix):
-            resolved[key] = _resolve_value(value[len(prefix):], backend)
-        else:
-            resolved[key] = value
-    return resolved
-
-
-def _extract_model_values(
-    instance: BaseModel,
-    prefix: str,
-) -> tuple[dict[str, t.Any], bool]:
-    """Extract field values from a BaseModel, unwrapping SecretStr.
-
-    Returns (field_dict, has_references) where has_references is True
-    if any string value starts with the given prefix.
-    """
-    values: dict[str, t.Any] = {}
-    has_refs = False
-    for field_name in instance.model_fields:
-        value = getattr(instance, field_name)
-        if isinstance(value, SecretStr):
-            raw = value.get_secret_value()
-            values[field_name] = raw
-            if isinstance(raw, str) and raw.startswith(prefix):
-                has_refs = True
-        elif isinstance(value, BaseModel):
-            inner_values, inner_has_refs = _extract_model_values(value, prefix)
-            values[field_name] = inner_values
-            if inner_has_refs:
-                has_refs = True
-        else:
-            values[field_name] = value
-            if isinstance(value, str) and value.startswith(prefix):
-                has_refs = True
-    return values, has_refs
+    resolved, _ = _resolve_reference_value(data, backend, prefix)
+    return t.cast(dict[str, t.Any], resolved)
 
 
 def resolve_references_in_model_tree(
-    instance: t.Any,
+    instance: BaseModel,
     backend: SecretsBackend,
     prefix: str = "secret:",
 ) -> None:
-    for field_name in instance.model_fields:
+    for field_name in type(instance).model_fields:
         if field_name.startswith(_SETTINGS_SOURCE_PREFIX) or field_name in _SETTINGS_META_FIELDS:
             continue
-        value = getattr(instance, field_name)
-        if isinstance(value, BaseModel):
-            raw_dict, has_refs = _extract_model_values(value, prefix)
-            if has_refs:
-                resolved_dict = resolve_references_in_dict(raw_dict, backend, prefix)
-                rebuilt = type(value)(**resolved_dict)
-                setattr(instance, field_name, rebuilt)
-        elif isinstance(value, SecretStr):
-            raw = value.get_secret_value()
-            if isinstance(raw, str) and raw.startswith(prefix):
-                setattr(instance, field_name, _resolve_value(raw[len(prefix):], backend))
-        elif isinstance(value, str) and value.startswith(prefix):
-            setattr(instance, field_name, _resolve_value(value[len(prefix):], backend))
+        resolved, changed = _resolve_reference_value(
+            getattr(instance, field_name), backend, prefix
+        )
+        if changed:
+            setattr(instance, field_name, resolved)

@@ -3,7 +3,14 @@
 import typing as t
 
 import pytest
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import (
+    AliasChoices,
+    AliasPath,
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+)
 
 from mountainash_settings.resolve import (
     resolve_references_in_dict,
@@ -57,6 +64,67 @@ class TestResolveReferencesInDict:
         data = {"outer": {"inner": "secret:nested.key"}}
         result = resolve_references_in_dict(data, _test_backend)
         assert result == {"outer": {"inner": "resolved_nested/key"}}
+
+    def test_list_values_resolve_recursively(self):
+        data = {
+            "items": [
+                "secret:first.value",
+                {"token": "secret:second.value"},
+            ]
+        }
+        result = resolve_references_in_dict(data, _test_backend)
+        assert result == {
+            "items": [
+                "resolved_first/value",
+                {"token": "resolved_second/value"},
+            ]
+        }
+
+    def test_tuple_values_preserve_tuple_type(self):
+        data = {"items": ("secret:first.value", "plain")}
+        result = resolve_references_in_dict(data, _test_backend)
+        assert result == {"items": ("resolved_first/value", "plain")}
+        assert isinstance(result["items"], tuple)
+
+    def test_nested_containers_do_not_mutate_input(self):
+        data = {"items": [{"token": "secret:api.token"}]}
+        result = resolve_references_in_dict(data, _test_backend)
+        assert data == {"items": [{"token": "secret:api.token"}]}
+        assert result is not data
+        assert result["items"] is not data["items"]
+
+    def test_secretstr_values_remain_wrapped_in_containers(self):
+        data = {
+            "direct": SecretStr("secret:direct.value"),
+            "items": [SecretStr("secret:list.value")],
+            "pair": (SecretStr("secret:tuple.value"),),
+        }
+
+        result = resolve_references_in_dict(data, _test_backend)
+
+        resolved = [
+            result["direct"],
+            result["items"][0],
+            result["pair"][0],
+        ]
+        assert all(isinstance(value, SecretStr) for value in resolved)
+        assert [value.get_secret_value() for value in resolved] == [
+            "resolved_direct/value",
+            "resolved_list/value",
+            "resolved_tuple/value",
+        ]
+
+    def test_secretstr_custom_prefix_remains_wrapped(self):
+        data = {"token": SecretStr("vault:api.token")}
+
+        result = resolve_references_in_dict(
+            data,
+            _test_backend,
+            prefix="vault:",
+        )
+
+        assert isinstance(result["token"], SecretStr)
+        assert result["token"].get_secret_value() == "resolved_api/token"
 
     def test_non_string_values_passed_through(self):
         data = {"count": 42, "flag": True, "items": [1, 2, 3]}
@@ -159,6 +227,38 @@ class _SettingsWithDeepNesting(MountainAshBaseSettings):
     deep: _DeepNestedOuter
 
 
+class _ContainerSecretModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    token: SecretStr
+
+
+class _SettingsWithContainers(MountainAshBaseSettings):
+    mapping: dict[str, t.Any]
+    items: list[t.Any]
+    pair: tuple[t.Any, ...]
+    models: list[_ContainerSecretModel]
+
+
+class _AliasOnlySecretModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    token: SecretStr = Field(validation_alias="TOKEN")
+
+
+class _AliasPathSecretModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    token: SecretStr = Field(
+        validation_alias=AliasPath("auth", "TOKEN"),
+    )
+    choice: SecretStr = Field(
+        validation_alias=AliasChoices("CHOICE", "choice"),
+    )
+
+
+class _SettingsWithAliasedContainers(MountainAshBaseSettings):
+    aliases: list[_AliasOnlySecretModel]
+    paths: list[_AliasPathSecretModel]
+
+
 @pytest.mark.unit
 class TestResolveReferencesInModelTreeNested:
     def test_resolves_nested_model_str_field(self):
@@ -207,3 +307,36 @@ class TestResolveReferencesInModelTreeNested:
         )
         resolve_references_in_model_tree(instance, _test_backend, prefix="vault:")
         assert instance.nested.password == "resolved_db/pass"
+
+    def test_resolves_dict_list_tuple_and_models(self):
+        settings = _SettingsWithContainers(
+            mapping={"token": "secret:mapping.token"},
+            items=["secret:list.token", {"inner": "secret:list.inner"}],
+            pair=("secret:tuple.token", "plain"),
+            models=[{"token": "secret:model.token"}],
+        )
+
+        resolve_references_in_model_tree(settings, _test_backend)
+
+        assert settings.mapping == {"token": "resolved_mapping/token"}
+        assert settings.items == [
+            "resolved_list/token",
+            {"inner": "resolved_list/inner"},
+        ]
+        assert settings.pair == ("resolved_tuple/token", "plain")
+        assert settings.models[0].token.get_secret_value() == "resolved_model/token"
+
+    def test_rebuilds_alias_only_and_alias_path_models_inside_lists(self):
+        settings = _SettingsWithAliasedContainers(
+            aliases=[{"TOKEN": "secret:alias.token"}],
+            paths=[{
+                "auth": {"TOKEN": "secret:path.token"},
+                "CHOICE": "secret:choice.token",
+            }],
+        )
+
+        resolve_references_in_model_tree(settings, _test_backend)
+
+        assert settings.aliases[0].token.get_secret_value() == "resolved_alias/token"
+        assert settings.paths[0].token.get_secret_value() == "resolved_path/token"
+        assert settings.paths[0].choice.get_secret_value() == "resolved_choice/token"
