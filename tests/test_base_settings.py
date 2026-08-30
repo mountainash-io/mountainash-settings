@@ -197,8 +197,8 @@ def test_init_file_prefix3(settings_manager: SettingsManager):
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
 
     with check:
-        assert app_settings.TEST_VAL_1 == None
-        assert app_settings.TEST_VAL_2 == None
+        assert app_settings.TEST_VAL_1 is None
+        assert app_settings.TEST_VAL_2 is None
 
 def test_init_file_prefix_prefers_prefixed_value(settings_manager, tmp_path):
     env_file = tmp_path / "both.env"
