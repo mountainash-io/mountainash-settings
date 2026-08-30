@@ -295,6 +295,31 @@ class _NegativeIndexedAliasModel(BaseModel):
 class _SettingsWithNegativeIndexedAlias(MountainAshBaseSettings):
     values: list[_NegativeIndexedAliasModel]
 
+
+class _PositiveNegativeIndexedAliasModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    positive: SecretStr = Field(
+        validation_alias=AliasPath("items", 1),
+    )
+    negative: SecretStr = Field(
+        validation_alias=AliasPath("items", -1),
+    )
+
+
+class _NegativePositiveIndexedAliasModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    negative: SecretStr = Field(
+        validation_alias=AliasPath("items", -1),
+    )
+    positive: SecretStr = Field(
+        validation_alias=AliasPath("items", 1),
+    )
+
+
+class _SettingsWithSharedIndexedAliases(MountainAshBaseSettings):
+    forward: list[_PositiveNegativeIndexedAliasModel]
+    reverse: list[_NegativePositiveIndexedAliasModel]
+
 @pytest.mark.unit
 class TestResolveReferencesInModelTreeNested:
     def test_resolves_nested_model_str_field(self):
@@ -407,3 +432,28 @@ class TestResolveReferencesInModelTreeNested:
         resolve_references_in_model_tree(settings, _test_backend)
 
         assert settings.values[0].token.get_secret_value() == "resolved_negative/token"
+
+    def test_shared_positive_and_negative_alias_paths_are_order_independent(self):
+        settings = _SettingsWithSharedIndexedAliases(
+            forward=[{
+                "items": [
+                    "unused",
+                    "secret:positive.token",
+                    "secret:negative.token",
+                ],
+            }],
+            reverse=[{
+                "items": [
+                    "unused",
+                    "secret:positive.token",
+                    "secret:negative.token",
+                ],
+            }],
+        )
+
+        resolve_references_in_model_tree(settings, _test_backend)
+
+        assert settings.forward[0].positive.get_secret_value() == "resolved_positive/token"
+        assert settings.forward[0].negative.get_secret_value() == "resolved_negative/token"
+        assert settings.reverse[0].positive.get_secret_value() == "resolved_positive/token"
+        assert settings.reverse[0].negative.get_secret_value() == "resolved_negative/token"

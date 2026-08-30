@@ -119,10 +119,33 @@ def _select_validation_paths(
     return selected
 
 
+def _list_sizes_for_paths(
+    paths: tuple[tuple[str | int, ...], ...],
+) -> dict[tuple[str | int, ...], int]:
+    indexes_by_parent: dict[tuple[str | int, ...], list[int]] = {}
+    for path in paths:
+        for index, segment in enumerate(path):
+            if isinstance(segment, int):
+                indexes_by_parent.setdefault(path[:index], []).append(segment)
+
+    sizes: dict[tuple[str | int, ...], int] = {}
+    for parent, indexes in indexes_by_parent.items():
+        positive = [index for index in indexes if index >= 0]
+        negative = [-index for index in indexes if index < 0]
+        if positive and negative:
+            sizes[parent] = max(max(positive) + max(negative) + 1, max(negative))
+        elif positive:
+            sizes[parent] = max(positive) + 1
+        else:
+            sizes[parent] = max(negative)
+    return sizes
+
+
 def _set_validation_path(
     payload: dict[str, t.Any],
     path: tuple[str | int, ...],
     value: t.Any,
+    list_sizes: dict[tuple[str | int, ...], int] | None = None,
 ) -> None:
     current: dict[str, t.Any] | list[t.Any] = payload
     for index, segment in enumerate(path):
@@ -131,7 +154,11 @@ def _set_validation_path(
         if isinstance(segment, int):
             if not isinstance(current, list):
                 raise TypeError(f"Alias path requires list at {path[:index]!r}")
-            if segment < 0:
+            required_length = (list_sizes or {}).get(path[:index])
+            if required_length is not None:
+                while len(current) < required_length:
+                    current.append(None)
+            elif segment < 0:
                 while len(current) < -segment:
                     current.append(None)
             else:
@@ -189,9 +216,10 @@ def _resolve_reference_value(
             return value, False
 
         selected_paths = _select_validation_paths(model_fields)
+        list_sizes = _list_sizes_for_paths(selected_paths)
         payload: dict[str, t.Any] = {}
         for (_, resolved, _), path in zip(resolved_fields, selected_paths):
-            _set_validation_path(payload, path, resolved)
+            _set_validation_path(payload, path, resolved, list_sizes)
         return type(value).model_validate(payload), True
 
     if isinstance(value, dict):
