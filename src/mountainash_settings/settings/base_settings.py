@@ -180,9 +180,9 @@ class MountainAshBaseSettings(BaseSettings):
                 env_settings,
                 dotenv_settings,
                 unprefixed_dotenv_settings,
-                YamlConfigSettingsSource(settings_cls),
-                TomlConfigSettingsSource(settings_cls),
-                JsonConfigSettingsSource(settings_cls),
+                YamlConfigSettingsSource(settings_cls, deep_merge=True),
+                TomlConfigSettingsSource(settings_cls, deep_merge=True),
+                JsonConfigSettingsSource(settings_cls, deep_merge=True),
                 file_secret_settings
         )
 

@@ -240,8 +240,8 @@ def test_init_config_valid_init_files_reverse_noprefix(settings_manager: Setting
 
     #TEST_VAL_2 was 000002 in the file, but over-ridden by the kwarg
     with check:
-        assert app_settings.TEST_VAL_1 == "TEST_VAL_1_File_2"
-        assert app_settings.TEST_VAL_2 == "TEST_VAL_2_File_2"
+        assert app_settings.TEST_VAL_1 == "TEST_VAL_1_File_1"
+        assert app_settings.TEST_VAL_2 == "TEST_VAL_2_File_1"
 
 
 
