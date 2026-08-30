@@ -24,11 +24,10 @@ classifiers = [
 ]
 dependencies = [
     "pydantic>=2.9.2",
-    # pydantic-settings stays pinned: 2.14.x regresses env_prefix + dotenv
-    # handling (test_init_file_prefix1 — file values return None). 2.6.1 works
-    # with pydantic 2.9–2.13. Relaxing pydantic (not -settings) lets consumers
-    # that need pydantic>=2.11 (e.g. modern mcp/fastmcp) resolve cleanly.
-    "pydantic-settings==2.6.1",
+    # Exact pin: settings-source behavior is application-visible. 2.15.0 adds
+    # structured-file deep merge. MountainAsh preserves its legacy unprefixed
+    # dotenv fallback through explicit source wiring and regression tests.
+    "pydantic-settings==2.15.0",
     "universal_pathlib==0.2.2",
     "pyaml",
 ]

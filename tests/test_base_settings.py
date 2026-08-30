@@ -200,6 +200,22 @@ def test_init_file_prefix3(settings_manager: SettingsManager):
         assert app_settings.TEST_VAL_1 == None
         assert app_settings.TEST_VAL_2 == None
 
+def test_init_file_prefix_prefers_prefixed_value(settings_manager, tmp_path):
+    env_file = tmp_path / "both.env"
+    env_file.write_text(
+        'TEST_VAL_1="unprefixed"\n'
+        'PREFIX_TEST_VAL_1="prefixed"\n'
+    )
+    params = SettingsParameters.create(
+        settings_class=TestSettings,
+        config_files=[env_file],
+        env_prefix="PREFIX_",
+    )
+
+    settings = get_test_settings(settings_parameters=params)
+
+    assert settings.TEST_VAL_1 == "prefixed"
+
 
 
 def test_init_config_valid_init_two_files_noprefix(settings_manager: SettingsManager):

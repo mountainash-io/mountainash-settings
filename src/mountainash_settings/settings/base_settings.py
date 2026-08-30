@@ -4,7 +4,15 @@ from string import Formatter
 from importlib import import_module
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource, TomlConfigSettingsSource, YamlConfigSettingsSource, JsonConfigSettingsSource
+from pydantic_settings import (
+    BaseSettings,
+    DotEnvSettingsSource,
+    JsonConfigSettingsSource,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+    TomlConfigSettingsSource,
+    YamlConfigSettingsSource,
+)
 
 from mountainash_settings.settings_parameters import SettingsFileHandler, SettingsParameters, SettingsKwargsHandler, SettingsFiles
 
@@ -153,9 +161,25 @@ class MountainAshBaseSettings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        unprefixed_dotenv_settings = DotEnvSettingsSource(
+            settings_cls,
+            env_file=dotenv_settings.env_file,
+            env_file_encoding=dotenv_settings.env_file_encoding,
+            dotenv_filtering=dotenv_settings.dotenv_filtering,
+            case_sensitive=dotenv_settings.case_sensitive,
+            env_prefix="",
+            env_prefix_target=dotenv_settings.env_prefix_target,
+            env_nested_delimiter=dotenv_settings.env_nested_delimiter,
+            env_nested_max_split=dotenv_settings.env_nested_max_split,
+            env_ignore_empty=dotenv_settings.env_ignore_empty,
+            env_parse_none_str=dotenv_settings.env_parse_none_str,
+            env_parse_enums=dotenv_settings.env_parse_enums,
+            _init_state=dotenv_settings._init_state,
+        )
         return ( init_settings,
                 env_settings,
                 dotenv_settings,
+                unprefixed_dotenv_settings,
                 YamlConfigSettingsSource(settings_cls),
                 TomlConfigSettingsSource(settings_cls),
                 JsonConfigSettingsSource(settings_cls),
