@@ -6,6 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 mountainash-settings is a Python package for advanced configuration management with support for multiple file formats, authentication providers, and secret management. It provides a unified interface for loading settings from environment variables, configuration files (YAML, TOML, JSON), and various secret management systems.
 
+## Central Repository — Principles & Backlog
+
+Durable architecture principles and the implementation backlog for this project live in the
+**mountainash-central** repo, not here.
+
+- **Principles:** [`../mountainash-central/01.principles/mountainash-settings/README.md`](../mountainash-central/01.principles/mountainash-settings/README.md) — see [`PRINCIPLES.md`](../mountainash-central/01.principles/mountainash-settings/PRINCIPLES.md) for governance (statuses, category precedence).
+- **Backlog:** [`../mountainash-central/04.planning/mountainash-settings/a.backlog/INDEX.md`](../mountainash-central/04.planning/mountainash-settings/a.backlog/INDEX.md) — prioritized items; see that directory's `CHANGELOG.md` for update history.
+- **Specs & plans:** save new design specs/plans to `../mountainash-central/04.planning/mountainash-settings/superpowers/{specs,plans}/`, not under `docs/superpowers/` in this repo.
+
 ## Architecture
 
 ### Core Components
