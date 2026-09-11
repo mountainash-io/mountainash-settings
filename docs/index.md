@@ -4,7 +4,7 @@ description: 'A practitioner manual for mountainash-settings — typed configura
 ---
 
 
-[← Back to Ecosystem](../)
+[← Back to Ecosystem](https://docs.mountainash.io/)
 # Mountainash Settings
 
 Define fully-typed application settings with Pydantic, load configuration from YAML, TOML, JSON, or .env files, and retrieve a cached instance with a single call.
