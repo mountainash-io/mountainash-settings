@@ -1,0 +1,12 @@
+{
+  "FOUND": "Foundation Concepts",
+  "BASE": "Base Settings",
+  "PARAM": "Settings Parameters",
+  "TEMPL": "Field Templating",
+  "SECRT": "Secrets Resolution",
+  "PROF": "Connection Profiles",
+  "REG": "Profile Registry",
+  "AUTH": "Auth System",
+  "CACHE": "Caching",
+  "APP": "App Settings"
+}
