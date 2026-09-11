@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0",
+  "baseline": {
+    "source_commit": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+    "refresh_date": "2026-06-04T12:47:46Z",
+    "tool_versions": {
+      "python": "3.12",
+      "enrich_script": "1.0.0"
+    }
+  },
+  "chapter_state": {
+    "01-pydantic-and-configuration-foundations": {
+      "content_hash": "ab3dd95b475879c04827b5bc6905a08a4695aa6ff2611dbfc0236b0d823758d7",
+      "word_count": 2772,
+      "has_concept_markers": true
+    },
+    "02-mountainash-base-settings": {
+      "content_hash": "23293a3e0b94c304978b61403d99d01fa7cf671ed9228eab697993347b188183",
+      "word_count": 2446,
+      "has_concept_markers": true
+    },
+    "03-settings-parameters-and-merge-strategies": {
+      "content_hash": "ae5bae2e2e6f4af3a3b449d013dbb43b7ffb43af0f24a772253288e00fdefdc1",
+      "word_count": 2629,
+      "has_concept_markers": true
+    },
+    "04-file-handling-kwargs-and-field-templating": {
+      "content_hash": "fb447cb434a5289afdb4c2223daa39e5d171799a7a518a203c990df5cf01e11b",
+      "word_count": 2862,
+      "has_concept_markers": true
+    },
+    "05-secrets-resolution": {
+      "content_hash": "579818991a790cf7ed762c540dd3b487709055e0e59aebdfb842e5e133918067",
+      "word_count": 2775,
+      "has_concept_markers": true
+    },
+    "06-connection-profiles": {
+      "content_hash": "3698d8de9b982e2607b4cfd73e21d04a8347485aae6bb0cfa5f2633fb5971b13",
+      "word_count": 2479,
+      "has_concept_markers": true
+    },
+    "07-profile-registry-and-invariants": {
+      "content_hash": "876bd9d5ed0517265f7a1d6237accbb4bbe039ca856376309ab9d6280d42f34d",
+      "word_count": 2230,
+      "has_concept_markers": true
+    },
+    "08-authentication-system": {
+      "content_hash": "9dee365029df871bfafe67e6db5616d5758a4b44d61b04c0b15e86bceb0a644c",
+      "word_count": 2562,
+      "has_concept_markers": true
+    },
+    "09-caching-settings-management-and-app-settings": {
+      "content_hash": "2fda1958b35d15fba1d317e85febe92139e9faee1c2f666e08b6cf5cb4a2d5dd",
+      "word_count": 2608,
+      "has_concept_markers": true
+    }
+  },
+  "learning_graph_state": {
+    "content_hash": "141dbf42f22b90140d3df8a1c6949d46dc0465ffd30ff1e0ea4fcb900b176a8a",
+    "node_count": 110,
+    "edge_count": 156,
+    "enriched_nodes": 110,
+    "low_confidence_count": 50
+  },
+  "faq_state": null,
+  "refresh_history": []
+}
