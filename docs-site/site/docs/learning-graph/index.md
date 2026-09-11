@@ -6,7 +6,7 @@ The graph maps 110 concepts covering base settings, parameters, field templating
 
 ## Files
 
-- [Course Description](./course-description.md)
+- [Course Description](../course-description.md)
 - [Concept List](./concept-list.md)
 - [Learning Graph CSV](./learning-graph.csv)
 - [Learning Graph JSON](./learning-graph.json)
