@@ -1,0 +1,57 @@
+{
+  "id": "mountainash_settings.auth.base",
+  "path": "src/mountainash_settings/auth/base.py",
+  "summary": "AuthSpec is the abstract base for all auth mode models. It is a pydantic BaseModel with extra='forbid' and frozen=True. Each concrete subclass declares a kind: Literal['...'] discriminator field used by pydantic discriminated unions.",
+  "role": "protocol",
+  "visibility": "public",
+  "stability": "stable",
+  "audiences": ["extension-authors", "maintainers", "contributors"],
+  "doc_priority": "essential",
+  "confidence": "high",
+  "public_api": ["AuthSpec"],
+  "key_classes": ["AuthSpec"],
+  "key_functions": [],
+  "dependencies": [],
+  "dependents": [
+    "mountainash_settings.auth.password",
+    "mountainash_settings.auth.token",
+    "mountainash_settings.auth.oauth1",
+    "mountainash_settings.auth.oauth2",
+    "mountainash_settings.auth.oauth2_authcode",
+    "mountainash_settings.auth.iam",
+    "mountainash_settings.auth.azure",
+    "mountainash_settings.auth.kerberos",
+    "mountainash_settings.auth.certificate",
+    "mountainash_settings.auth.service_account",
+    "mountainash_settings.auth.none",
+    "mountainash_settings.auth.dispatch",
+    "mountainash_settings.profiles.invariants"
+  ],
+  "extension_points": [
+    "Subclass AuthSpec and declare kind: Literal['your_kind'] to add a new auth mode"
+  ],
+  "lifecycle_notes": [
+    "frozen=True — AuthSpec instances are immutable (safe to use as cache keys or in frozen dataclasses)",
+    "extra='forbid' — no extra fields accepted; protects against typos in auth config"
+  ],
+  "documentation_hooks": [
+    "All auth modes are pydantic models — they validate and parse from dict/JSON automatically"
+  ],
+  "examples": [],
+  "tests": [
+    "tests/unit/auth/test_base.py"
+  ],
+  "risks": [],
+  "open_questions": [],
+  "evidence": [
+    {"kind": "symbol", "path": "src/mountainash_settings/__init__.py", "detail": "AuthSpec in __all__"},
+    {"kind": "test", "path": "tests/unit/auth/test_base.py", "detail": "Base model tests"}
+  ],
+  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "manual": {
+    "notes": "",
+    "editorial_status": "",
+    "owner": "",
+    "manual_summary": ""
+  }
+}

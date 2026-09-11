@@ -1,0 +1,28 @@
+{
+  "id": "mountainash_settings.auth.none",
+  "path": "src/mountainash_settings/auth/none.py",
+  "summary": "NoAuth is an AuthSpec with kind='none' and no additional fields. Used for authentication-free backends (SQLite, DuckDB, PySpark). Profiles that require at least one auth_mode should include NoAuth when unauthenticated access is valid.",
+  "role": "model",
+  "visibility": "public",
+  "stability": "stable",
+  "audiences": ["users", "extension-authors"],
+  "doc_priority": "useful",
+  "confidence": "high",
+  "public_api": ["NoAuth"],
+  "key_classes": ["NoAuth"],
+  "key_functions": [],
+  "dependencies": ["mountainash_settings.auth.base"],
+  "dependents": ["mountainash_settings.auth.dispatch"],
+  "extension_points": [],
+  "lifecycle_notes": [],
+  "documentation_hooks": ["descriptor_invariants_for enforces auth_modes is non-empty — use [NoAuth] when auth is genuinely not required"],
+  "examples": [],
+  "tests": ["tests/unit/auth/test_subclasses.py"],
+  "risks": [],
+  "open_questions": [],
+  "evidence": [
+    {"kind": "symbol", "path": "src/mountainash_settings/__init__.py", "detail": "NoAuth in __all__"}
+  ],
+  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "manual": {"notes": "", "editorial_status": "", "owner": "", "manual_summary": ""}
+}
