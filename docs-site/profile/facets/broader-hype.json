@@ -1,0 +1,65 @@
+{
+  "audience": "broader-hype",
+  "summary": "Typed, testable configuration for data applications — one base class that loads any format, resolves secrets, templates fields, and auto-derives connection parameters.",
+
+  "the_vision": "Configuration in data applications should be as trustworthy as the data pipelines it powers. mountainash-settings brings all configuration into typed settings classes built on Pydantic — any format, any source, with secrets resolution, field templating, and auto-derived connection parameters. Every settings class is testable, documentable, and consistent from laptop to production.",
+
+  "what_it_makes_possible": [
+    {
+      "capability": "Any config source, one base class",
+      "essence": "YAML, TOML, JSON, .env files, and environment variables all flow into the same typed settings class. Pydantic validates everything — type coercion, required fields, constrained values. IDE autocomplete works. Tests work. The config file format is a deployment choice, not an application concern."
+    },
+    {
+      "capability": "Fields that build on each other",
+      "essence": "Template syntax lets fields reference other fields: log_file = 'logs/{APP_NAME}/{RUNDATE}.log'. Connection strings build from host, port, and database fields. Paths compose from base directories and environment-specific suffixes. The derivation is declarative and transparent."
+    },
+    {
+      "capability": "Secrets that resolve themselves",
+      "essence": "Write 'secret:path/to/value' in a config file or environment variable. Register a secrets provider — AWS SSM, HashiCorp Vault, Azure Key Vault, or your own. The secret resolves before Pydantic validation, so the settings class sees the real value and validates it normally. No special handling in application code."
+    },
+    {
+      "capability": "Connection profiles that know their databases",
+      "essence": "Define a profile descriptor once — the framework installs Pydantic fields, auth options, and template wiring automatically. Each database backend gets typed settings with auto-derived connection parameters and driver kwargs. The connection profile IS the documentation of how to connect."
+    },
+    {
+      "capability": "Auth modes that cover every backend",
+      "essence": "From password through OAuth2 to service accounts to Kerberos to 'none' — every auth mode is a Pydantic model with SecretStr-protected credentials. Pick the right one for your backend. The discriminated union validates that the auth mode matches what the backend expects."
+    },
+    {
+      "capability": "Smart caching for pipelines",
+      "essence": "get_settings() returns the same instance on every call for the same configuration — no redundant file I/O or environment reads. Runtime overrides for batch IDs or run-specific parameters get their own instance without polluting the cache."
+    }
+  ],
+
+  "use_cases": [
+    {
+      "title": "Configuration governance at scale",
+      "story": "A platform team standardises configuration across fifteen services. One settings base class, typed connection profiles for every database, secrets resolved from Vault. Configuration becomes testable, version-controlled, and consistent. Every registered profile gets free pytest invariant coverage."
+    },
+    {
+      "title": "The data pipeline that configures itself",
+      "story": "A pipeline settings class loads from a YAML file in the repo, overrides from environment variables in CI, resolves secrets from SSM in production, and templates output paths from the run date and environment name. The same class, the same code, every deployment target."
+    },
+    {
+      "title": "Multi-database connection management",
+      "story": "A data engineer defines profiles for PostgreSQL, Snowflake, and DuckDB. Each profile knows its auth requirements, its connection string format, and its driver kwargs. Switching databases means switching profiles — the settings framework derives everything else."
+    }
+  ],
+
+  "featured_modules": [
+    "mountainash_settings.settings.base_settings",
+    "mountainash_settings.settings_cache.settings_functions",
+    "mountainash_settings.profiles.descriptor",
+    "mountainash_settings.profiles.profile",
+    "mountainash_settings.auth.base",
+    "mountainash_settings.secrets.registry"
+  ],
+  "hidden_or_internal_modules": [
+    "mountainash_settings.settings_parameters.filehandler",
+    "mountainash_settings.settings_parameters.merge_framework",
+    "mountainash_settings.settings_cache.settings_manager",
+    "mountainash_settings.resolve",
+    "mountainash_settings.auth.dispatch"
+  ],
+  "open_questions": []
+}

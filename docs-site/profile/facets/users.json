@@ -1,0 +1,99 @@
+{
+  "audience": "users",
+  "summary": "Define fully-typed application settings with Pydantic, load configuration from YAML, TOML, JSON, or .env files, and retrieve a cached instance with a single call. Template strings let you derive fields from other fields automatically. Connection profiles give you ready-made typed settings for databases, storage backends, and APIs, with built-in support for the authentication mode your target expects.",
+  "use_cases": [
+    "Configure a data pipeline that reads connection details from a YAML file and resolves secrets from Vault at startup",
+    "Build a CLI application where environment variables override file-based defaults, with template-derived output paths",
+    "Set up a multi-environment project where dev, staging, and production each have their own config files merged in priority order",
+    "Define a reusable database connection profile that auto-derives connection strings from individual host, port, and database fields"
+  ],
+  "concepts": [
+    {
+      "name": "Defining a settings class",
+      "description": "Subclass MountainAshBaseSettings to declare your application's configuration as typed Python fields. Pydantic validation ensures every value meets your constraints as soon as the settings object is created. Use post_init() to compute any fields that depend on other values.",
+      "module_ids": [
+        "mountainash_settings.settings.base_settings"
+      ]
+    },
+    {
+      "name": "Loading configuration files",
+      "description": "Pass one or more file paths to config_files and the framework loads YAML, TOML, JSON, or .env files automatically based on extension. For advanced scenarios, SettingsParameters.create() lets you compose file lists, environment overrides, and kwargs into a single merged configuration.",
+      "module_ids": [
+        "mountainash_settings.settings.base_settings",
+        "mountainash_settings.settings_parameters.filehandler"
+      ]
+    },
+    {
+      "name": "Template-driven derived fields",
+      "description": "Use {FIELD_NAME} syntax in default values to build fields that derive their value from other settings. Combined with the UPath / operator, this makes cross-platform path construction straightforward and declarative.",
+      "module_ids": [
+        "mountainash_settings.settings.base_settings"
+      ]
+    },
+    {
+      "name": "Getting cached settings instances",
+      "description": "Call get_settings() to retrieve a cached, ready-to-use settings instance. Structural parameters (files, env prefix) determine the cache key, while runtime parameters (per-call overrides) are applied on top of the cached base, keeping startup fast and memory efficient.",
+      "module_ids": [
+        "mountainash_settings.settings_cache.settings_functions"
+      ]
+    },
+    {
+      "name": "Merging settings parameters",
+      "description": "SettingsParameters.create() and merge() combine multiple configuration sources with clear priority rules. File lists are unioned, scalar values follow last-wins, and dictionaries are deep-merged, giving you predictable multi-layer configuration composition.",
+      "module_ids": [
+        "mountainash_settings.settings_parameters.settings_parameters"
+      ]
+    },
+    {
+      "name": "Secrets resolution",
+      "description": "Register a secrets provider (Vault, SSM, KeyVault, or your own) and reference secrets in config files or kwargs with the secret:path/to/value prefix. The framework resolves secrets transparently during settings construction, so your application code works with plain typed values.",
+      "module_ids": [
+        "mountainash_settings.secrets.registry",
+        "mountainash_settings.resolve"
+      ]
+    },
+    {
+      "name": "Building connection profiles",
+      "description": "Declare a ProfileDescriptor listing the parameters your connection needs, then subclass DescriptorProfile to get a fully-typed settings class with those fields wired in automatically. Register profiles in a Registry so downstream code can look them up by name.",
+      "module_ids": [
+        "mountainash_settings.profiles.descriptor",
+        "mountainash_settings.profiles.profile",
+        "mountainash_settings.profiles.registry"
+      ]
+    },
+    {
+      "name": "Authentication modes",
+      "description": "Choose from built-in auth modes including password, token, OAuth2, IAM, service account, Azure AD, and more. Each mode is an AuthSpec subclass selected via a kind literal field, so your configuration is explicit about which credentials are expected and how they are supplied.",
+      "module_ids": [
+        "mountainash_settings.auth.base",
+        "mountainash_settings.auth.password",
+        "mountainash_settings.auth.token",
+        "mountainash_settings.auth.oauth2",
+        "mountainash_settings.auth.iam",
+        "mountainash_settings.auth.service_account",
+        "mountainash_settings.auth.azure",
+        "mountainash_settings.auth.none"
+      ]
+    }
+  ],
+  "featured_modules": [
+    "mountainash_settings.settings.base_settings",
+    "mountainash_settings.settings_parameters.settings_parameters",
+    "mountainash_settings.settings_cache.settings_functions",
+    "mountainash_settings.profiles.descriptor",
+    "mountainash_settings.profiles.profile",
+    "mountainash_settings.profiles.registry",
+    "mountainash_settings.secrets.registry"
+  ],
+  "hidden_or_internal_modules": [
+    "mountainash_settings.settings_parameters.filehandler",
+    "mountainash_settings.settings_parameters.kwargshandler",
+    "mountainash_settings.settings_parameters.merge_framework",
+    "mountainash_settings.settings_cache.settings_manager",
+    "mountainash_settings.resolve",
+    "mountainash_settings.settings.app.app_settings_templates",
+    "mountainash_settings.__version__",
+    "mountainash_settings.auth.dispatch"
+  ],
+  "open_questions": []
+}

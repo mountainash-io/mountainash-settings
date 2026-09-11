@@ -1,0 +1,69 @@
+{
+  "id": "mountainash_settings.profiles.profile",
+  "path": "src/mountainash_settings/profiles/profile.py",
+  "summary": "DescriptorProfile is a MountainAshBaseSettings subclass that auto-generates pydantic fields from a __descriptor__ (ProfileDescriptor) at class-creation time via __pydantic_init_subclass__. It also assembles a discriminated auth union field. Provides _default_kwargs() for 1:1 driver-key mappings and _auth_kwargs() for auth dispatch.",
+  "role": "public-api",
+  "visibility": "public",
+  "stability": "stable",
+  "audiences": ["users", "extension-authors", "maintainers", "contributors"],
+  "doc_priority": "essential",
+  "confidence": "high",
+  "public_api": [
+    "DescriptorProfile",
+    "DescriptorProfile.__descriptor__",
+    "DescriptorProfile.__adapter__",
+    "DescriptorProfile.profile_name",
+    "DescriptorProfile.backend",
+    "DescriptorProfile.provider_type",
+    "DescriptorProfile._default_kwargs",
+    "DescriptorProfile._auth_kwargs",
+    "DescriptorProfile.post_init"
+  ],
+  "key_classes": ["DescriptorProfile"],
+  "key_functions": [
+    "_default_kwargs",
+    "_auth_kwargs",
+    "post_init"
+  ],
+  "dependencies": [
+    "mountainash_settings.settings.base_settings",
+    "mountainash_settings.profiles.descriptor",
+    "mountainash_settings.auth"
+  ],
+  "dependents": [
+    "mountainash_settings.profiles.registry"
+  ],
+  "extension_points": [
+    "__adapter__ class variable — if set, takes over the full output pipeline (replaces _default_kwargs + _auth_kwargs)",
+    "_auth_kwargs() — override in domain subclasses to customise auth-to-driver mapping",
+    "post_init() — inherits template auto-wiring; extend in domain subclasses"
+  ],
+  "lifecycle_notes": [
+    "__pydantic_init_subclass__ fires at class-creation time — fields are materialised before any instance is created",
+    "Intermediate subclasses (no __descriptor__ in their own __dict__) are skipped",
+    "model_rebuild(force=True) is called after field installation — necessary for pydantic v2 to register dynamic annotations"
+  ],
+  "documentation_hooks": [
+    "Domain adapters declare __descriptor__ = MY_DESCRIPTOR and optionally __adapter__ = my_adapter_fn",
+    "auth field is a discriminated union keyed on 'kind' literal — one pydantic model per auth mode"
+  ],
+  "examples": [],
+  "tests": [
+    "tests/unit/profiles/test_profile.py"
+  ],
+  "risks": [
+    "Dynamic field installation via model_fields mutation and model_rebuild() is not officially documented in pydantic v2 — may need adjustment on pydantic upgrades"
+  ],
+  "open_questions": [],
+  "evidence": [
+    {"kind": "symbol", "path": "src/mountainash_settings/__init__.py", "detail": "DescriptorProfile in __all__"},
+    {"kind": "test", "path": "tests/unit/profiles/test_profile.py", "detail": "Profile instantiation and field tests"}
+  ],
+  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "manual": {
+    "notes": "",
+    "editorial_status": "",
+    "owner": "",
+    "manual_summary": ""
+  }
+}

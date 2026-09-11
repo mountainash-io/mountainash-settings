@@ -1,0 +1,73 @@
+{
+  "audience": "extension-authors",
+  "summary": "Build domain-specific connection profiles for databases, storage backends, and APIs on top of the profiles framework. Define a ProfileDescriptor with typed parameters, register it via a Registry, and get a fully validated settings class with authentication, secret handling, and template derivation built in. You can also extend the auth system with custom authentication modes for any backend.",
+  "use_cases": [
+    "Create a PostgreSQL connection profile that exposes host, port, database, and schema as typed fields with auto-derived connection strings",
+    "Add a custom OAuth2 + refresh-token auth mode for a proprietary API and wire it into an existing profile descriptor",
+    "Build a cloud storage profile with tiered parameters where advanced options only appear when explicitly configured",
+    "Publish a profile registry as a standalone package that downstream teams install and use with their own config files"
+  ],
+  "concepts": [
+    {
+      "name": "Defining a profile descriptor",
+      "description": "A ProfileDescriptor declares the connection's identity (name, provider_type), its typed parameters via ParameterSpec entries, and which auth modes it supports. Each ParameterSpec defines a name (UPPERCASE by convention), Python type, tier, default value, driver_key mapping, and optional secret/transform/validator/template behaviour. Use the MISSING sentinel for required fields.",
+      "module_ids": [
+        "mountainash_settings.profiles.descriptor"
+      ]
+    },
+    {
+      "name": "Registering and using a profile class",
+      "description": "Create a Registry for your domain, then use @REGISTRY.decorator() on a DescriptorProfile subclass that declares __descriptor__. The framework automatically installs typed Pydantic fields from your descriptor at class creation time. Implement __adapter__ to provide a custom output pipeline that transforms profile values into driver-ready kwargs.",
+      "module_ids": [
+        "mountainash_settings.profiles.profile",
+        "mountainash_settings.profiles.registry"
+      ]
+    },
+    {
+      "name": "Auth mode extension",
+      "description": "Create new auth modes by subclassing AuthSpec with a unique kind literal. Register it in AUTH_TO_DRIVER_KWARGS for default dispatch, or override _auth_kwargs() in your DescriptorProfile subclass for full control over how credentials are mapped to driver parameters.",
+      "module_ids": [
+        "mountainash_settings.auth.base",
+        "mountainash_settings.auth.dispatch"
+      ]
+    },
+    {
+      "name": "Invariant test coverage",
+      "description": "Call descriptor_invariants_for(MY_REGISTRY) and assign the result to a test class to get automatic coverage of descriptor conventions: lowercase names, UPPERCASE parameter names, unique driver_keys, valid auth_modes, and non-null provider_type. This gives you confidence that your descriptors are well-formed as your profile evolves.",
+      "module_ids": [
+        "mountainash_settings.profiles.invariants"
+      ]
+    },
+    {
+      "name": "Secret fields in profiles",
+      "description": "Set secret=True on a ParameterSpec and the framework wraps the field as SecretStr automatically. When building driver kwargs, _default_kwargs() unwraps secrets via .get_secret_value(), so downstream driver code receives plain strings while the settings object keeps credentials masked in logs and repr output.",
+      "module_ids": [
+        "mountainash_settings.profiles.descriptor",
+        "mountainash_settings.profiles.profile"
+      ]
+    },
+    {
+      "name": "Template-derived fields in profiles",
+      "description": "Set a template string on a ParameterSpec (e.g., '{OTHER_FIELD}/suffix') and post_init() computes the value automatically when the field still holds its declared default. Explicit user-provided values always take priority, so templates serve as smart defaults that adapt to the rest of the configuration.",
+      "module_ids": [
+        "mountainash_settings.profiles.descriptor",
+        "mountainash_settings.profiles.profile"
+      ]
+    }
+  ],
+  "featured_modules": [
+    "mountainash_settings.profiles.descriptor",
+    "mountainash_settings.profiles.profile",
+    "mountainash_settings.profiles.registry",
+    "mountainash_settings.profiles.invariants",
+    "mountainash_settings.auth.base",
+    "mountainash_settings.auth.dispatch"
+  ],
+  "hidden_or_internal_modules": [
+    "mountainash_settings.settings_cache.settings_manager",
+    "mountainash_settings.settings_parameters.filehandler",
+    "mountainash_settings.settings_parameters.kwargshandler",
+    "mountainash_settings.resolve"
+  ],
+  "open_questions": []
+}

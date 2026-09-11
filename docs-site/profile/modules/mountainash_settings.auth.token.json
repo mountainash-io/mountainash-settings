@@ -1,0 +1,28 @@
+{
+  "id": "mountainash_settings.auth.token",
+  "path": "src/mountainash_settings/auth/token.py",
+  "summary": "Defines two opaque-token auth modes: TokenAuth (kind='token', generic bearer token, e.g. MotherDuck, PyIceberg REST) and JWTAuth (kind='jwt', JSON Web Token, e.g. Trino). Both hold a single SecretStr token field.",
+  "role": "model",
+  "visibility": "public",
+  "stability": "stable",
+  "audiences": ["users", "extension-authors"],
+  "doc_priority": "useful",
+  "confidence": "high",
+  "public_api": ["TokenAuth", "JWTAuth"],
+  "key_classes": ["TokenAuth", "JWTAuth"],
+  "key_functions": [],
+  "dependencies": ["mountainash_settings.auth.base"],
+  "dependents": ["mountainash_settings.auth.dispatch"],
+  "extension_points": [],
+  "lifecycle_notes": [],
+  "documentation_hooks": [],
+  "examples": [],
+  "tests": ["tests/unit/auth/test_subclasses.py"],
+  "risks": [],
+  "open_questions": [],
+  "evidence": [
+    {"kind": "symbol", "path": "src/mountainash_settings/__init__.py", "detail": "TokenAuth and JWTAuth in __all__"}
+  ],
+  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "manual": {"notes": "", "editorial_status": "", "owner": "", "manual_summary": ""}
+}

@@ -1,0 +1,111 @@
+ConceptID,ConceptLabel,Dependencies,TaxonomyID
+1,Pydantic BaseModel,,FOUND
+2,Pydantic BaseSettings,1,FOUND
+3,Field Validators,1,FOUND
+4,Model Config,1,FOUND
+5,YAML File Format,,FOUND
+6,TOML File Format,,FOUND
+7,JSON File Format,,FOUND
+8,Env File Format,,FOUND
+9,Environment Variables,,FOUND
+10,Python Decorators,,FOUND
+11,Discriminated Unions,1,FOUND
+12,SecretStr Type,1,FOUND
+13,MountainAshBaseSettings Class,2|4|9,BASE
+14,Settings Model Config,13|4,BASE
+15,Post Init Lifecycle,13,BASE
+16,Source Customization,13|2,BASE
+17,Validate Assignment Invariant,13|3,BASE
+18,Object Setattr Bypass,17,BASE
+19,Settings Source Priority,16,BASE
+20,Env Prefix Override,13|9,BASE
+21,Config Files Parameter,13,BASE
+22,Multi Format File Loading,21|32,BASE
+23,SettingsParameters Class,1,PARAM
+24,Structural Fields,23,PARAM
+25,Runtime Fields,23,PARAM
+26,Custom Hash And Eq,23|24,PARAM
+27,Parameter Create Factory,23,PARAM
+28,Merge Framework,23,PARAM
+29,File List Union Strategy,28,PARAM
+30,Scalar Last Wins Strategy,28,PARAM
+31,Dict Deep Merge Strategy,28,PARAM
+32,FileHandler Class,23|5|6|7|8,PARAM
+33,File Extension Dispatch,32,PARAM
+34,File Categorization,32|33,PARAM
+35,KwargsHandler Class,23,PARAM
+36,Kwargs Normalization,35,PARAM
+37,Template Syntax,13,TEMPL
+38,Field Name Placeholder,37,TEMPL
+39,Template Resolution,37|38,TEMPL
+40,Post Init Template Expansion,39|15,TEMPL
+41,UPath Path Derivation,39,TEMPL
+42,Template Priority Rules,39|25,TEMPL
+43,Nested Template Resolution,39,TEMPL
+44,Secrets Registry,10,SECRT
+45,Secret Provider Protocol,44,SECRT
+46,Two Pass Resolution,44|13,SECRT
+47,Kwargs Pass Resolution,46|49,SECRT
+48,Model Tree Pass Resolution,46|50,SECRT
+49,Resolve References In Dict,44,SECRT
+50,Resolve References In Model Tree,44|1,SECRT
+51,Secret Prefix Syntax,44,SECRT
+52,Vault Provider,45,SECRT
+53,SSM Provider,45,SECRT
+54,Key Vault Provider,45,SECRT
+55,Frozen Model Rebuild On Resolve,48|12,SECRT
+56,ProfileDescriptor Class,1,PROF
+57,Descriptor Identity,56,PROF
+58,Provider Type Field,56,PROF
+59,ParameterSpec Class,56,PROF
+60,Parameter Name Convention,59,PROF
+61,Parameter Python Type,59,PROF
+62,Parameter Tier,59,PROF
+63,Parameter Default Value,59,PROF
+64,MISSING Sentinel,59|63,PROF
+65,Driver Key Mapping,59,PROF
+66,Secret Parameter Flag,59|12,PROF
+67,Transform Function,59,PROF
+68,Validator Function,59|3,PROF
+69,DescriptorProfile Class,56|13,PROF
+70,Dynamic Field Installation,69|59,PROF
+71,Registry Class,10,REG
+72,Name Keyed Store,71,REG
+73,Decorator Registration,71|10,REG
+74,Registry Decorator Factory,73,REG
+75,Duplicate Prevention,71|72,REG
+76,Registry Iteration,71,REG
+77,Registry Lookup By Name,71|72,REG
+78,Descriptor Invariants,56|71,REG
+79,Invariant Test Generator,78,REG
+80,AuthSpec Base Class,1|11,AUTH
+81,Auth Kind Literal,80,AUTH
+82,Auth Discriminated Union,80|11,AUTH
+83,Auth Dispatch Function,82|84,AUTH
+84,Auth To Driver Kwargs Map,80,AUTH
+85,Default Auth Kwargs,84,AUTH
+86,NoneAuth Mode,80,AUTH
+87,PasswordAuth Mode,80|12,AUTH
+88,TokenAuth Mode,80|12,AUTH
+89,OAuth2 Client Credentials Mode,80|12,AUTH
+90,OAuth1 Mode,80|12,AUTH
+91,OAuth2 Auth Code Mode,80|12,AUTH
+92,IAM Auth Mode,80,AUTH
+93,Azure AD Auth Mode,80|12,AUTH
+94,Kerberos Auth Mode,80,AUTH
+95,Certificate Auth Mode,80|12,AUTH
+96,Service Account Auth Mode,80|12,AUTH
+97,Auth Mode Selection In Profile,82|56|70,AUTH
+98,Custom Auth Mode Extension,80|81|84,AUTH
+99,LRU Cache Decorator,,CACHE
+100,Get Settings Function,13|99|23,CACHE
+101,Internal Get Settings,100|26,CACHE
+102,Structural Cache Key,101|24|26,CACHE
+103,Runtime Override Application,100|25,CACHE
+104,Model Copy For Overrides,103,CACHE
+105,SettingsManager Class,100,CACHE
+106,Named Settings Lookup,105|72,CACHE
+107,AppSettings Class,13,APP
+108,App Settings Defaults,107,APP
+109,App Settings Templates,107|37,APP
+110,App Settings Integration,107|100,APP

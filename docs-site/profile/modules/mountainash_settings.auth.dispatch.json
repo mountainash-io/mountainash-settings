@@ -1,0 +1,52 @@
+{
+  "id": "mountainash_settings.auth.dispatch",
+  "path": "src/mountainash_settings/auth/dispatch.py",
+  "summary": "AUTH_TO_DRIVER_KWARGS is a dict mapping AuthSpec subclasses to default driver-kwargs converters. auth_to_driver_kwargs() dispatches on type(auth) and calls the registered mapper. Covers NoAuth, PasswordAuth, TokenAuth, JWTAuth, OAuth2Auth, and IAMAuth by default. AzureADAuth, KerberosAuth, ServiceAccountAuth, CertificateAuth, and OAuth1Auth have no defaults — their backend adapters handle them.",
+  "role": "orchestration",
+  "visibility": "public",
+  "stability": "stable",
+  "audiences": ["extension-authors", "maintainers", "contributors"],
+  "doc_priority": "useful",
+  "confidence": "high",
+  "public_api": [
+    "AUTH_TO_DRIVER_KWARGS",
+    "auth_to_driver_kwargs"
+  ],
+  "key_classes": [],
+  "key_functions": ["auth_to_driver_kwargs"],
+  "dependencies": [
+    "mountainash_settings.auth.base",
+    "mountainash_settings.auth.iam",
+    "mountainash_settings.auth.none",
+    "mountainash_settings.auth.oauth2",
+    "mountainash_settings.auth.password",
+    "mountainash_settings.auth.token"
+  ],
+  "dependents": [
+    "mountainash_settings.profiles.profile"
+  ],
+  "extension_points": [
+    "AUTH_TO_DRIVER_KWARGS — extend dict with additional AuthSpec subclasses to add custom dispatch"
+  ],
+  "lifecycle_notes": [
+    "auth_to_driver_kwargs raises KeyError for unregistered types — backend adapters must handle those types themselves"
+  ],
+  "documentation_hooks": [],
+  "examples": [],
+  "tests": [
+    "tests/unit/auth/test_dispatch.py"
+  ],
+  "risks": [],
+  "open_questions": [],
+  "evidence": [
+    {"kind": "symbol", "path": "src/mountainash_settings/__init__.py", "detail": "AUTH_TO_DRIVER_KWARGS and auth_to_driver_kwargs in __all__"},
+    {"kind": "test", "path": "tests/unit/auth/test_dispatch.py", "detail": "Dispatch tests"}
+  ],
+  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "manual": {
+    "notes": "",
+    "editorial_status": "",
+    "owner": "",
+    "manual_summary": ""
+  }
+}

@@ -1,0 +1,247 @@
+# Frequently Asked Questions for Mountainash Settings
+
+## Foundation and Base Settings
+
+### What is mountainash-settings and what problem does it solve?
+
+Mountainash-settings is a typed configuration framework for Python applications built on Pydantic v2. It solves the problem of managing application configuration across multiple sources (YAML, TOML, JSON, .env files, and environment variables) while providing type safety, validation, secrets resolution, and intelligent caching. Rather than scattering configuration loading logic throughout an application, mountainash-settings centralises it in a single validated model with support for derived values via field templating, transparent secrets resolution from providers like HashiCorp Vault, AWS SSM, and Azure Key Vault, and reusable connection profiles for database and service backends. The framework eliminates common configuration bugs such as missing keys, type mismatches, and stale cached values by leveraging Pydantic's validation engine and providing structural hashing for cache correctness.
+
+### How does MountainAshBaseSettings relate to Pydantic BaseSettings?
+
+MountainAshBaseSettings is a subclass of Pydantic's BaseSettings that extends it with several framework-specific capabilities. It inherits all of Pydantic's environment variable loading, type coercion, and validation features, then adds the post_init lifecycle for template expansion and secrets resolution, source customization for multi-format file loading, the validate_assignment invariant that prevents silent mutation of validated fields, and integration with the SettingsParameters system for controlling file lists, merge strategies, and runtime overrides. Developers subclass MountainAshBaseSettings rather than BaseSettings directly to gain these features. The class also configures its own Settings Model Config that controls behaviours such as env prefix overrides, config file parameters, and source priority ordering.
+
+### What configuration file formats does mountainash-settings support?
+
+The framework supports four configuration file formats: YAML, TOML, JSON, and .env files. Multi-format file loading is handled by the FileHandler class, which uses file extension dispatch to route each file to the appropriate parser. You can mix formats freely in a single application. For example, you might use a YAML file for structured application settings, a TOML file for project metadata, a JSON file for machine-generated configuration, and a .env file for local development overrides. The Config Files Parameter on MountainAshBaseSettings accepts a list of file paths, and the FileHandler categorises and parses each one according to its extension. Files are processed in order, with merge strategies controlling how values from later files combine with earlier ones.
+
+### What is the Settings Model Config and how do I customise it?
+
+Settings Model Config is the Pydantic model_config dictionary that controls how MountainAshBaseSettings behaves. It inherits from Pydantic's standard Model Config but adds framework-specific options. Key settings include the env prefix override (which prepends a string to all environment variable names the model reads), the config files parameter (which specifies which files to load), and the validate_assignment invariant (which ensures that any field assignment after construction is still validated). You customise it by setting the model_config class variable in your MountainAshBaseSettings subclass. The Settings Model Config also controls source customization, which determines the priority ordering of configuration sources: environment variables, file sources, keyword arguments, and defaults.
+
+### What is the post_init lifecycle and when does it run?
+
+The post_init lifecycle is a hook that runs after Pydantic has constructed and validated the settings model but before the instance is returned to the caller. It is the stage where field template expansion and secrets resolution occur. During post_init, the framework first resolves any {FIELD_NAME} templates by substituting references with the actual values of other fields on the model. Then it runs the two-pass secrets resolution pipeline to replace secret references with their actual values from configured providers. The post_init lifecycle ensures that derived values and secrets are fully resolved before any application code accesses the settings instance. This ordering is critical because templates may reference fields that contain secrets, and secrets resolution must happen on the fully-templated values.
+
+### What is the validate_assignment invariant and why does it matter?
+
+The validate_assignment invariant ensures that any field assignment on a settings instance after initial construction is still subject to Pydantic's full validation pipeline. Without this, you could accidentally assign an invalid value to a typed field and bypass all the type checking and validation that Pydantic provides at construction time. Mountainash-settings enables this by default through the Settings Model Config. The related Object Setattr Bypass mechanism provides a controlled escape hatch for internal framework code that needs to set fields without triggering validation, such as during template resolution or secrets replacement in the post_init lifecycle, where the framework itself is populating values that will be valid but must be set in a specific order.
+
+### How does source customization and source priority work?
+
+Source customization allows you to control which configuration sources are consulted and in what order. The Settings Source Priority defines the precedence hierarchy for resolving field values. By default, the priority order is: keyword arguments passed to the constructor (highest priority), environment variables, configuration files, and field defaults (lowest priority). This means an environment variable will override a value from a YAML file, and an explicit keyword argument will override everything. You can customise this ordering by overriding the settings_customise_sources class method on your MountainAshBaseSettings subclass, allowing you to reorder sources or add custom sources. The Env Prefix Override feature lets you namespace environment variables so that multiple settings classes in the same process do not collide.
+
+### What is multi-format file loading and how does file extension dispatch work?
+
+Multi-format file loading is the capability to load configuration from YAML, TOML, JSON, and .env files within a single settings class. When you specify a list of config files via the Config Files Parameter, the FileHandler class processes each file by examining its extension. File extension dispatch routes .yaml and .yml files to the YAML parser, .toml files to the TOML parser, .json files to the JSON parser, and .env files to the dotenv parser. File categorization groups the parsed results so that the merge framework can combine values from multiple files according to the configured merge strategies. This design means you never need to specify which parser to use; the framework infers it from the filename.
+
+## Settings Parameters and Merge Strategies
+
+### What is the SettingsParameters class and what does it do?
+
+SettingsParameters is a companion class that controls how a settings instance is constructed, cached, and merged. It holds two categories of fields: structural fields and runtime fields. Structural fields (such as file lists and environment prefixes) affect the identity of the settings configuration and participate in the custom hash and equality implementation. Runtime fields (such as override values) do not affect identity and are applied after cache lookup. The SettingsParameters class provides the Parameter Create Factory for constructing instances, and it integrates with the merge framework to combine parameters from multiple sources. It also provides the KwargsHandler for normalising keyword arguments before they are passed to the settings constructor.
+
+### What is the difference between structural fields and runtime fields?
+
+Structural fields define the identity of a settings configuration. They include things like the list of config files, the environment prefix, and the secrets provider configuration. Two SettingsParameters instances with the same structural fields are considered equivalent, even if their runtime fields differ. This distinction is critical for the LRU caching system: the structural cache key is computed from structural fields only, so that runtime overrides do not defeat the cache. Runtime fields include values like individual field overrides that should be applied after retrieving a cached base instance. The Custom Hash And Eq implementation on SettingsParameters uses only structural fields, making the cache key stable across calls that differ only in runtime overrides.
+
+### How do merge strategies work for combining configuration from multiple sources?
+
+The merge framework provides three strategies for combining values when the same key appears in multiple configuration files. The File List Union Strategy merges lists by taking the union of all elements, so file lists from different sources are combined without duplicates. The Scalar Last Wins Strategy simply takes the value from the highest-priority source, meaning later files or environment variables override earlier ones for simple scalar values. The Dict Deep Merge Strategy recursively merges dictionaries, so nested configuration structures are combined key by key rather than one completely replacing the other. The merge framework applies the appropriate strategy based on the type of each field, and you can influence which strategy is used through the SettingsParameters configuration.
+
+### What is the FileHandler class?
+
+The FileHandler class is responsible for loading and parsing configuration files. It takes a list of file paths, determines each file's format through file extension dispatch, parses the content using the appropriate parser, and returns the combined configuration data. The FileHandler also performs file categorization, grouping files by their format for batch processing. It integrates with the merge framework to combine values from multiple files according to the configured merge strategies. The FileHandler is used internally by MountainAshBaseSettings during construction and is not typically called directly by application code, though understanding its behaviour is important when debugging configuration loading issues or when you need to understand the order in which files are processed and merged.
+
+### What does the KwargsHandler do?
+
+The KwargsHandler class normalises keyword arguments before they are passed to the settings constructor. Kwargs normalization handles tasks such as converting string values to appropriate types, expanding shorthand parameter names, and validating that provided keyword arguments correspond to actual fields on the settings model. The KwargsHandler ensures consistency between programmatic configuration (passing values as constructor arguments) and file-based configuration (loading values from YAML/TOML/JSON files). It works alongside the FileHandler to prepare the combined input that Pydantic will validate during model construction. This normalisation step prevents subtle bugs where the same logical value might be represented differently depending on whether it came from a keyword argument or a file.
+
+## Field Templating
+
+### What is the {FIELD_NAME} template syntax and how does it work?
+
+The {FIELD_NAME} template syntax allows you to define field values that are derived from other fields on the same settings model. When you set a field's value to a string containing {ANOTHER_FIELD}, the template resolution system replaces the placeholder with the actual value of that referenced field. For example, if you have a base_url field set to "https://api.example.com" and an endpoint field set to "{base_url}/v1/data", the endpoint field will resolve to "https://api.example.com/v1/data". Template resolution happens during the post_init lifecycle, after Pydantic has validated all fields but before the instance is returned. This means all source values (files, environment variables, kwargs) have already been merged and validated before templates are expanded.
+
+### What are template priority rules?
+
+Template priority rules govern what happens when a templated field also has a value provided by a higher-priority source. If a field has a template default like "{base_url}/api" but an environment variable provides an explicit value like "https://override.example.com/api", the explicit value wins and the template is not expanded. This follows the same source priority hierarchy as non-templated fields: keyword arguments override environment variables, which override file values, which override defaults. The template priority rules ensure that templates act as intelligent defaults that can always be overridden by explicit configuration. Runtime fields from SettingsParameters also interact with template priority, allowing runtime overrides to bypass template expansion.
+
+### How does nested template resolution work?
+
+Nested template resolution handles cases where a template references a field whose value is itself a template. The resolution system processes templates iteratively until all references are resolved. For example, if field_a has value "base", field_b has value "{field_a}_path", and field_c has value "{field_b}/data", the system first resolves field_b to "base_path", then resolves field_c to "base_path/data". The framework detects circular references (where field_a references field_b which references field_a) and raises an error rather than entering an infinite loop. Nested templates are useful for building hierarchical path structures or constructing complex connection strings from modular components.
+
+### What is UPath path derivation?
+
+UPath path derivation is a feature that works alongside template resolution to handle file system paths. When a field is typed as a UPath (Universal Path), the template resolution system not only substitutes {FIELD_NAME} placeholders but also constructs the result as a proper path object rather than a plain string. This means path separators are handled correctly for the current platform, and the resulting path can be used directly with file system operations. UPath supports both local and remote paths (such as S3 or GCS URIs), making it useful for configuration that references data stored in cloud storage. Path derivation through templates allows you to define a base directory once and derive all related paths from it.
+
+## Secrets Resolution
+
+### What is the two-pass secrets resolution pipeline?
+
+The two-pass secrets resolution pipeline ensures that all secret references in the settings model are resolved, regardless of where they appear. In the first pass (kwargs pass resolution), the framework scans the keyword arguments dictionary for secret references before the Pydantic model is constructed. This catches secrets in top-level fields and allows them to be resolved before validation. In the second pass (model tree pass resolution), the framework walks the fully-constructed Pydantic model tree and resolves any remaining secret references in nested models, lists, and dictionaries. The two-pass design is necessary because some secret references may only become visible after template expansion or after Pydantic has constructed nested sub-models. Both passes use the secrets registry to look up the appropriate provider for each reference.
+
+### How does the secrets registry work?
+
+The secrets registry is a central store that maps secret prefix patterns to secret provider implementations. When the framework encounters a secret reference like "vault://secret/myapp/db_password", it extracts the prefix "vault://" and looks up the corresponding provider in the registry. Each provider implements the Secret Provider Protocol, which defines a method for resolving a reference string to its actual secret value. The registry supports multiple providers simultaneously, so you can mix Vault, SSM, and Key Vault references in a single settings model. Providers are registered at application startup, typically before any settings instances are constructed. The registry pattern makes the secrets system extensible: you can implement and register custom providers for proprietary secret stores.
+
+### What is the secret prefix syntax?
+
+The secret prefix syntax is the convention for marking a field value as a secret reference that needs resolution. A secret reference is a string that begins with a registered prefix, such as "vault://", "ssm://", or "keyvault://". Everything after the prefix is the path or key that the corresponding provider uses to fetch the actual secret value. For example, "ssm:///myapp/production/db_password" tells the framework to use the SSM provider and fetch the parameter at the path "/myapp/production/db_password". The prefix must match exactly with a registered provider in the secrets registry. If no provider is registered for a given prefix, the framework raises an error during resolution.
+
+### What are the built-in secrets providers (Vault, SSM, Key Vault)?
+
+The framework ships with three built-in secrets providers. The Vault Provider integrates with HashiCorp Vault and resolves references like "vault://secret/data/myapp/password" by authenticating to a Vault server and reading the specified secret path. The SSM Provider integrates with AWS Systems Manager Parameter Store and resolves references like "ssm:///myapp/db_password" by calling the AWS API. The Key Vault Provider integrates with Azure Key Vault and resolves references like "keyvault://myvault/secret-name" by authenticating to Azure and retrieving the named secret. Each provider handles its own authentication and connection management. All three providers implement the Secret Provider Protocol, making them interchangeable from the framework's perspective.
+
+### How do I build a custom secrets provider?
+
+To build a custom secrets provider, you implement the Secret Provider Protocol. This requires defining a class with a resolve method that takes a secret reference string (with the prefix already stripped) and returns the resolved secret value as a string. You then register an instance of your provider with the secrets registry, associating it with a prefix string. For example, you might create a provider for an internal secrets API with prefix "internal://" and register it before constructing any settings. The framework will then automatically route any "internal://..." references to your provider during the two-pass resolution pipeline. Your provider can use any authentication mechanism or transport it needs; the framework only cares that it implements the protocol interface.
+
+### What is the frozen model rebuild on resolve?
+
+Frozen model rebuild on resolve addresses a challenge with Pydantic's immutability model. When a settings model contains SecretStr fields within frozen (immutable) sub-models, the secrets resolution pipeline cannot simply assign new values to those fields. Instead, the framework rebuilds the frozen sub-model with the resolved secret values, effectively creating a new instance with the secrets populated. This ensures that Pydantic's immutability guarantees are maintained while still allowing transparent secrets resolution. The rebuild happens during the model tree pass resolution, the second pass of the two-pass pipeline, because that is when the framework walks nested models. This mechanism is only needed for frozen models; mutable models can have their fields updated directly.
+
+### What do resolve_references_in_dict and resolve_references_in_model_tree do?
+
+These are the two core functions that implement the two-pass secrets resolution pipeline. The resolve_references_in_dict function operates on plain Python dictionaries (the kwargs pass). It recursively walks a dictionary, identifies any string values that match a registered secret prefix, resolves them through the appropriate provider, and returns the dictionary with secrets replaced by their actual values. The resolve_references_in_model_tree function operates on constructed Pydantic models (the model tree pass). It recursively walks the model's fields, including nested models, lists, and dictionaries within the model, and resolves any remaining secret references. This function handles the frozen model rebuild when it encounters immutable sub-models containing secret references.
+
+## Connection Profiles
+
+### What is a ProfileDescriptor and what does it define?
+
+A ProfileDescriptor is a declarative specification for a connection profile. It defines the identity of a connection type (via descriptor identity and provider type field), the parameters that the connection requires (as a list of ParameterSpec instances), and the authentication modes it supports (from the auth system). Think of a ProfileDescriptor as a schema for a connection: it says "a connection to this type of backend requires these parameters with these types and these defaults." The ProfileDescriptor does not hold actual configuration values; instead, it describes what values are needed. At class creation time, the framework uses the descriptor to dynamically install Pydantic fields on the corresponding DescriptorProfile class, creating a typed settings model specific to that connection type.
+
+### What is a ParameterSpec and what are its fields?
+
+A ParameterSpec defines a single parameter within a ProfileDescriptor. Its fields include: the parameter name convention (the name used in configuration files), the parameter Python type (the expected type after validation), the parameter tier (classifying the parameter as structural or runtime), the parameter default value (optional, may use the MISSING sentinel), the driver key mapping (the name the parameter should have when passed to the actual driver/client), the secret parameter flag (whether the value should be treated as a secret and wrapped in SecretStr), the transform function (an optional callable that transforms the value before it is passed to the driver), and the validator function (an optional callable for custom validation beyond Pydantic's type checking). ParameterSpec is the building block that makes ProfileDescriptors composable and reusable.
+
+### What is the MISSING sentinel and why is it needed?
+
+The MISSING sentinel is a special marker value that distinguishes "no default was provided" from "the default is None." In Python, None is a valid default value for optional parameters, so using None to mean "required" would be ambiguous. The MISSING sentinel resolves this by providing an unambiguous marker. When a ParameterSpec has its default value set to MISSING, the framework knows that the parameter is required and must be provided by the user through configuration files, environment variables, or kwargs. If the parameter is not provided, validation fails with a clear error message. MISSING integrates with the dynamic field installation system: fields with MISSING defaults become required Pydantic fields, while fields with actual defaults (including None) become optional.
+
+### How does dynamic field installation work?
+
+Dynamic field installation is the process by which a ProfileDescriptor's ParameterSpec list is converted into actual Pydantic fields on a DescriptorProfile class at class creation time. When a DescriptorProfile subclass is defined, the framework reads the associated ProfileDescriptor, iterates over its ParameterSpec entries, and programmatically adds a Pydantic field for each one. The field's type comes from the parameter Python type, its default comes from the parameter default value (or the field is marked required if the default is MISSING), and SecretStr wrapping is applied if the secret parameter flag is set. This metaprogramming approach means you do not write Pydantic field definitions manually for connection profiles; instead, you declare the parameters once in the descriptor and the framework generates the typed model.
+
+### What is a DescriptorProfile?
+
+A DescriptorProfile is a concrete settings class generated from a ProfileDescriptor. It is a subclass of MountainAshBaseSettings that has its fields dynamically installed from the descriptor's ParameterSpec list. A DescriptorProfile inherits all the capabilities of MountainAshBaseSettings (multi-format file loading, template expansion, secrets resolution, caching) and adds profile-specific features like auth mode selection and driver key mapping dispatch. When you instantiate a DescriptorProfile, you provide the connection parameters through the usual configuration sources, and the profile validates them, resolves any secrets, and can produce a dictionary of driver kwargs for passing directly to a database driver or API client constructor.
+
+### What are driver key mapping and transform functions?
+
+Driver key mapping translates parameter names from the configuration domain to the driver domain. For example, your configuration might use the name "database_host" (following the parameter name convention), but the actual database driver expects the keyword argument "host". The driver key mapping on the ParameterSpec tells the framework to output "host" when generating driver kwargs. The transform function is an optional callable that transforms a parameter value before it is included in the driver kwargs. For example, a transform function might convert a comma-separated string into a list, or convert a human-readable duration like "30s" into an integer of milliseconds. Together, these features bridge the gap between user-friendly configuration and driver-specific API expectations.
+
+### What is the secret parameter flag?
+
+The secret parameter flag is a boolean attribute on ParameterSpec that marks a parameter as containing sensitive data. When this flag is set, the dynamic field installation system wraps the parameter's type in Pydantic's SecretStr, ensuring that the value is masked in string representations, logging output, and serialisation. The flag also signals to the secrets resolution pipeline that this parameter's value may contain a secret prefix reference that needs resolution. This means you can set a configuration value like "vault://secret/myapp/db_password" and the framework will both resolve it to the actual password and ensure it is stored as a SecretStr in the model. The secret parameter flag provides defence in depth against accidental secret exposure.
+
+## Auth System
+
+### What is the AuthSpec base class?
+
+AuthSpec is the Pydantic BaseModel subclass that serves as the foundation for all authentication modes in the framework. It defines the auth kind literal field, which is a string literal that identifies the specific authentication mode (e.g., "none", "password", "token", "oauth2_client_credentials"). The kind literal is used as the discriminator for Pydantic's discriminated union, enabling the framework to deserialise a configuration dictionary into the correct AuthSpec subclass based on the "kind" field. AuthSpec also defines the interface for auth to driver kwargs map, which produces the dictionary of keyword arguments that a connection driver needs for authentication. All concrete auth modes inherit from AuthSpec and implement their own kind literal and kwargs mapping.
+
+### How does the auth discriminated union work?
+
+The auth discriminated union is a Pydantic construct that allows a single field to accept any of the 10+ authentication mode types, automatically deserialising to the correct one based on the "kind" discriminator field. When a ProfileDescriptor declares its supported auth modes, the framework assembles a discriminated union type from only those AuthSpec subclasses. This means Pydantic can parse a configuration dictionary like {"kind": "password", "username": "admin", "password": "vault://secret/pw"} and automatically construct a PasswordAuth instance. The discriminated union provides type safety (each mode's fields are validated independently), clear error messages (Pydantic reports which mode was attempted and why validation failed), and extensibility (new modes are added by creating a new AuthSpec subclass with a unique kind literal).
+
+### What are the built-in authentication modes?
+
+The framework provides 10+ built-in authentication modes: NoneAuth (no authentication required), PasswordAuth (username/password credentials), TokenAuth (bearer or API token), OAuth2 Client Credentials (client ID/secret for machine-to-machine auth), OAuth1 (legacy OAuth 1.0a with consumer key/secret and token), OAuth2 Auth Code (authorization code flow for user-delegated access), IAM Auth (AWS IAM role-based authentication), Azure AD Auth (Azure Active Directory tokens), Kerberos Auth (Kerberos ticket-based authentication), Certificate Auth (mutual TLS with client certificates), and Service Account Auth (service account key files, typically for Google Cloud). Each mode defines its own set of required and optional fields, and each implements the auth to driver kwargs map method to produce the specific keyword arguments the target driver expects.
+
+### How does auth dispatch work?
+
+The auth dispatch function takes a resolved AuthSpec instance and produces the final dictionary of driver keyword arguments for authentication. It first calls the auth to driver kwargs map method on the specific auth mode instance, which returns a dictionary of mode-specific keyword arguments. It then merges these with the default auth kwargs, which provide fallback values common across modes. The dispatch function is typically called by the DescriptorProfile when generating the complete set of driver kwargs. This design separates the concerns of validation (handled by Pydantic through the discriminated union), resolution (handled by the secrets pipeline for any secret values within auth fields), and dispatch (handled by the auth dispatch function to produce driver-ready kwargs).
+
+### How do I select an auth mode in a profile?
+
+Auth mode selection in a profile is configured through the ProfileDescriptor's auth_modes list and the DescriptorProfile's configuration. The ProfileDescriptor declares which auth modes are valid for this connection type by listing the supported AuthSpec subclasses. The framework assembles a discriminated union from only those modes. In your configuration file, you specify the auth mode by including a dictionary with a "kind" field matching one of the supported modes, plus any mode-specific fields. For example, a profile that supports password and token auth might have configuration like: auth: {kind: "password", username: "admin", password: "vault://secret/pw"}. The discriminated union validates that the chosen mode is among those the descriptor supports and that all required fields for that mode are present.
+
+### How do I create a custom auth mode?
+
+To create a custom auth mode, you subclass AuthSpec and define three things: a unique auth kind literal (a Literal type annotation for the kind field), the mode-specific fields (typed Pydantic fields for credentials or tokens), and the auth to driver kwargs map method (which returns the dictionary of driver keyword arguments for your authentication scheme). You then include your custom AuthSpec subclass in a ProfileDescriptor's auth_modes list. The framework will automatically include it in the discriminated union for that profile, and Pydantic will handle deserialisation and validation. Your custom mode inherits all framework features: secret fields will be resolved, SecretStr fields will be masked, and the mode will participate in the same dispatch pipeline as built-in modes.
+
+### What is the difference between NoneAuth and omitting auth entirely?
+
+NoneAuth is an explicit declaration that a connection does not require authentication. It is a valid AuthSpec subclass with kind literal "none" that produces an empty kwargs dictionary from auth to driver kwargs map. This is different from omitting auth entirely, which would be a configuration error if the ProfileDescriptor requires an auth field. Using NoneAuth explicitly documents the intent and satisfies the type system. Some backends genuinely support unauthenticated access (local databases, development servers), and NoneAuth provides a type-safe way to configure this. It also means that switching from authenticated to unauthenticated access is a configuration change (changing the kind field) rather than a structural change (removing the auth field entirely).
+
+### How do OAuth2 Client Credentials and OAuth2 Auth Code modes differ?
+
+OAuth2 Client Credentials mode is designed for machine-to-machine authentication where no user is involved. It requires a client_id and client_secret, uses them to obtain an access token from an OAuth2 token endpoint, and includes that token in subsequent requests. This mode is fully automated with no user interaction. OAuth2 Auth Code mode is designed for user-delegated access where the application acts on behalf of a user. It involves redirecting a user to an authorization server, receiving an authorization code, and exchanging it for tokens. This mode requires additional fields like redirect_uri and scopes. The choice between them depends on whether the connection is service-to-service (use Client Credentials) or user-facing (use Auth Code).
+
+## Caching and Settings Retrieval
+
+### How does the LRU cache on settings work?
+
+The framework uses Python's functools.lru_cache decorator on the internal _get_settings function to ensure that settings instances with identical structural parameters are constructed only once. The structural cache key is computed from the structural fields of SettingsParameters using its custom hash implementation. When get_settings is called, it constructs a SettingsParameters instance, computes its hash from the structural fields, and checks the LRU cache. If a matching entry exists, the cached settings instance is returned (possibly with runtime overrides applied via model_copy). If no match exists, the settings are constructed from scratch, cached, and returned. This caching strategy is safe because structural fields fully determine the settings identity; runtime overrides are applied after cache lookup and do not pollute the cached base instance.
+
+### What is the get_settings function and how do I use it?
+
+The get_settings function is the primary entry point for retrieving settings instances. It accepts a settings class (a MountainAshBaseSettings subclass) and optional SettingsParameters. It delegates to the internal _get_settings function for cache-aware construction and applies any runtime overrides. Typical usage is: settings = get_settings(MyAppSettings) for default parameters, or settings = get_settings(MyAppSettings, params) when you need to customise file lists or apply overrides. The function handles the full lifecycle: parameter construction, cache lookup, settings construction (if not cached), template expansion, secrets resolution, and runtime override application. It is the recommended way to obtain settings instances because it ensures correct caching behaviour and lifecycle ordering.
+
+### How do runtime overrides work with caching?
+
+Runtime overrides are field values that should be applied to a settings instance without affecting the cache key. When you pass runtime fields in SettingsParameters, the framework first looks up the cached base instance using only the structural fields. If found, it applies the runtime overrides by calling model_copy on the cached instance with the override values. The model_copy method creates a shallow copy of the Pydantic model with the specified fields replaced, leaving the original cached instance unchanged. This design means that calling get_settings with different runtime overrides but the same structural parameters hits the cache and only incurs the cost of a model_copy, not a full settings construction with file loading and secrets resolution.
+
+### What is the SettingsManager class?
+
+The SettingsManager class is a higher-level dictionary store for managing multiple named settings instances. While the LRU cache on _get_settings handles deduplication for identical structural parameters, the SettingsManager provides a named settings lookup where you can register and retrieve settings by a human-readable name. This is useful in applications that manage multiple connection profiles or multiple environments simultaneously. The SettingsManager integrates with the Registry class's name-keyed store pattern, providing a consistent interface for looking up settings by name. It complements rather than replaces the LRU cache: the manager stores references to settings instances, while the cache ensures those instances are efficiently constructed.
+
+### What is the structural cache key and how is it computed?
+
+The structural cache key is the hash value used to identify a unique settings configuration in the LRU cache. It is computed from the structural fields of the SettingsParameters instance using the custom hash and eq implementation. Only structural fields participate in the hash: these include the config file list, environment prefix, secrets provider configuration, and other parameters that affect which settings values are loaded. Runtime fields like individual field overrides are excluded from the hash. The custom eq implementation ensures that two SettingsParameters instances with the same structural fields are considered equal even if their runtime fields differ. This separation is what makes the caching system work correctly with runtime overrides.
+
+## Registry and App Settings
+
+### What is the Registry class and how does it work?
+
+The Registry class is a generic name-keyed store that provides registration, lookup, and iteration capabilities. It is used throughout the framework to manage collections of named items such as ProfileDescriptors, secrets providers, and settings instances. The Registry enforces duplicate prevention, raising an error if you attempt to register two items with the same name. Registry lookup by name provides O(1) access to registered items, and registry iteration allows you to enumerate all registered items. The Registry is a foundational building block that other framework components build upon, providing a consistent pattern for managing named collections.
+
+### How does the @decorator registration pattern work?
+
+The decorator registration pattern uses Python decorators to register items with a Registry at class definition time. The registry decorator factory creates a decorator that, when applied to a class or function, automatically registers it with the specified Registry under a given name. For example, you might write @register_profile("postgres") above a ProfileDescriptor class definition, which registers that descriptor under the name "postgres" in the profile registry. This pattern is idiomatic Python and eliminates the need for separate registration calls. The decorator returns the original class unchanged, so the registered class can be used normally. This pattern is used for ProfileDescriptors, secrets providers, and auth modes.
+
+### What is duplicate prevention in the Registry?
+
+Duplicate prevention is a safety mechanism that raises an error when you attempt to register two items with the same name in a Registry. This catches configuration errors early, such as accidentally defining two ProfileDescriptors both named "postgres" or registering two secrets providers with the same prefix. Without duplicate prevention, the second registration would silently overwrite the first, leading to hard-to-debug issues where a profile or provider unexpectedly changes behaviour. The error message identifies both the name and the conflicting items, making it easy to diagnose. This invariant is one of the descriptor invariants that the invariant test generator can automatically verify through generated test cases.
+
+### What are descriptor invariants and the invariant test generator?
+
+Descriptor invariants are rules that every ProfileDescriptor must satisfy to be valid. These include rules like: every parameter name must be unique within a descriptor, every parameter's Python type must be a valid Pydantic type, every default value must be compatible with its parameter's type, and every auth mode in the descriptor must be a valid AuthSpec subclass. The invariant test generator automatically creates test cases for each registered ProfileDescriptor that verify all invariants hold. This is a form of property-based testing that ensures correctness without requiring developers to manually write tests for each descriptor. Running the generated tests as part of your CI pipeline catches descriptor definition errors before they reach production.
+
+### What is the AppSettings class?
+
+AppSettings is a convenience subclass of MountainAshBaseSettings designed for common application configuration patterns. It provides app settings defaults for frequently needed fields such as application name, environment (dev/staging/production), debug mode, and log level. The AppSettings class also integrates app settings templates, using the {FIELD_NAME} template syntax to derive common paths and identifiers from the application name and environment. For example, a log directory might be templated as "/var/log/{app_name}/{environment}/". AppSettings integration with the get_settings function and caching system means it works identically to custom MountainAshBaseSettings subclasses, just with sensible defaults pre-configured.
+
+### How do app settings templates work?
+
+App settings templates use the same {FIELD_NAME} template syntax as the broader framework, but are pre-configured with common patterns for application configuration. The AppSettings class defines default templates that derive values from core fields like app_name and environment. For example, a data_dir field might default to "/data/{app_name}/{environment}", automatically constructing environment-specific paths. These templates follow the same template priority rules as all other templates: explicit values from environment variables or config files override the template defaults. This means the templates provide sensible convention-over-configuration defaults while remaining fully customisable for applications that need different directory structures or naming patterns.
+
+### How does AppSettings integrate with get_settings?
+
+App settings integration means that AppSettings works seamlessly with the get_settings function, LRU caching, and the full settings lifecycle. You call get_settings(AppSettings) or get_settings(AppSettings, params) exactly as you would with any MountainAshBaseSettings subclass. The AppSettings defaults and templates are resolved during the post_init lifecycle, secrets in any AppSettings field are resolved through the two-pass pipeline, and the resulting instance is cached based on its structural parameters. You can also subclass AppSettings to add application-specific fields while retaining all the convenience defaults. This makes AppSettings a practical starting point for most applications, providing common configuration patterns out of the box while remaining extensible.
+
+## Advanced Topics
+
+### How do I subclass MountainAshBaseSettings for my application?
+
+To create custom application settings, define a class that inherits from MountainAshBaseSettings and declare your fields using standard Pydantic type annotations. Set model_config to customise behaviour such as env prefix, config file paths, and validation settings. Your fields can use any Pydantic-supported type, including nested models, enums, and SecretStr for sensitive values. You can use {FIELD_NAME} template syntax in default values to derive fields from other fields. Register your settings class with get_settings for cached construction. For connection profiles, subclass DescriptorProfile instead and let the ProfileDescriptor's dynamic field installation handle field creation. The framework handles file loading, environment variable binding, template expansion, secrets resolution, and caching automatically.
+
+### What happens when a configuration key appears in multiple sources?
+
+When the same key appears in multiple configuration sources, the source priority determines which value wins. By default, kwargs have the highest priority, followed by environment variables, then file sources, then defaults. Within file sources, the merge framework applies type-appropriate strategies: scalars use last-wins (the value from the last file in the list takes precedence), lists use union (values from all files are combined), and dicts use deep merge (keys from all files are recursively combined). This means you can use a base configuration file with shared defaults and an environment-specific overlay file that overrides only the values that differ. The source customization mechanism allows you to change this priority ordering if the defaults do not suit your application.
+
+### How do I debug configuration loading issues?
+
+When configuration does not load as expected, systematically check each stage of the pipeline. First, verify file loading by checking that the FileHandler can find and parse your configuration files (check paths, extensions, and file syntax). Second, check source priority by verifying which source is providing the unexpected value (environment variables are a common culprit). Third, inspect template resolution by checking that all {FIELD_NAME} references resolve correctly and in the expected order. Fourth, check secrets resolution by verifying that secret prefixes match registered providers and that providers can authenticate. The SettingsParameters for your settings class will tell you which files and sources are configured, and Pydantic's validation errors will identify type mismatches and missing required fields.
+
+### Can I use mountainash-settings without secrets resolution?
+
+Yes. Secrets resolution is an opt-in feature that only activates when field values contain registered secret prefixes. If none of your configuration values use secret prefix syntax (like "vault://..." or "ssm://..."), the secrets resolution pipeline runs but has nothing to resolve and adds negligible overhead. You do not need to register any secrets providers if you are not using secrets. The framework's other features (multi-format file loading, field templating, type validation, caching, merge strategies) all work independently of secrets resolution. This makes mountainash-settings useful even for applications that manage their secrets through other means, such as environment variables injected by a container orchestrator.
+
+### How do I test settings in a CI/CD environment?
+
+For CI/CD testing, you can construct settings directly with keyword arguments, bypassing file loading and secrets resolution entirely. Pass all values as constructor kwargs, which have the highest source priority and will override any file or environment defaults. Alternatively, use SettingsParameters to point at test-specific configuration files with mock values. For secrets, you can either register a mock secrets provider that returns test values, or simply provide the secret values directly as kwargs (since kwargs are resolved before the secrets pipeline runs). The invariant test generator produces tests for your ProfileDescriptors automatically. The caching system can be cleared between tests to ensure isolation.
+
+### What is the relationship between SettingsParameters and MountainAshBaseSettings?
+
+SettingsParameters controls how a MountainAshBaseSettings instance is constructed, while MountainAshBaseSettings defines what the settings contain. Think of SettingsParameters as the "how" (which files to load, what env prefix to use, which secrets providers to consult) and MountainAshBaseSettings as the "what" (the actual typed fields with their values). The get_settings function bridges the two: it takes a MountainAshBaseSettings class and a SettingsParameters instance, uses the parameters to construct the settings, and returns the validated instance. The structural fields of SettingsParameters determine the cache key, so different parameter configurations for the same settings class produce separate cached instances. This separation of concerns keeps settings definitions clean and construction logic configurable.

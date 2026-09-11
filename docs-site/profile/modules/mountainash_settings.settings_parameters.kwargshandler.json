@@ -1,0 +1,49 @@
+{
+  "id": "mountainash_settings.settings_parameters.kwargshandler",
+  "path": "src/mountainash_settings/settings_parameters/kwargshandler.py",
+  "summary": "SettingsKwargsHandler normalises kwargs inputs to dict or tuple form, and merges two kwargs dicts. Provides format_kwargs_dict(), format_kwargs_tuple(), and merge_kwargs() as class methods.",
+  "role": "backend",
+  "visibility": "internal",
+  "stability": "stable",
+  "audiences": ["maintainers", "contributors"],
+  "doc_priority": "internal-note",
+  "confidence": "high",
+  "public_api": [
+    "SettingsKwargsHandler",
+    "SettingsKwargsHandler.format_kwargs_dict",
+    "SettingsKwargsHandler.format_kwargs_tuple",
+    "SettingsKwargsHandler.merge_kwargs"
+  ],
+  "key_classes": ["SettingsKwargsHandler"],
+  "key_functions": [
+    "format_kwargs_dict",
+    "format_kwargs_tuple",
+    "merge_kwargs"
+  ],
+  "dependencies": [],
+  "dependents": [
+    "mountainash_settings.settings_parameters.settings_parameters",
+    "mountainash_settings.settings.base_settings",
+    "mountainash_settings.settings_cache.settings_manager"
+  ],
+  "extension_points": [],
+  "lifecycle_notes": [],
+  "documentation_hooks": [],
+  "examples": [],
+  "tests": [
+    "tests/test_settings_parameters/test_kwargshandler.py"
+  ],
+  "risks": [],
+  "open_questions": [],
+  "evidence": [
+    {"kind": "import", "path": "src/mountainash_settings/settings_parameters/settings_parameters.py", "detail": "Used for kwargs normalisation"},
+    {"kind": "test", "path": "tests/test_settings_parameters/test_kwargshandler.py", "detail": "Dedicated test file"}
+  ],
+  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "manual": {
+    "notes": "",
+    "editorial_status": "",
+    "owner": "",
+    "manual_summary": ""
+  }
+}
