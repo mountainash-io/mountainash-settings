@@ -1,0 +1,73 @@
+{
+  "audience": "maintainers",
+  "summary": "The settings framework is built on a two-level caching architecture, a strict validate_assignment invariant, a structural/runtime parameter split, dynamic Pydantic field installation for connection profiles, and a two-pass secrets resolution pipeline. Understanding these layers gives you full visibility into how configuration flows from files and environment variables through to cached, validated settings instances.",
+  "concepts": [
+    {
+      "name": "Two-level caching architecture",
+      "description": "An lru_cache on _get_settings() provides fast, process-global memoization keyed by structural parameters. SettingsManager maintains a secondary dictionary store for named lookups. apply_runtime_overrides() returns a model_copy(), ensuring the cached base instance is never mutated.",
+      "module_ids": [
+        "mountainash_settings.settings_cache.settings_functions",
+        "mountainash_settings.settings_cache.settings_manager"
+      ]
+    },
+    {
+      "name": "SettingsParameters structural/runtime split",
+      "description": "Custom __hash__ and __eq__ on SettingsParameters include only structural fields (files, env prefix), making them suitable as cache keys. Runtime parameters (per-call kwargs) are applied after cache lookup via apply_runtime_overrides(). The merge() method uses field-specific strategies: union for file lists, last-wins for scalars, and deep-merge for dictionaries.",
+      "module_ids": [
+        "mountainash_settings.settings_parameters.settings_parameters"
+      ]
+    },
+    {
+      "name": "validate_assignment=True and object.__setattr__ invariant",
+      "description": "All attribute assignment triggers Pydantic validation, including SecretStr wrapping, enum coercion, and AfterValidator hooks. Internal metadata fields (SETTINGS_SOURCE_*) use object.__setattr__ to bypass revalidation and avoid polluting model_fields_set. This pattern is documented in the setattr-bypass-fix design spec.",
+      "module_ids": [
+        "mountainash_settings.settings.base_settings"
+      ]
+    },
+    {
+      "name": "DescriptorProfile dynamic field installation",
+      "description": "__pydantic_init_subclass__ fires at class creation time and installs fields from the profile descriptor into model_fields and __annotations__. A model_rebuild(force=True) call finalises the updated schema. The auth discriminated union is assembled dynamically from the descriptor's auth_modes list.",
+      "module_ids": [
+        "mountainash_settings.profiles.profile",
+        "mountainash_settings.profiles.descriptor"
+      ]
+    },
+    {
+      "name": "Secrets resolution pipeline",
+      "description": "Resolution runs in two passes during __init__: first on raw kwargs via resolve_references_in_dict before super().__init__, then on loaded config fields via resolve_references_in_model_tree after construction. Nested BaseModel fields are rebuilt as fresh instances to respect the frozen=True constraint.",
+      "module_ids": [
+        "mountainash_settings.secrets.registry",
+        "mountainash_settings.resolve",
+        "mountainash_settings.settings.base_settings"
+      ]
+    },
+    {
+      "name": "Config file dispatch pipeline",
+      "description": "Files are separated by extension into categorised groups (env, YAML, TOML, JSON). The appropriate file path is set on model_config before calling super().__init__(). settings_customise_sources() returns the source priority tuple that Pydantic uses to layer values.",
+      "module_ids": [
+        "mountainash_settings.settings_parameters.filehandler",
+        "mountainash_settings.settings.base_settings"
+      ]
+    },
+    {
+      "name": "Concurrency and evolution considerations",
+      "description": "model_config mutation before super().__init__ operates at the class level; concurrent first-construction of different file sets on the same class should be serialised. The SettingsManager dictionary is similarly designed for single-threaded first-creation. Dynamic field installation via model_rebuild() should be verified after Pydantic version upgrades.",
+      "module_ids": [
+        "mountainash_settings.settings.base_settings",
+        "mountainash_settings.settings_cache.settings_manager",
+        "mountainash_settings.profiles.profile"
+      ]
+    }
+  ],
+  "featured_modules": [
+    "mountainash_settings.settings.base_settings",
+    "mountainash_settings.settings_parameters.settings_parameters",
+    "mountainash_settings.settings_cache.settings_functions",
+    "mountainash_settings.settings_cache.settings_manager",
+    "mountainash_settings.profiles.profile",
+    "mountainash_settings.secrets.registry",
+    "mountainash_settings.resolve"
+  ],
+  "hidden_or_internal_modules": [],
+  "open_questions": []
+}

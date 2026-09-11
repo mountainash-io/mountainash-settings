@@ -1,0 +1,85 @@
+{
+  "id": "mountainash_settings.settings.base_settings",
+  "path": "src/mountainash_settings/settings/base_settings.py",
+  "summary": "MountainAshBaseSettings extends pydantic-settings BaseSettings with multi-format config file loading (YAML, TOML, JSON, env), template-based field derivation, secrets resolution, and a post_init hook. It is the single most important class in the package — all user settings classes subclass it.",
+  "role": "public-api",
+  "visibility": "public",
+  "stability": "stable",
+  "audiences": ["users", "maintainers", "contributors", "backend-architecture", "extension-authors"],
+  "doc_priority": "essential",
+  "confidence": "high",
+  "public_api": [
+    "MountainAshBaseSettings",
+    "MountainAshBaseSettings.__init__",
+    "MountainAshBaseSettings.get_settings",
+    "MountainAshBaseSettings.post_init",
+    "MountainAshBaseSettings.init_setting_from_template",
+    "MountainAshBaseSettings.format_template_from_settings",
+    "MountainAshBaseSettings.update_settings_from_dict",
+    "MountainAshBaseSettings.extract_settings_parameters",
+    "MountainAshBaseSettings.settings_customise_sources"
+  ],
+  "key_classes": ["MountainAshBaseSettings"],
+  "key_functions": [
+    "init_setting_from_template",
+    "format_template_from_settings",
+    "update_settings_from_dict",
+    "extract_settings_parameters",
+    "post_init"
+  ],
+  "dependencies": [
+    "mountainash_settings.settings_parameters.settings_parameters",
+    "mountainash_settings.settings_parameters.filehandler",
+    "mountainash_settings.settings_parameters.kwargshandler",
+    "mountainash_settings.secrets.registry",
+    "mountainash_settings.resolve"
+  ],
+  "dependents": [
+    "mountainash_settings.settings.app.app_settings",
+    "mountainash_settings.profiles.profile",
+    "mountainash_settings.settings_cache.settings_manager"
+  ],
+  "extension_points": [
+    "post_init(): override in subclasses for template-driven derived fields",
+    "settings_customise_sources(): classmethod override to change source priority"
+  ],
+  "lifecycle_notes": [
+    "Calls SettingsParameters.create and merge before super().__init__",
+    "Calls post_init() at end of __init__",
+    "With validate_assignment=True, setattr triggers pydantic revalidation — use object.__setattr__ for bookkeeping-only fields",
+    "SETTINGS_SOURCE_* fields are harness bookkeeping, not user config — excluded from model_dump(exclude_unset=True)"
+  ],
+  "documentation_hooks": [
+    "Template syntax: {FIELD_NAME} in string fields, resolved at post_init",
+    "config_files accepts UPath, str, list, or tuple — dispatched to YAML/TOML/JSON/env by extension",
+    "secrets_provider wires secret: prefixes in kwargs and config-file-loaded fields"
+  ],
+  "examples": [
+    "examples/basic_usage_example.py",
+    "examples/path_templating_with_upath.py",
+    "examples/comprehensive_patterns_example.py"
+  ],
+  "tests": [
+    "tests/test_base_settings.py",
+    "tests/test_base_settings_coverage.py",
+    "tests/test_config_files.py"
+  ],
+  "risks": [
+    "validate_assignment=True means all setattr calls trigger full pydantic validation including SecretStr wrapping — can surprise callers who assign raw strings",
+    "model_config is mutated directly (yaml_file, toml_file, json_file) before super().__init__ — this is a class-level dict, so concurrent multi-threaded construction of different subclasses sharing the same model_config could race"
+  ],
+  "open_questions": [],
+  "evidence": [
+    {"kind": "symbol", "path": "src/mountainash_settings/__init__.py", "detail": "MountainAshBaseSettings exported from package root in __all__"},
+    {"kind": "example", "path": "examples/basic_usage_example.py", "detail": "Primary usage example"},
+    {"kind": "test", "path": "tests/test_base_settings.py", "detail": "Comprehensive test coverage"},
+    {"kind": "doc", "path": "CLAUDE.md", "detail": "Described as 'primary interface' in project docs"}
+  ],
+  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "manual": {
+    "notes": "",
+    "editorial_status": "",
+    "owner": "",
+    "manual_summary": ""
+  }
+}
