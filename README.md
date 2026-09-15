@@ -3,6 +3,9 @@
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue) ![Category](https://img.shields.io/badge/category-core-purple) ![Tests](https://img.shields.io/badge/tests-✓-green) ![Docs](https://img.shields.io/badge/docs-✓-blue)
 
 Advanced configuration management for Python applications — typed settings with smart caching, multi-format file loading, template-driven derived fields, a pluggable secrets layer, and a declarative system for building typed connection profiles.
+Requires Python 3.12 or later.
+
+> Public PyPI publication is not confirmed by these source changes. Treat builds as unpublished candidates until the public confirmation stage succeeds; the install command below describes the published distribution. See [RELEASE.md](RELEASE.md) for candidate verification and separately authorized publishing.
 
 ## Installation
 
