@@ -7,7 +7,7 @@ name = "mountainash_settings"
 dynamic = ["version"]
 description = 'Mountain Ash - Settings'
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 # license = "Proprietary"
 keywords = []
 authors = [
@@ -16,8 +16,6 @@ authors = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
@@ -29,7 +27,7 @@ dependencies = [
     # dotenv fallback through explicit source wiring and regression tests.
     "pydantic-settings==2.15.0",
     "universal_pathlib==0.2.2",
-    "pyaml",
+    "PyYAML>=6.0",
 ]
 
 [project.urls]

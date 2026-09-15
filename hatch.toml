@@ -7,6 +7,9 @@ path = "src/mountainash_settings/__version__.py"
 [build.targets.wheel]
 packages = ["src/mountainash_settings"]
 
+[build.targets.sdist]
+include = ["/src", "/pyproject.toml", "/hatch.toml", "/README.md", "/LICENSE"]
+
 #================
 # Env: build_github
 #================
@@ -43,7 +46,7 @@ dependencies = []
 # Env: test_github
 #================
 [[envs.test_github.matrix]]
-python = ["3.12"] #,"3.11", "3.10", # "3.8", "3.9","3.9",
+python = ["3.12"]
 
 [envs.test_github]
 installer = "uv"
@@ -65,7 +68,7 @@ test-cov = "pytest --cov --junitxml=junit.xml -o junit_family=legacy  --cov-repo
 # Env: test
 #================
 [[envs.test.matrix]]
-python = ["3.12"] #,  "3.11",, "3.10" ] # "3.8", "3.9","3.9",
+python = ["3.12"]
 
 [envs.test]
 installer = "uv"
