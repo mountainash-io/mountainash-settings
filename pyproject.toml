@@ -26,7 +26,7 @@ dependencies = [
     # structured-file deep merge. MountainAsh preserves its legacy unprefixed
     # dotenv fallback through explicit source wiring and regression tests.
     "pydantic-settings==2.15.0",
-    "universal_pathlib==0.2.2",
+    "universal_pathlib>=0.2.2",
     "PyYAML>=6.0",
 ]
 
