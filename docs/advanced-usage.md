@@ -105,23 +105,52 @@ locked = SettingsParameters.merge(compliance_base, caller_params, prioritise_bas
 # locked.kwargs["TENANT_ID"] == "acme"  (new key, always merged)
 ```
 
-### Extracting parameters from a live instance
+### Controlled reconstruction from a live instance
 
-A settings instance records the parameters it was created with. Use `extract_settings_parameters()` to reconstruct a `SettingsParameters` that can be merged, extended, or passed elsewhere:
+`extract_settings_parameters()` is a controlled reconstruction capability, not a
+general diagnostics dump. It returns the structural selectors together with a
+fresh, independently owned tree of the accepted constructor and successful
+update inputs in their original source form. For example, a
+`secret:record.field` input remains a reference in the extracted kwargs rather
+than a copied backend result. Extraction itself does not reread files,
+environment variables, or secret backends.
+
+Use `SETTINGS_SOURCE_KWARG_NAMES` when diagnostic code needs to know which
+attribute inputs were accepted. It exposes names only. The removed
+`SETTINGS_SOURCE_KWARGS` field has no compatibility alias: migrate diagnostic
+uses to the names tuple, and use extraction only where reconstruction inputs
+are intentionally needed.
 
 ```python
 settings = AppSettings(config_files=["config/production.yaml"], TENANT_ID="acme")
 
-# Reconstruct — reflects config files, env prefix, env files, kwargs
+# Trusted reconstruction — params.kwargs contains the source-form values.
 params = settings.extract_settings_parameters()
+assert settings.SETTINGS_SOURCE_KWARG_NAMES == ("TENANT_ID",)
 
-# Extend it
+# Extend the reconstruction input deliberately.
 extended = SettingsParameters.merge(
     params,
     SettingsParameters.create(settings_class=AppSettings, LOG_LEVEL="WARNING"),
 )
 new_settings = get_settings(settings_parameters=extended)
 ```
+
+Successful `update_settings_from_dict()` and `persist()` calls preserve
+untouched accepted inputs and replace only the supplied logical fields in the
+reconstruction recipe. A dict-valued field is replaced as a field, not
+recursively merged. Existing partial-assignment behavior is unchanged: a
+failed update does not roll back assignments that already succeeded, and it
+does not publish failed or resolved input provenance. A persistence failure
+after its backend write is not an atomic transaction.
+
+The ordinary `repr()` of `SettingsParameters` omits `kwargs`, but that is a
+safe-default diagnostic boundary, not a serialization guarantee. Explicit
+`params.kwargs`, `to_dict()`, `dataclasses.asdict()`, pickle, debugger
+inspection, and other intentional serialization or inspection can expose
+caller-supplied values. Keep those operations in trusted code paths.
+
+If an otherwise valid supplied value cannot be faithfully represented in, and independently owned by, the reconstruction recipe, construction and updates retain their normal behavior, but extraction raises a value-free `TypeError`. This includes an update whose accepted alias/path would make faithful reconstruction change an independently supplied sibling. It does not return a partial recipe, alter another field to invent a representation, or use a shared input tree.
 
 ### Service registry pattern
 

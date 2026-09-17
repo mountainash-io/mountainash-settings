@@ -1,7 +1,7 @@
 {
   "id": "mountainash_settings.settings_cache.settings_manager",
   "path": "src/mountainash_settings/settings_cache/settings_manager.py",
-  "summary": "SettingsManager is a process-wide singleton that holds a dict cache of MountainAshBaseSettings instances keyed by SettingsParameters. get_or_create_settings() creates an instance on first call; get_settings_object() retrieves it and applies runtime overrides via model_copy(). Never mutates the cached instance.",
+  "summary": "SettingsManager holds a dictionary of settings instances keyed by structural SettingsParameters. Cold construction currently retains runtime inputs; get_settings_object returns the cached instance or a shallow overlay. MAS-SEC-001 protects supported reconstruction recipes, but cold contamination and shared nested live state remain MAS-SEC-002 work.",
   "role": "orchestration",
   "visibility": "semi-public",
   "stability": "stable",

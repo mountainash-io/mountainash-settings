@@ -61,10 +61,6 @@ def get_test_settings(settings_parameters: SettingsParameters,
 # TESTS #
 
 
-def test_init_sets_kwargs():
-    kwargs: dict[str, Any] = {"TEST_VAL_1": "value1", "TEST_VAL_2": "value2"}
-    settings = TestSettings(**kwargs)
-    assert settings.SETTINGS_SOURCE_KWARGS == kwargs
 
 
 def test_init_sets_env_file():

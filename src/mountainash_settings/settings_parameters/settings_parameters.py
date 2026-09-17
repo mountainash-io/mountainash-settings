@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Optional, Any, Tuple, Type, List, Dict, TYPE_CHECKING
-from dataclasses import dataclass
+from typing import Optional, Any, Tuple, Type, List, Dict, TYPE_CHECKING, cast
+from dataclasses import dataclass, field
 
 from pydantic_settings import BaseSettings
 from upath import UPath
@@ -48,7 +48,7 @@ class SettingsParameters():
     settings_class: Optional[Type[BaseSettings]] = None
     env_prefix:     Optional[str] = None
     secrets_dir:    Optional[str] = None
-    kwargs:         Optional[Dict[str,Any]] = None
+    kwargs:         Optional[Dict[str,Any]] = field(default=None, repr=False)
     secrets_provider: Optional[str] = None
 
     # _reserved_mountainash_kwargs = ["_dummy"]
@@ -382,12 +382,11 @@ class SettingsParameters():
             settings_copy = cached_settings.model_copy()
             override_kwargs = self.get_attribute_settings_kwargs()
             if override_kwargs:
+                backend = None
                 if self.secrets_provider:
                     from ..secrets.registry import get_secrets_backend
-                    from ..resolve import resolve_references_in_dict
                     backend = get_secrets_backend(self.secrets_provider)
-                    override_kwargs = resolve_references_in_dict(override_kwargs, backend)
-                settings_copy.update_settings_from_dict(settings_dict=override_kwargs)
+                cast("MountainAshBaseSettings", settings_copy)._apply_settings_inputs(override_kwargs, backend)
             return settings_copy
         return cached_settings
 

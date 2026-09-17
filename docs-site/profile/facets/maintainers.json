@@ -4,7 +4,7 @@
   "concepts": [
     {
       "name": "Two-level caching architecture",
-      "description": "An lru_cache on _get_settings() provides fast, process-global memoization keyed by structural parameters. SettingsManager maintains a secondary dictionary store for named lookups. apply_runtime_overrides() returns a model_copy(), ensuring the cached base instance is never mutated.",
+      "description": "The _get_settings LRU and SettingsManager dictionary retain instances by structural identity. Runtime kwargs enter cold construction and later overlays are shallow copies. MAS-SEC-001 owns supported reconstruction recipes; MAS-SEC-002 must remove cold contamination and nested live-state sharing.",
       "module_ids": [
         "mountainash_settings.settings_cache.settings_functions",
         "mountainash_settings.settings_cache.settings_manager"
@@ -12,7 +12,7 @@
     },
     {
       "name": "SettingsParameters structural/runtime split",
-      "description": "Custom __hash__ and __eq__ on SettingsParameters include only structural fields (files, env prefix), making them suitable as cache keys. Runtime parameters (per-call kwargs) are applied after cache lookup via apply_runtime_overrides(). The merge() method uses field-specific strategies: union for file lists, last-wins for scalars, and deep-merge for dictionaries.",
+      "description": "Custom __hash__ and __eq__ on SettingsParameters include only structural fields (files, env prefix), making them suitable as cache keys. Runtime inputs are handed in source form to the private settings lifecycle after cache lookup. The merge() method uses field-specific strategies: union for file lists, last-wins for scalars, and deep-merge for dictionaries.",
       "module_ids": [
         "mountainash_settings.settings_parameters.settings_parameters"
       ]
@@ -34,7 +34,7 @@
     },
     {
       "name": "Secrets resolution pipeline",
-      "description": "Resolution runs in two passes during __init__: first on raw kwargs via resolve_references_in_dict before super().__init__, then on loaded config fields via resolve_references_in_model_tree after construction. Nested BaseModel fields are rebuilt as fresh instances to respect the frozen=True constraint.",
+      "description": "Resolution runs in two passes during __init__: accepted kwargs are first captured privately in source form and a working copy is resolved via resolve_references_in_dict before super().__init__; loaded config fields are then resolved via resolve_references_in_model_tree after construction. Nested BaseModel fields are rebuilt as fresh instances to respect the frozen=True constraint.",
       "module_ids": [
         "mountainash_settings.secrets.registry",
         "mountainash_settings.resolve",
