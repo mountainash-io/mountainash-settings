@@ -31,7 +31,7 @@ Python developers and platform engineers who need a validated, multi-source conf
 6. **Connection Profiles** — ProfileDescriptor, ParameterSpec, MISSING sentinel, dynamic Pydantic field installation, DescriptorProfile
 7. **Profile Registry** — Name-keyed store, @decorator registration pattern, duplicate prevention, invariant testing
 8. **Auth System** — AuthSpec base with kind literal, 10+ concrete auth modes as discriminated union, dispatch to driver kwargs
-9. **Caching** — LRU cache on _get_settings, SettingsManager dictionary store, runtime overrides via model_copy
+9. **Caching** — LRU cache on `_get_settings`, SettingsManager dictionary store, source-form runtime-overlay handoff
 10. **App Settings** — AppSettings convenience class, app settings templates
 
 ## Topics Excluded

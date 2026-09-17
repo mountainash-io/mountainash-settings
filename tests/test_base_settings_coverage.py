@@ -320,7 +320,6 @@ class TestUpdateSettingsFromDict:
 
         assert settings.TEST_VAL_1 == "updated1"
         assert settings.TEST_VAL_2 == "updated2"
-        assert settings.SETTINGS_SOURCE_KWARGS == {"TEST_VAL_1": "updated1", "TEST_VAL_2": "updated2"}
 
     @pytest.mark.unit
     def test_update_with_none_returns_none(self):
@@ -331,15 +330,6 @@ class TestUpdateSettingsFromDict:
 
         assert result is None
 
-    @pytest.mark.unit
-    def test_update_with_empty_dict(self):
-        """Test updating with empty dictionary."""
-        settings = TestSettings()
-
-        settings.update_settings_from_dict({})
-
-        # SETTINGS_SOURCE_KWARGS should be set to empty dict
-        assert settings.SETTINGS_SOURCE_KWARGS == {}
 
     @pytest.mark.unit
     def test_update_with_invalid_attribute_raises_error(self):
@@ -763,14 +753,9 @@ class TestEdgeCases:
 #         s = TestSettings(TEST_VAL_1="x", TEST_VAL_2="y")
 #         assert s.SETTINGS_CLASS is TestSettings
 #         assert s.SETTINGS_CLASS_NAME == "TestSettings"
-#         assert s.SETTINGS_SOURCE_KWARGS == {"TEST_VAL_1": "x", "TEST_VAL_2": "y"}
 
 #         # DescriptorProfile subclasses inherit MountainAshBaseSettings.__init__,
 #         # so the same meta-field bookkeeping must land on them too.
-#         # (SETTINGS_SOURCE_KWARGS is not asserted here — profile construction
-#         # passes `auth` and SecretStr-wrapped fields, producing a post-validation
-#         # kwargs shape that differs from the raw dict. The CLASS/CLASS_NAME
-#         # assertions are sufficient witnesses that the __init__ path ran.)
 #         p = _SampleProfile(TOKEN="raw", auth=NoAuth())  # type: ignore[call-arg]
 #         assert p.SETTINGS_CLASS is _SampleProfile
 #         assert p.SETTINGS_CLASS_NAME == "_SampleProfile"

@@ -17,9 +17,9 @@ This chapter introduces the SettingsParameters class that controls how settings 
 <!-- concept:27 -->
 ## The Parameter Abstraction Layer
 
-Between the caller who says "give me database settings from this config file with debug=True" and the actual construction of a `MountainAshBaseSettings` instance, there is an important abstraction layer: the `SettingsParameters` class. This frozen dataclass captures everything needed to construct (or retrieve from cache) a settings instance. It separates the identity of a configuration -- which files, which class, which prefix -- from the transient overrides that might change on each access.
+Between the caller who says "give me database settings from this config file with debug=True" and the actual construction of a `MountainAshBaseSettings` instance, there is an important abstraction layer: the `SettingsParameters` class. This frozen dataclass captures everything needed to construct (or retrieve from cache) a settings instance. It separates the identity of a configuration -- which files, which class, which prefix -- from the source-form runtime inputs that may change on each access.
 
-Understanding `SettingsParameters` is essential because it drives the caching strategy. Two requests for the same structural configuration but different runtime overrides share a single cached base instance, with overrides applied as a thin copy-on-read layer.
+`SettingsParameters` drives structural cache identity. Requests with different runtime inputs share a cached instance. MAS-SEC-001 privately owns supported reconstruction recipes before resolving values, but cold runtime inputs can still contaminate the cache and shallow overlays can share nested state; MAS-SEC-002 owns those remaining defects.
 
 <!-- concept:23 -->
 ## SettingsParameters Class
@@ -37,7 +37,7 @@ class SettingsParameters:
     secrets_provider: Optional[str] = None
 ```
 
-The frozen nature is significant. Because instances are immutable, they can safely be used as dictionary keys and cache lookup parameters. The `@dataclass(frozen=True)` decorator generates `__hash__` and `__eq__` methods by default, but `SettingsParameters` overrides both to implement its custom caching strategy.
+The frozen nature is significant. Because instances are immutable, they can safely be used as dictionary keys and cache lookup parameters. The `@dataclass(frozen=True)` decorator generates `__hash__` and `__eq__` methods by default, but `SettingsParameters` overrides both to implement its custom caching strategy. Its `kwargs` field is omitted from the generated representation, so ordinary diagnostics do not print runtime values; explicit access and serialization remain intentional, trusted operations.
 
 The class also declares two reserved kwarg lists that it uses to separate Pydantic-internal parameters from user-facing attribute kwargs:
 
@@ -79,9 +79,9 @@ These five fields answer the question: "What configuration am I loading?" Two se
 
 ## Runtime Fields
 
-**Runtime fields** are parameters that modify the output of a settings lookup without affecting which cached instance is used as the base. Currently, the single runtime field is `kwargs` -- a dictionary of key-value overrides that are applied as a copy-on-read layer on top of the cached base instance.
+**Runtime fields** do not affect cache identity. Currently `kwargs` carries source-form inputs. The public overlay passes accepted inputs to `_apply_settings_inputs()` before reference resolution so reconstruction does not retain a resolved-value duplicate.
 
-The architectural significance of this split is performance. Consider an application that requests the same database settings fifty times per second, each time with a different `request_id` kwarg for tracing. Without the structural/runtime split, each request would create and validate a new settings instance from scratch. With the split, a single validated instance is cached and reused, with only the lightweight `request_id` override applied as a `model_copy()`.
+This is provenance protection, not cache isolation. Cold construction still retains runtime inputs, while later overlays use shallow copies. Runtime reference freshness and independently owned returns across every retrieval route remain MAS-SEC-002 work.
 
 ```python
 # These two produce the same cached base instance:
@@ -298,15 +298,16 @@ A decision tree showing how the merge method selects a strategy for each field. 
 
 The structural/runtime split, custom hash, create factory, and merge framework all serve a single purpose: efficient settings caching. The complete flow works as follows:
 
-1. Caller invokes `get_settings(settings_class=X, config_files=["a.yaml"], debug=True)`
-2. The `get_settings` function creates a `SettingsParameters` via `create()`
-3. The parameters are passed to `_get_settings()`, which is decorated with `@lru_cache`
-4. `lru_cache` calls `__hash__` -- only structural fields contribute
-5. Cache hit: the existing `MountainAshBaseSettings` instance is returned
-6. `apply_runtime_overrides()` creates a `model_copy()` and applies `debug=True`
-7. Caller receives a fresh copy with the override, while the cache retains the original
+1. Caller invokes `get_settings(settings_class=X, config_files=["a.yaml"], debug=True)`.
+2. The `get_settings` function creates a `SettingsParameters` via `create()`.
+3. The structural parameters are passed to `_get_settings()`, which is decorated with `@lru_cache`.
+4. `lru_cache` calls `__hash__` -- only structural fields contribute.
+5. On a cache hit, the existing `MountainAshBaseSettings` instance supplies the baseline.
+6. `apply_runtime_overrides()` makes a shallow copy and hands `debug=True` to `_apply_settings_inputs()` in source form.
+7. That lifecycle owns a supported reconstruction recipe before resolving the patch for assignment.
+8. Nested live values may still be shared; the cold construction may already contain runtime overrides.
 
-This flow means that the expensive work -- parsing config files, loading environment variables, running validators -- happens exactly once per unique structural configuration. Runtime overrides are applied as a lightweight copy operation.
+Source loading is cached, but full invocation validation and caller/cache ownership are not yet established. MAS-SEC-002 addresses these limitations.
 
 | Component | Role in Caching |
 |-----------|----------------|
@@ -333,7 +334,7 @@ An animated simulation showing multiple settings requests arriving (represented 
 
 - **SettingsParameters** is a frozen dataclass that captures everything needed to construct or retrieve a settings instance from cache.
 - **Structural fields** (config_files, settings_class, env_prefix, secrets_dir, secrets_provider) define the cache key identity -- same structure means same cached instance.
-- **Runtime fields** (kwargs) are applied as a copy-on-read overlay and do not affect cache identity, enabling efficient reuse.
+- **Runtime fields** (`kwargs`) are source-form overlays handed to the private settings lifecycle; their resolved values are not cache provenance.
 - **Custom Hash and Eq** deliberately exclude runtime fields, allowing `lru_cache` to share base instances across callers with different overrides.
 - **Parameter Create Factory** normalizes flexible input types into a canonical frozen form suitable for hashing and caching.
 - **File List Union Strategy** combines config file lists from both parameter sets, deduplicating but never dropping explicitly requested files.

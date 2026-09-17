@@ -1,6 +1,6 @@
 ---
 title: Caching, Settings Management, and App Settings
-description: The caching layer with LRU cache, get_settings function, structural cache keys, runtime overrides via model_copy, SettingsManager, and the AppSettings convenience class.
+description: The caching layer with LRU cache, get_settings function, structural cache keys, source-form runtime-overlay handoff, SettingsManager, and the AppSettings convenience class.
 generated_by: claude skill chapter-content-generator
 date: 2026-06-03
 version: 0.08
@@ -10,7 +10,7 @@ version: 0.08
 
 ## Summary
 
-This chapter covers the caching layer that ensures settings instances are constructed once and reused efficiently, plus the AppSettings convenience class for application-level configuration. You will learn about the LRU cache decorator, the get_settings function and its internal implementation, structural cache keys derived from parameter hash/eq, runtime override application via model_copy, the SettingsManager dictionary store with named settings lookup, and the AppSettings class with its defaults, templates, and integration with the caching system.
+This chapter covers the caching layer that ensures settings instances are constructed once and reused efficiently, plus the AppSettings convenience class for application-level configuration. You will learn about the LRU cache decorator, the get_settings function and its internal implementation, structural cache keys derived from parameter hash/eq, source-form runtime-overlay handoff, the SettingsManager dictionary store with named settings lookup, and the AppSettings class with its defaults, templates, and integration with the caching system.
 
 ---
 
@@ -18,7 +18,7 @@ This chapter covers the caching layer that ensures settings instances are constr
 
 Constructing a settings instance is expensive. It involves reading configuration files from disk (or cloud storage), querying environment variables, resolving secret references from external vaults, running Pydantic's full validation pipeline, and expanding templates. In a web application handling thousands of requests per second, repeating this work for every request that needs database credentials or API configuration would create an unacceptable performance bottleneck.
 
-The caching layer solves this by constructing each unique settings configuration exactly once and serving subsequent requests from an in-memory cache. The structural/runtime split (introduced in Chapter 3) makes this efficient: the cache key includes only structural parameters, while runtime overrides are applied as a lightweight copy-on-read operation.
+The caching layer reuses settings instances by structural identity. Runtime kwargs are excluded from that identity but still enter cold construction. MAS-SEC-001 protects reconstruction provenance; MAS-SEC-002 must fix cold contamination and shallow-copy sharing.
 
 <!-- concept:99 -->
 <!-- concept:102 -->
@@ -71,8 +71,8 @@ def get_settings(
 
 The function follows a two-step pattern:
 
-1. **Build final parameters** -- merge the optional pre-built `settings_parameters` with any additional arguments
-2. **Get cached + apply overrides** -- retrieve the cached base instance, then apply runtime overrides if kwargs are present
+1. **Build final parameters** -- merge the optional pre-built `settings_parameters` with any additional arguments.
+2. **Get cached + apply overlay** -- retrieve the cached instance and pass original runtime inputs to the private reconstruction lifecycle through a shallow copy.
 
 ```python
 <!-- concept:105 -->
@@ -112,9 +112,9 @@ def _get_settings(settings_parameters: SettingsParameters) -> MountainAshBaseSet
     return settings
 ```
 
-The separation between `get_settings()` (public, flexible) and `_get_settings()` (internal, cached) serves a critical purpose. The public function handles parameter merging and runtime override application -- operations that should NOT be cached because they vary per call. The internal function handles only the expensive construction work -- which SHOULD be cached.
+The public function merges parameters and applies an additional runtime overlay. The internal cached function still receives the full parameter object, including kwargs, and cold construction retains those inputs. Removing kwargs from equality/hash alone does not exclude them from retained state.
 
-This layering means that calling `get_settings(config_files="db.yaml", debug=True)` and `get_settings(config_files="db.yaml", debug=False)` both hit the same cache entry in `_get_settings()` (because `debug` is a runtime kwarg excluded from the hash), and then each gets its own override applied cheaply.
+Calls with different `debug` values share a structural entry and each public call applies its overlay, but later source-only retrieval can expose the first caller's override. This is the open MAS-SEC-002 defect.
 
 #### Diagram: Caching Layer Architecture
 
@@ -152,52 +152,34 @@ assert hash(params_a) == hash(params_b)
 assert params_a == params_b  # __eq__ also structural-only
 ```
 
-This means the `@lru_cache` on `_get_settings()` returns the same cached instance for both calls. The runtime differences are then applied in the layer above via `apply_runtime_overrides()`.
+The `@lru_cache` on `_get_settings()` returns the same cached instance for both structural keys. Runtime inputs are then applied through `apply_runtime_overrides()`. This is not yet an isolation guarantee: the cold construction retains its runtime inputs, and later overlays use shallow copies.
 
 ## Runtime Override Application
 
-**Runtime override application** is the process of taking a cached base settings instance and applying per-call kwargs to produce a customized copy. The `apply_runtime_overrides()` method on `SettingsParameters` implements this:
+**Runtime override application** hands original accepted inputs to the private `_apply_settings_inputs()` lifecycle. MAS-SEC-001 owns the reconstruction recipe before reference resolution; it does not fix cache ownership.
 
 ```python
-def apply_runtime_overrides(self, cached_settings: BaseSettings) -> BaseSettings:
-    if self.kwargs:
-        settings_copy = cached_settings.model_copy()
-        override_kwargs = self.get_attribute_settings_kwargs()
-        if override_kwargs:
-            if self.secrets_provider:
-                resolver = get_secrets_resolver(self.secrets_provider)
-                override_kwargs = resolve_references_in_dict(
-                    override_kwargs, resolver
-                )
-            settings_copy.update_settings_from_dict(
-                settings_dict=override_kwargs
-            )
-        return settings_copy
-    return cached_settings
+settings_copy = cached_settings.model_copy()
+settings_copy._apply_settings_inputs(source_inputs)
 ```
 
-When kwargs are present, the method creates a shallow copy of the cached instance, resolves any secret references in the override kwargs, and applies them via `update_settings_from_dict()`. When no kwargs are present, it returns the cached instance directly (zero-copy fast path).
+The private lifecycle owns the source-form patch before resolving references for live validation and assignment. On a cache hit, the public overlay resolves runtime references through the selected backend. On a cold call, runtime inputs also participate in the cached construction and can remain in the cached state. No-input calls return the cached instance directly.
 
-This design ensures the cached instance is never mutated. Multiple concurrent callers can safely access the same cached base instance because overrides are always applied to a fresh copy.
+Cold-call contamination and shared nested state remain open under MAS-SEC-002. Do not use this cache as a caller-isolation boundary until that milestone is implemented.
 
 <!-- concept:104 -->
 ## Model Copy For Overrides
 
-The **`model_copy()` method** (from Pydantic) creates a shallow copy of a settings instance. This is the mechanism that enables safe runtime overrides without mutating the cache:
+Pydantic's `model_copy()` creates a shallow outer copy, not independently owned nested settings state. The private reconstruction lifecycle owns supported source-form recipes, but that narrower guarantee does not isolate all live fields, extras or private state.
 
 ```python
-# Pydantic's model_copy creates a new instance with the same field values
+# The cached baseline remains unchanged.
 settings_copy = cached_settings.model_copy()
-
-# Modifications to the copy do not affect the original
-settings_copy.update_settings_from_dict({"debug": True})
-assert cached_settings.debug == False  # original unchanged
+settings_copy._apply_settings_inputs({"debug": True})
+assert cached_settings.debug is False
 ```
 
-The shallow copy is efficient -- it does not recursively deep-copy nested objects or re-run validation on existing values. It simply creates a new Python object with references to the same field values. The subsequent `update_settings_from_dict()` then mutates only the override fields on the copy.
-
-!!! tip "When model_copy is and is not used"
-    `model_copy()` is invoked only when runtime kwargs are present. If you call `get_settings(settings_class=X, config_files="y.yaml")` without any overrides, the cached instance is returned directly -- no copy overhead. This makes the zero-override path (the common case for most production code) as fast as a dictionary lookup.
+The shallow copy avoids re-running construction. Assignment validates supplied fields individually, not an atomic complete invocation. Nested mutable values can still be shared, and no-input calls expose the cached object.
 
 ## SettingsManager Class
 
@@ -240,7 +222,7 @@ Type: microsim
 **Library:** p5.js<br/>
 **Status:** Specified
 
-An interactive simulation of the SettingsManager cache. A hash table visualization shows cached entries (each entry shows settings_class name and config_files). Users can "send" lookup requests with different SettingsParameters -- on cache hit, the entry lights up green; on cache miss, a construction animation plays and a new entry is added. A "with kwargs" checkbox adds runtime overrides to the request, showing the model_copy branch. A hit-rate counter and timing comparison (cached vs uncached) are displayed. Learning objective: Predict whether a given settings request will be a cache hit or miss based on its structural parameters (Bloom: Apply).
+An interactive simulation of structural cache hits and misses. Display class and file selectors for entries, cold construction including runtime inputs, and the shallow-copy branch for overlays. Do not portray that copy as nested-state isolation. Learning objective: predict cache hits from structural parameters and distinguish caching from the pending MAS-SEC-002 ownership guarantee.
 </details>
 
 ## Named Settings Lookup
@@ -257,17 +239,7 @@ settings = get_settings(
 
 The named lookup pattern is particularly useful in applications that determine the backend at runtime (from a configuration file or environment variable). The registry resolves the name to a class, and the caching layer handles efficient construction.
 
-The `SettingsManager.get_settings_object()` method also supports override application: when kwargs are present in the parameters, it creates a `model_copy()` and applies overrides, mirroring the behavior of `apply_runtime_overrides()`:
-
-```python
-def get_settings_object(self, settings_parameters):
-    obj_settings = self.settings_object_cache.get(settings_parameters)
-    override_kwargs = settings_parameters.get_attribute_settings_kwargs()
-    if override_kwargs:
-        obj_settings = obj_settings.model_copy()
-        obj_settings.update_settings_from_dict(settings_dict=override_kwargs)
-    return obj_settings
-```
+`SettingsManager.get_settings_object()` shallow-copies on runtime kwargs and calls `update_settings_from_dict()`. This preserves supported source-form reconstruction through `_apply_settings_inputs()`, but does not select the backend used by the public overlay route or independently own all live state. MAS-SEC-002 must unify these routes.
 
 ## AppSettings Class
 
@@ -345,7 +317,7 @@ class MyAppSettings(AppSettings):
         # Custom template expansion for app-specific fields
 ```
 
-The `get_settings()` class method ensures that `AppSettings` instances participate in the caching system. Multiple calls with the same config files return the same cached instance (or a lightweight copy if kwargs differ).
+`AppSettings.get_settings()` uses the same cache routes and therefore shares their current cold-input retention and shallow-overlay limitations.
 
 #### Diagram: AppSettings Inheritance and Integration
 
@@ -364,25 +336,25 @@ A class hierarchy diagram showing the inheritance chain: BaseSettings -> Mountai
 
 Bringing all the caching concepts together, the complete flow for a settings retrieval is:
 
-1. Caller invokes `get_settings()` or `cls.get_settings()` with flexible arguments
-2. A `SettingsParameters` is built via `create()` and optionally `merge()`
-3. The parameters are passed to `_get_settings()` (the `@lru_cache`-decorated function)
-4. `lru_cache` computes `hash(settings_parameters)` -- only structural fields contribute
-5. **Cache hit**: the cached `MountainAshBaseSettings` instance is returned immediately
-6. **Cache miss**: `SettingsManager.get_or_create_settings()` constructs a new instance
-7. Back in the public layer, `apply_runtime_overrides()` checks for kwargs
-8. **No kwargs**: return the cached instance directly (zero-copy)
-9. **Has kwargs**: `model_copy()` + `update_settings_from_dict()` on the copy
+1. Caller invokes `get_settings()` or `cls.get_settings()` with flexible arguments.
+2. A `SettingsParameters` is built via `create()` and optionally `merge()`.
+3. Structural parameters are passed to `_get_settings()` (the `@lru_cache`-decorated function).
+4. `lru_cache` computes `hash(settings_parameters)` -- only structural fields contribute.
+5. **Cache hit**: the cached `MountainAshBaseSettings` instance supplies the baseline.
+6. **Cache miss**: `SettingsManager.get_or_create_settings()` constructs that baseline.
+7. Back in the public layer, `apply_runtime_overrides()` checks for accepted kwargs.
+8. **No kwargs**: return the cached instance directly (zero-copy).
+9. **Has kwargs**: shallow-copy and hand original source-form inputs to `_apply_settings_inputs()` before public-route reference resolution and assignment.
 
-The result is that the expensive work (file I/O, secret resolution, validation) happens at most once per unique structural configuration, while runtime overrides are a lightweight dictionary update on a shallow copy.
+Expensive source loading is reused, but cold runtime inputs can remain cached and nested live state can remain shared. Provenance ownership is narrower than the cache isolation planned in MAS-SEC-002.
 
 ## Key Takeaways
 
 - **LRU Cache Decorator** with `maxsize=None` provides unbounded caching for both the SettingsManager singleton and individual settings instances.
-- **Get Settings Function** is the public API that handles parameter building, cache lookup, and runtime override application in one call.
-- **Internal Get Settings** is the `@lru_cache`-decorated layer that ensures expensive construction happens at most once per structural configuration.
+- **Get Settings Function** is the public API that handles parameter building, cache lookup, and source-form runtime-overlay handoff in one call.
+- **Internal Get Settings** is the `@lru_cache`-decorated layer that ensures expensive baseline construction happens once per structural configuration.
 - **Structural Cache Key** is the hash of structural parameters only, enabling cache sharing across calls with different runtime kwargs.
-- **Runtime Override Application** creates a `model_copy()` only when kwargs are present, applying overrides without mutating the cached base.
-- **Model Copy For Overrides** ensures thread-safe access to cached instances by never mutating the original.
+- **Runtime Override Application** applies kwargs through the private source-form lifecycle; it does not yet guarantee caller/cache isolation.
+- **Model Copy For Overrides** copies the outer model only; nested mutable state may remain shared.
 - **SettingsManager Class** maintains the dictionary cache and handles class resolution via `importlib` for lazy construction.
 - **AppSettings Class** provides pre-configured application fields (timezone, debug, date/time) with template expansion, serving as a ready-to-use base for application settings.

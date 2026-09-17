@@ -1,9 +1,13 @@
-from typing import Optional, Union, List, Any, Dict, Type, Tuple, TypeVar
+from typing import Optional, Union, List, Any, Dict, Type, Tuple, TypeVar, cast
 from upath import UPath
 from string import Formatter
 from importlib import import_module
+from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal
+from pathlib import PurePosixPath, PureWindowsPath, PosixPath, WindowsPath
+from uuid import UUID
 
-from pydantic import Field
+from pydantic import BaseModel, Field, PrivateAttr, SecretStr, SecretBytes
 from pydantic_settings import (
     BaseSettings,
     DotEnvSettingsSource,
@@ -18,6 +22,197 @@ from mountainash_settings.settings_parameters import SettingsFileHandler, Settin
 
 # T = TypeVar('T', bound='BaseSettings')
 T = TypeVar('T', BaseSettings, 'MountainAshBaseSettings')
+
+
+_LOCAL_PATH_TYPE = type(UPath("."))
+
+
+class _UnownedReconstruction(Exception):
+    """Internal signal; never retains an input or exception from user code."""
+
+
+
+def _reconstruction_key_is_safe(value: Any) -> bool:
+    """Hash only exact value types, never user model hash/equality hooks."""
+    value_type = type(value)
+    if value_type in (tuple, frozenset):
+        return all(_reconstruction_key_is_safe(child) for child in value)
+    return value_type in (
+        type(None), bool, int, float, complex, str, bytes,
+        SecretStr, SecretBytes, date, datetime, time, timedelta, Decimal, UUID,
+        PurePosixPath, PureWindowsPath, PosixPath, WindowsPath, _LOCAL_PATH_TYPE,
+    )
+
+
+def _copy_reconstruction(value: Any, memo: dict[int, Any], active: set[int]) -> Any:
+    """Copy source values without trusting arbitrary user copy hooks.
+
+    Exact value types are deliberate: subclasses may carry mutable state.
+    Cycles and opaque state affect extraction only, never model admission.
+    """
+    value_type = type(value)
+    if value_type in (type(None), bool, int, float, complex, str, bytes):
+        return value
+    identity = id(value)
+    if identity in active:
+        raise _UnownedReconstruction
+    if identity in memo:
+        return memo[identity]
+    active.add(identity)
+    try:
+        if value_type in (SecretStr, SecretBytes):
+            result = value_type(value.get_secret_value())
+        elif value_type is dict:
+            if not all(_reconstruction_key_is_safe(key) for key in value):
+                raise _UnownedReconstruction
+            result = {
+                _copy_reconstruction(key, memo, active): _copy_reconstruction(child, memo, active)
+                for key, child in value.items()
+            }
+        elif value_type in (list, tuple, set, frozenset):
+            if value_type in (set, frozenset) and not all(
+                _reconstruction_key_is_safe(child) for child in value
+            ):
+                raise _UnownedReconstruction
+            result = value_type(_copy_reconstruction(child, memo, active) for child in value)
+        elif value_type in (date, datetime, time, timedelta, Decimal, UUID, PurePosixPath, PureWindowsPath, PosixPath, WindowsPath):
+            if value_type in (datetime, time) and value.tzinfo is not None and type(value.tzinfo) is not timezone:
+                raise _UnownedReconstruction
+            result = value
+        elif value_type is _LOCAL_PATH_TYPE:
+            # Local paths describe locations, not open filesystem resources.
+            result = UPath(str(value))
+            if value.storage_options:
+                raise _UnownedReconstruction
+        elif isinstance(value, BaseModel):
+            # Bypass constructors, validation and user-defined copy hooks.
+            # Custom slots have no generic ownership contract.
+            for cls in value_type.__mro__:
+                if cls is BaseModel:
+                    break
+                if cls.__dict__.get("__slots__"):
+                    raise _UnownedReconstruction
+            result = object.__new__(value_type)
+            for attribute in ("__dict__", "__pydantic_extra__", "__pydantic_private__", "__pydantic_fields_set__"):
+                object.__setattr__(
+                    result, attribute,
+                    _copy_reconstruction(object.__getattribute__(value, attribute), memo, active),
+                )
+        else:
+            raise _UnownedReconstruction
+        memo[identity] = result
+        return result
+    finally:
+        active.remove(identity)
+
+
+def _snapshot_reconstruction(values: dict[str, Any]) -> Optional[dict[str, Any]]:
+    try:
+        return _copy_reconstruction(values, {}, set())
+    except (_UnownedReconstruction, RecursionError):
+        return None
+
+
+
+def _same_reconstruction_value(left: Any, right: Any) -> bool:
+    """Compare already-owned source values without user model equality hooks."""
+    if left is right:
+        return True
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return left.keys() == right.keys() and all(
+            _same_reconstruction_value(value, right[key]) for key, value in left.items()
+        )
+    if type(left) in (list, tuple):
+        return len(left) == len(right) and all(
+            _same_reconstruction_value(a, b) for a, b in zip(left, right)
+        )
+    if isinstance(left, BaseModel):
+        return all(
+            _same_reconstruction_value(
+                object.__getattribute__(left, attribute),
+                object.__getattribute__(right, attribute),
+            )
+            for attribute in ("__dict__", "__pydantic_extra__", "__pydantic_private__", "__pydantic_fields_set__")
+        )
+    # Remaining snapshot-supported exact types have value equality; opaque
+    # objects and model hash keys were rejected at the ownership boundary.
+    return bool(left == right)
+
+
+def _replace_reconstruction_path(tree: Any, path: tuple[str | int, ...], value: Any) -> Any:
+    """Copy the changed path, replacing a field rather than deep-merging it."""
+    if not path:
+        return value
+    segment, *rest = path
+    if isinstance(segment, str):
+        result = dict(tree) if isinstance(tree, dict) else {}
+        result[segment] = _replace_reconstruction_path(result.get(segment), tuple(rest), value)
+        return result
+    items = list(tree) if type(tree) in (list, tuple) else []
+    required = segment + 1 if segment >= 0 else -segment
+    items.extend([None] * max(0, required - len(items)))
+    items[segment] = _replace_reconstruction_path(items[segment], tuple(rest), value)
+    return tuple(items) if type(tree) is tuple else items
+
+
+def _patch_reconstruction(
+    recipe: dict[str, Any], patch: dict[str, Any], model_type: Type[BaseSettings],
+) -> Optional[dict[str, Any]]:
+    """Patch accepted paths only when every logical input remains faithful."""
+    from pydantic import AliasPath
+    from pydantic_core import PydanticUndefined
+    from mountainash_settings.resolve import _validation_paths
+
+    def input_paths(name: str) -> tuple[tuple[str | int, ...], ...]:
+        field = model_type.model_fields.get(name)
+        if field is None or model_type.model_config.get("validate_by_alias") is False:
+            return ((name,),)
+        paths = _validation_paths(name, field)
+        if model_type.model_config.get("validate_by_name") or model_type.model_config.get("populate_by_name"):
+            if (name,) not in paths:
+                paths += ((name,),)
+        return paths
+
+    def at(tree: dict[str, Any], path: tuple[str | int, ...]) -> Any:
+        return AliasPath(cast(str, path[0]), *path[1:]).search_dict_for_path(tree)
+
+    def selected_input(tree: dict[str, Any], name: str) -> Any:
+        for path in input_paths(name):
+            value = at(tree, path)
+            if value is not PydanticUndefined:
+                return value
+        return PydanticUndefined
+
+    result = recipe
+    for name, value in patch.items():
+        # A lower choice can lose to an earlier file/env alias. The highest
+        # choice must also survive the existing canonical-only kwargs filter.
+        selected = input_paths(name)[0]
+        if selected[0] not in model_type.model_fields:
+            return None
+        result = _replace_reconstruction_path(result, selected, value)
+        if selected[0] != name:
+            result.pop(name, None)
+
+    for name in model_type.model_fields:
+        actual = selected_input(result, name)
+        expected = patch[name] if name in patch else selected_input(recipe, name)
+        # Compare only owned source values, never resolved model fields.
+        if not _same_reconstruction_value(actual, expected):
+            return None
+        if name not in patch and expected is PydanticUndefined:
+            for path in input_paths(name):
+                for index, segment in enumerate(path):
+                    if isinstance(segment, int):
+                        parent = path[:index]
+                        if at(recipe, parent) is PydanticUndefined and at(result, parent) is not PydanticUndefined:
+                            # A newly supplied sequence replaces, rather than
+                            # merges with, a file/env sequence we cannot read.
+                            return None
+    return result
+
 
 class MountainAshBaseSettings(BaseSettings):
     """Base settings class with template support, multi-format config files,
@@ -47,8 +242,9 @@ class MountainAshBaseSettings(BaseSettings):
     SETTINGS_SOURCE_YAML_FILES: Optional[Union[Any, str, List[Any|str]]] =      Field(default=None)
     SETTINGS_SOURCE_TOML_FILES: Optional[Union[Any, str, List[Any|str]]] =      Field(default=None)
     SETTINGS_SOURCE_JSON_FILES: Optional[Union[Any, str, List[Any|str]]] =      Field(default=None)
-    SETTINGS_SOURCE_KWARGS: Optional[Dict[str,Any]] =                           Field(default=None)
-    SETTINGS_SOURCE_SECRETS_DIR: Optional[Dict[str,Any]] =                      Field(default=None)
+    SETTINGS_SOURCE_KWARG_NAMES: tuple[str, ...] = Field(default=())
+    _settings_reconstruction_kwargs: Optional[dict[str, Any]] = PrivateAttr(default=None)
+    SETTINGS_SOURCE_SECRETS_DIR: Optional[str] = Field(default=None)
     SETTINGS_SOURCE_SECRETS_PROVIDER: Optional[str] =                              Field(default=None)
 
 
@@ -85,6 +281,10 @@ class MountainAshBaseSettings(BaseSettings):
         valid_pydantic_modelconfig_kwargs: Dict[str, Any] = local_settings_params.get_pydantic_modelconfig_kwargs()
         valid_attribute_kwargs: Dict[str, Any] =            local_settings_params.get_attribute_settings_kwargs(settings_class=self.__class__)
         valid_pydantic_kwargs: Dict[str, Any] =             local_settings_params.get_pydantic_settings_kwargs()
+        reconstruction_kwargs = _snapshot_reconstruction(valid_attribute_kwargs)
+        reconstruction_names = tuple(valid_attribute_kwargs)
+        if reconstruction_kwargs is not None:
+            valid_attribute_kwargs = _copy_reconstruction(reconstruction_kwargs, {}, set())
 
 
         # Resolve prefixed references (e.g. secret:) in kwargs before pydantic validation
@@ -130,7 +330,8 @@ class MountainAshBaseSettings(BaseSettings):
         # meta-fields do not appear in model_fields_set and are dropped by
         # model_dump(exclude_unset=True). That matches the pre-Task-2
         # behaviour and is intentional — bookkeeping is not model state.
-        object.__setattr__(self, "SETTINGS_SOURCE_KWARGS",    valid_attribute_kwargs)
+        self._settings_reconstruction_kwargs = reconstruction_kwargs
+        object.__setattr__(self, "SETTINGS_SOURCE_KWARG_NAMES", reconstruction_names)
         object.__setattr__(self, "SETTINGS_CLASS",            local_settings_params.settings_class or MountainAshBaseSettings)
         object.__setattr__(self, "SETTINGS_CLASS_NAME",       local_settings_params.settings_class.__name__ if local_settings_params.settings_class else "MountainAshBaseSettings")
         object.__setattr__(self, "SETTINGS_SOURCE_ENV_PREFIX", local_settings_params.env_prefix)
@@ -234,7 +435,6 @@ class MountainAshBaseSettings(BaseSettings):
                      tuple(self.SETTINGS_SOURCE_YAML_FILES) if self.SETTINGS_SOURCE_YAML_FILES else None,
                      tuple(self.SETTINGS_SOURCE_TOML_FILES) if self.SETTINGS_SOURCE_TOML_FILES else None,
                      tuple(self.SETTINGS_SOURCE_JSON_FILES) if self.SETTINGS_SOURCE_JSON_FILES else None,
-                    #  self.SETTINGS_SOURCE_KWARGS
                      ))
 
 
@@ -306,14 +506,32 @@ class MountainAshBaseSettings(BaseSettings):
 
         if settings_dict is None:
             return None
+        self._apply_settings_inputs(settings_dict)
 
+    def _apply_settings_inputs(self, settings_dict: dict[str, Any], backend: Any = None) -> None:
+        """Stage source form before optional runtime resolution and assignment."""
+
+        patch = _snapshot_reconstruction(settings_dict)
+        recipe = self._settings_reconstruction_kwargs
+        merged = _snapshot_reconstruction(recipe) if recipe is not None else None
+        if merged is not None and patch is not None:
+            merged = _patch_reconstruction(merged, patch, type(self))
+        else:
+            merged = None
+        if backend is not None:
+            from mountainash_settings.resolve import resolve_references_in_dict
+            settings_dict = resolve_references_in_dict(settings_dict, backend)
         for key, value in settings_dict.items():
             if hasattr(self, key):
                 setattr(self, key, value)
             else:
                 raise AttributeError(f"The object does not have an attribute named '{key}'")
 
-        setattr(self, 'SETTINGS_SOURCE_KWARGS', settings_dict)
+        self._settings_reconstruction_kwargs = merged
+        names = tuple(merged) if merged is not None else tuple(dict.fromkeys(
+            (*self.SETTINGS_SOURCE_KWARG_NAMES, *settings_dict)
+        ))
+        object.__setattr__(self, "SETTINGS_SOURCE_KWARG_NAMES", names)
 
     def post_init(self,
                 template_settings_parameters: Optional[SettingsParameters] = None,
@@ -355,7 +573,13 @@ class MountainAshBaseSettings(BaseSettings):
 
 
         existing_config_files =     SettingsFileHandler.format_config_file_list(config_files=config_files)
-        existing_kwargs =           SettingsKwargsHandler.format_kwargs_dict(p_kwargs=self.SETTINGS_SOURCE_KWARGS)
+        recipe = self._settings_reconstruction_kwargs
+        existing_kwargs = _snapshot_reconstruction(recipe) if recipe is not None else None
+        if existing_kwargs is None:
+            raise TypeError(
+                f"Cannot extract settings parameters for {type(self).__name__}: "
+                "source inputs have no faithful independently owned reconstruction"
+            )
         existing_settings_class =   self.SETTINGS_CLASS or None
         existing_env_prefix =       self.SETTINGS_SOURCE_ENV_PREFIX or None
         existing_secrets_provider =  self.SETTINGS_SOURCE_SECRETS_PROVIDER or None
@@ -365,6 +589,7 @@ class MountainAshBaseSettings(BaseSettings):
             config_files=       existing_config_files,
             kwargs=             existing_kwargs,
             env_prefix=         existing_env_prefix,
+            secrets_dir=        self.SETTINGS_SOURCE_SECRETS_DIR,
             secrets_provider=   existing_secrets_provider)
 
         return params
@@ -402,8 +627,15 @@ class MountainAshBaseSettings(BaseSettings):
         backend = get_secrets_backend(provider)
         if key is None:
             key = self.persist_key()
-        backend.set(key, data)
+        payload = _snapshot_reconstruction(data)
+        input_names = tuple(dict.fromkeys((*self.SETTINGS_SOURCE_KWARG_NAMES, *data)))
+        backend.set(key, payload if payload is not None else data)
         self.update_settings_from_dict(data)
+        if payload is None:
+            # A backend may mutate even unsupported input. Never advertise
+            # its post-write replacement as an owned original recipe.
+            self._settings_reconstruction_kwargs = None
+            object.__setattr__(self, "SETTINGS_SOURCE_KWARG_NAMES", input_names)
 
     # def __getattribute__(self, name):
     #     """

@@ -42,11 +42,11 @@ Use `{FIELD_NAME}` syntax in default values to build fields that derive their va
 
 ### Cached Settings Instances
 
-Call `get_settings()` to retrieve a cached, ready-to-use settings instance. Structural parameters (files, env prefix) determine the cache key, while runtime parameters (per-call overrides) are applied on top of the cached base. This keeps startup fast and memory efficient. `SettingsParameters.create()` and `merge()` combine multiple configuration sources with predictable priority: file lists are unioned, scalar values follow last-wins, and dictionaries are deep-merged.
+`get_settings()` retrieves settings using structural cache identity. MAS-SEC-001 privately owns supported source-form reconstruction recipes. It does not yet prevent cold runtime-input contamination or nested mutable-state sharing through shallow overlays; those remain MAS-SEC-002 work. `SettingsParameters.create()` and `merge()` normalize and combine source selectors and runtime inputs.
 
 ### Secrets Resolution
 
-Register a secrets provider (Vault, SSM, KeyVault, or your own) and reference secrets in config files or kwargs with the `secret:path/to/value` prefix. The framework resolves secrets transparently during settings construction in a two-pass pipeline -- first on raw kwargs before `__init__`, then on loaded config fields after construction. Your application code works with plain typed values while credentials stay masked in logs and repr output via SecretStr.
+Register a secrets provider (Vault, SSM, KeyVault, or your own) and reference secrets in config files or kwargs with the `secret:path/to/value` prefix. The framework captures accepted kwargs privately in source form before resolving a working validation copy, then resolves loaded config fields after construction. Your application code works with plain typed values while credentials stay masked in logs and repr output via SecretStr; source-form extraction is a separate trusted reconstruction capability.
 
 ### Connection Profiles
 
@@ -58,7 +58,7 @@ Choose from built-in auth modes including password, token, OAuth2, IAM, service 
 
 ## Architecture
 
-The settings framework is built on a two-level caching architecture. An `lru_cache` on `_get_settings()` provides fast, process-global memoisation keyed by structural parameters (files, env prefix). A secondary `SettingsManager` dictionary store handles named lookups. Runtime overrides return a `model_copy()`, ensuring the cached base instance is never mutated. All attribute assignment triggers Pydantic validation including SecretStr wrapping, enum coercion, and AfterValidator hooks.
+The current cache has an `_get_settings()` LRU and a `SettingsManager` dictionary keyed by structural parameters. Cold construction retains runtime inputs, no-input retrieval returns the cached object, and later overlays use shallow copies. The private reconstruction lifecycle protects provenance, not all live state. MAS-SEC-002 owns the single-owner cache cutover and full invocation validation.
 
 Connection profiles use dynamic Pydantic field installation at class creation time. `__pydantic_init_subclass__` fires and installs fields from the profile descriptor into `model_fields` and `__annotations__`, followed by a `model_rebuild(force=True)` to finalise the updated schema. The auth discriminated union is assembled dynamically from the descriptor's auth_modes list. Config files are dispatched by extension into categorised groups, and the appropriate source priority tuple layers values predictably.
 
@@ -76,4 +76,4 @@ The two-level caching architecture requires care around concurrency. `model_conf
 
 Dynamic field installation via `model_rebuild()` should be verified after Pydantic version upgrades, as it depends on internal Pydantic class-creation machinery. The `validate_assignment=True` invariant means all attribute assignment triggers full validation; internal metadata fields use `object.__setattr__` to bypass revalidation and avoid polluting `model_fields_set`.
 
-Secrets resolution runs in two passes during `__init__`: first on raw kwargs via `resolve_references_in_dict` before `super().__init__()`, then on loaded config fields via `resolve_references_in_model_tree` after construction. Nested BaseModel fields are rebuilt as fresh instances to respect the `frozen=True` constraint. When debugging secrets issues, trace through both passes to identify where resolution is failing.
+Secrets resolution runs in two passes during `__init__`: first, accepted kwargs are captured privately in source form and a working copy is resolved via `resolve_references_in_dict` before `super().__init__`; then loaded config fields are resolved via `resolve_references_in_model_tree` after construction. Nested BaseModel fields are rebuilt as fresh instances to respect the `frozen=True` constraint. When debugging secrets issues, trace through both passes without treating ordinary dumps or private reconstruction state as a generic redaction boundary.

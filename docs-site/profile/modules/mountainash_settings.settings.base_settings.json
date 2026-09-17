@@ -1,7 +1,7 @@
 {
   "id": "mountainash_settings.settings.base_settings",
   "path": "src/mountainash_settings/settings/base_settings.py",
-  "summary": "MountainAshBaseSettings extends pydantic-settings BaseSettings with multi-format config file loading (YAML, TOML, JSON, env), template-based field derivation, secrets resolution, and a post_init hook. It is the single most important class in the package — all user settings classes subclass it.",
+  "summary": "MountainAshBaseSettings extends pydantic-settings BaseSettings with multi-format config file loading (YAML, TOML, JSON, env), template-based field derivation, secrets resolution, and a post_init hook. It records value-free source diagnostics and keeps source-form reconstruction inputs private for controlled extraction.",
   "role": "public-api",
   "visibility": "public",
   "stability": "stable",
@@ -45,14 +45,15 @@
   ],
   "lifecycle_notes": [
     "Calls SettingsParameters.create and merge before super().__init__",
+    "Captures accepted attribute inputs in private source form before reference resolution; public diagnostics expose source facts and accepted names only",
     "Calls post_init() at end of __init__",
-    "With validate_assignment=True, setattr triggers pydantic revalidation — use object.__setattr__ for bookkeeping-only fields",
-    "SETTINGS_SOURCE_* fields are harness bookkeeping, not user config — excluded from model_dump(exclude_unset=True)"
+    "With validate_assignment=True, setattr triggers pydantic revalidation — use object.__setattr__ for value-free bookkeeping fields"
   ],
   "documentation_hooks": [
     "Template syntax: {FIELD_NAME} in string fields, resolved at post_init",
     "config_files accepts UPath, str, list, or tuple — dispatched to YAML/TOML/JSON/env by extension",
-    "secrets_provider wires secret: prefixes in kwargs and config-file-loaded fields"
+    "secrets_provider wires secret: prefixes in kwargs and config-file-loaded fields",
+    "extract_settings_parameters() is trusted source-form reconstruction, not a generic diagnostic export"
   ],
   "examples": [
     "examples/basic_usage_example.py",

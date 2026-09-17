@@ -73,7 +73,7 @@ After working through this manual, you will know how to:
 6. **Connection Profiles** — ProfileDescriptor, ParameterSpec, MISSING sentinel, dynamic Pydantic field installation, DescriptorProfile
 7. **Profile Registry and Invariants** — Name-keyed store, @decorator registration pattern, duplicate prevention, invariant testing
 8. **Authentication System** — AuthSpec base with kind literal, 10+ concrete auth modes as discriminated union, dispatch to driver kwargs
-9. **Caching, Settings Management, and App Settings** — LRU cache on _get_settings, SettingsManager dictionary store, runtime overrides via model_copy, AppSettings convenience class
+9. **Caching, Settings Management, and App Settings** — LRU cache on `_get_settings`, SettingsManager dictionary store, source-form runtime-overlay handoff, AppSettings convenience class
 
 ## What This Manual Does Not Cover
 
