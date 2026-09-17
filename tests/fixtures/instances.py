@@ -9,7 +9,7 @@ from typing import Optional, Type
 import pytest
 from unittest.mock import patch
 
-from mountainash_settings import get_settings, SettingsManager, get_settings_manager
+from mountainash_settings import get_settings, SettingsManager
 from mountainash_settings.settings.app.app_settings import AppSettings
 
 from .settings_classes import (
@@ -91,9 +91,14 @@ def app_settings_with_config(temp_yaml_file):
 
 
 @pytest.fixture
-def settings_manager() -> SettingsManager:
-    """Provides a SettingsManager instance."""
-    return get_settings_manager()
+def settings_manager(monkeypatch) -> SettingsManager:
+    """Provide a fresh manager for public and direct retrieval."""
+    manager = SettingsManager()
+    monkeypatch.setattr(
+        "mountainash_settings.settings_cache.settings_functions.get_settings_manager",
+        lambda: manager,
+    )
+    return manager
 
 
 @pytest.fixture
@@ -168,16 +173,15 @@ def cached_settings(basic_settings_parameters):
     return get_settings(settings_parameters=basic_settings_parameters)
 
 
-@pytest.fixture(scope="function")
-def isolated_settings_manager():
-    """
-    Provides an isolated SettingsManager for tests that need clean state.
-
-    Note: This doesn't fully isolate the global cache, but provides
-    a fresh manager instance. For true isolation, tests should use
-    unique parameter combinations (e.g. different env_prefix values).
-    """
-    return SettingsManager()
+@pytest.fixture
+def isolated_settings_manager(monkeypatch) -> SettingsManager:
+    """Provide an isolated manager for public and direct retrieval."""
+    manager = SettingsManager()
+    monkeypatch.setattr(
+        "mountainash_settings.settings_cache.settings_functions.get_settings_manager",
+        lambda: manager,
+    )
+    return manager
 
 
 @pytest.fixture

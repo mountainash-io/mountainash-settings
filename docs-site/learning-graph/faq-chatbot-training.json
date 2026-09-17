@@ -3,8 +3,8 @@
     "id": "faq-001",
     "category": "Foundation and Base Settings",
     "question": "What is mountainash-settings and what problem does it solve?",
-    "answer": "Mountainash-settings is a typed configuration framework for Python applications built on Pydantic v2. It solves the problem of managing application configuration across multiple sources (YAML, TOML, JSON, .env files, and environment variables) while providing type safety, validation, secrets resolution, and intelligent caching. Rather than scattering configuration loading logic throughout an application, mountainash-settings centralises it in a single validated model with support for derived values via field templating, transparent secrets resolution from providers like HashiCorp Vault, AWS SSM, and Azure Key Vault, and reusable connection profiles for database and service backends. The framework eliminates common configuration bugs such as missing keys, type mismatches, and stale cached values by leveraging Pydantic's validation engine and providing structural hashing for cache correctness.",
-    "concepts": ["MountainAshBaseSettings Class", "Multi Format File Loading", "Secrets Registry", "LRU Cache Decorator"]
+    "answer": "Mountainash-settings is a typed configuration framework for Python applications built on Pydantic v2. It solves the problem of managing application configuration across multiple sources (YAML, TOML, JSON, .env files, and environment variables) while providing type safety, validation, secrets resolution, and structural source-context reuse. Rather than scattering configuration loading logic throughout an application, mountainash-settings centralises it in a single validated model with support for derived values via field templates and reusable configuration profiles.",
+    "concepts": ["MountainAshBaseSettings Class", "Multi Format File Loading", "Secrets Registry", "Structural Source Context"]
   },
   {
     "id": "faq-002",
@@ -59,15 +59,15 @@
     "id": "faq-009",
     "category": "Settings Parameters and Merge Strategies",
     "question": "What is the SettingsParameters class and what does it do?",
-    "answer": "SettingsParameters is a companion class that controls how a settings instance is constructed, cached, and merged. It holds two categories of fields: structural fields and runtime fields. Structural fields (such as file lists and environment prefixes) affect the identity of the settings configuration and participate in the custom hash and equality implementation. Runtime fields (such as override values) do not affect identity and are applied after cache lookup. The SettingsParameters class provides the Parameter Create Factory for constructing instances, and it integrates with the merge framework to combine parameters from multiple sources. It also provides the KwargsHandler for normalising keyword arguments before they are passed to the settings constructor.",
+    "answer": "SettingsParameters is a companion class that describes how a settings result is materialized and merged. Its structural fields identify the private source context to capture—such as the settings class, file list, environment prefix, secrets directory, and secrets provider—while its runtime keyword arguments are inputs for one invocation. The manager captures the structural sources once, then each request projects its runtime inputs and validates a fresh result. SettingsParameters provides the Parameter Create Factory for construction, integrates with the merge framework, and uses the KwargsHandler to normalise keyword arguments before they reach the settings constructor.",
     "concepts": ["SettingsParameters Class", "Structural Fields", "Runtime Fields", "Custom Hash And Eq", "Parameter Create Factory", "KwargsHandler Class"]
   },
   {
     "id": "faq-010",
     "category": "Settings Parameters and Merge Strategies",
     "question": "What is the difference between structural fields and runtime fields?",
-    "answer": "Structural fields define the identity of a settings configuration. They include things like the list of config files, the environment prefix, and the secrets provider configuration. Two SettingsParameters instances with the same structural fields are considered equivalent, even if their runtime fields differ. This distinction is critical for the LRU caching system: the structural cache key is computed from structural fields only, so that runtime overrides do not defeat the cache. Runtime fields include values like individual field overrides that should be applied after retrieving a cached base instance. The Custom Hash And Eq implementation on SettingsParameters uses only structural fields, making the cache key stable across calls that differ only in runtime overrides.",
-    "concepts": ["Structural Fields", "Runtime Fields", "Custom Hash And Eq", "Structural Cache Key"]
+    "answer": "Structural fields identify the source context: they include the settings class, configuration-file list, environment prefix, secrets directory, and secrets provider. Requests with the same structural fields share the captured source context, not a settings object. Runtime fields are the current call's keyword arguments; they do not change the structural key and are projected during that call's materialization. The Custom Hash And Eq implementation covers the structural fields so that source capture can be reused while every retrieval still returns a newly validated, isolated result.",
+    "concepts": ["Structural Fields", "Runtime Fields", "Custom Hash And Eq", "Structural Context Key"]
   },
   {
     "id": "faq-011",
@@ -275,37 +275,37 @@
   {
     "id": "faq-040",
     "category": "Caching and Settings Retrieval",
-    "question": "How does the LRU cache on settings work?",
-    "answer": "The framework uses Python's functools.lru_cache decorator on the internal _get_settings function to ensure that settings instances with identical structural parameters are constructed only once. The structural cache key is computed from the structural fields of SettingsParameters using its custom hash implementation. When get_settings is called, it constructs a SettingsParameters instance, computes its hash from the structural fields, and checks the LRU cache. If a matching entry exists, the cached settings instance is returned (possibly with runtime overrides applied via model_copy). If no match exists, the settings are constructed from scratch, cached, and returned. This caching strategy is safe because structural fields fully determine the settings identity; runtime overrides are applied after cache lookup and do not pollute the cached base instance.",
-    "concepts": ["LRU Cache Decorator", "Internal Get Settings", "Structural Cache Key", "Custom Hash And Eq", "Model Copy For Overrides"]
+    "question": "How does settings source-context reuse work?",
+    "answer": "The framework retains one private structural source context for each structural key rather than an LRU cache of settings results. On the first request for a key, it captures the configured sources and resolves declared static secret references. Ordinary defaults and default factories remain per-materialization behavior. Later requests reuse that captured context, project their current runtime inputs through the source order, and perform full validation to materialize a new settings object. No previously returned object is reused, and no second result cache or copy-on-override layer is involved.",
+    "concepts": ["Structural Source Context", "Settings Materialization", "Structural Context Key", "Custom Hash And Eq", "Fresh Result Materialization"]
   },
   {
     "id": "faq-041",
     "category": "Caching and Settings Retrieval",
     "question": "What is the get_settings function and how do I use it?",
-    "answer": "The get_settings function is the primary entry point for retrieving settings instances. It accepts a settings class (a MountainAshBaseSettings subclass) and optional SettingsParameters. It delegates to the internal _get_settings function for cache-aware construction and applies any runtime overrides. Typical usage is: settings = get_settings(MyAppSettings) for default parameters, or settings = get_settings(MyAppSettings, params) when you need to customise file lists or apply overrides. The function handles the full lifecycle: parameter construction, cache lookup, settings construction (if not cached), template expansion, secrets resolution, and runtime override application. It is the recommended way to obtain settings instances because it ensures correct caching behaviour and lifecycle ordering.",
-    "concepts": ["Get Settings Function", "Internal Get Settings", "Runtime Override Application", "MountainAshBaseSettings Class"]
+    "answer": "The get_settings function is the primary entry point for materializing settings. It accepts a settings class and optional SettingsParameters, combines explicit arguments with the supplied parameters, and asks the process-wide SettingsManager for the matching structural source context. Typical usage is settings = get_settings(settings_class=MyAppSettings) for default parameters or settings = get_settings(settings_parameters=params) for a prepared request. Each call applies its current runtime inputs, runs the normal settings lifecycle and validation, and returns an isolated result.",
+    "concepts": ["Get Settings Function", "Settings Materialization", "Runtime Input Projection", "MountainAshBaseSettings Class"]
   },
   {
     "id": "faq-042",
     "category": "Caching and Settings Retrieval",
-    "question": "How do runtime overrides work with caching?",
-    "answer": "Runtime overrides are field values that should be applied to a settings instance without affecting the cache key. When you pass runtime fields in SettingsParameters, the framework first looks up the cached base instance using only the structural fields. If found, it applies the runtime overrides by calling model_copy on the cached instance with the override values. The model_copy method creates a shallow copy of the Pydantic model with the specified fields replaced, leaving the original cached instance unchanged. This design means that calling get_settings with different runtime overrides but the same structural parameters hits the cache and only incurs the cost of a model_copy, not a full settings construction with file loading and secrets resolution.",
-    "concepts": ["Runtime Override Application", "Model Copy For Overrides", "Structural Cache Key", "Runtime Fields"]
+    "question": "How do runtime inputs work with source-context reuse?",
+    "answer": "Runtime keyword arguments are inputs to one materialization; they are not applied to a cached settings instance. They are excluded from the structural key, so calls with the same source-defining parameters can reuse the captured source context while still projecting the current runtime values. The resulting candidate is fully validated and returned as a fresh, detached settings object. This avoids shared result identity, shallow model copies, and a separate runtime-overlay cache.",
+    "concepts": ["Runtime Input Projection", "Fresh Result Materialization", "Structural Context Key", "Runtime Fields"]
   },
   {
     "id": "faq-043",
     "category": "Caching and Settings Retrieval",
     "question": "What is the SettingsManager class?",
-    "answer": "The SettingsManager class is a higher-level dictionary store for managing multiple named settings instances. While the LRU cache on _get_settings handles deduplication for identical structural parameters, the SettingsManager provides a named settings lookup where you can register and retrieve settings by a human-readable name. This is useful in applications that manage multiple connection profiles or multiple environments simultaneously. The SettingsManager integrates with the Registry class's name-keyed store pattern, providing a consistent interface for looking up settings by name. It complements rather than replaces the LRU cache: the manager stores references to settings instances, while the cache ensures those instances are efficiently constructed.",
-    "concepts": ["SettingsManager Class", "Named Settings Lookup", "Name Keyed Store", "Registry Class"]
+    "answer": "SettingsManager is the sole process-wide owner of private structural source contexts. It coordinates one capture per structural key, makes concurrent callers wait for an in-progress capture when necessary, and materializes an isolated settings result for each request. It is not a named registry or dictionary of settings instances: it retains source snapshots and static defaults, never a previously returned result. The profile Registry remains a separate name-keyed facility.",
+    "concepts": ["SettingsManager Class", "Private Context Ownership"]
   },
   {
     "id": "faq-044",
     "category": "Caching and Settings Retrieval",
-    "question": "What is the structural cache key and how is it computed?",
-    "answer": "The structural cache key is the hash value used to identify a unique settings configuration in the LRU cache. It is computed from the structural fields of the SettingsParameters instance using the custom hash and eq implementation. Only structural fields participate in the hash: these include the config file list, environment prefix, secrets provider configuration, and other parameters that affect which settings values are loaded. Runtime fields like individual field overrides are excluded from the hash. The custom eq implementation ensures that two SettingsParameters instances with the same structural fields are considered equal even if their runtime fields differ. This separation is what makes the caching system work correctly with runtime overrides.",
-    "concepts": ["Structural Cache Key", "Custom Hash And Eq", "Structural Fields", "Runtime Fields"]
+    "question": "What is the structural context key and how is it computed?",
+    "answer": "The structural context key identifies the source data that may be captured and reused. It is derived from the settings class, normalized configuration-file list, environment prefix, secrets directory, and secrets provider. Runtime keyword arguments are deliberately absent because they belong to a single materialization, not to the source context. Equivalent structural parameters therefore use the same private capture, while their calls still receive independently validated results.",
+    "concepts": ["Structural Context Key", "Custom Hash And Eq", "Structural Fields", "Runtime Fields"]
   },
   {
     "id": "faq-045",
@@ -353,14 +353,14 @@
     "id": "faq-051",
     "category": "Registry and App Settings",
     "question": "How does AppSettings integrate with get_settings?",
-    "answer": "App settings integration means that AppSettings works seamlessly with the get_settings function, LRU caching, and the full settings lifecycle. You call get_settings(AppSettings) or get_settings(AppSettings, params) exactly as you would with any MountainAshBaseSettings subclass. The AppSettings defaults and templates are resolved during the post_init lifecycle, secrets in any AppSettings field are resolved through the two-pass pipeline, and the resulting instance is cached based on its structural parameters. You can also subclass AppSettings to add application-specific fields while retaining all the convenience defaults. This makes AppSettings a practical starting point for most applications, providing common configuration patterns out of the box while remaining extensible.",
+    "answer": "AppSettings uses get_settings and the same full settings lifecycle as any other supported settings class. You call get_settings(settings_class=AppSettings) or get_settings(settings_parameters=params); its defaults and templates are resolved during post_init and any secrets follow the normal resolution pipeline. A matching structural key may reuse its captured sources, but each invocation materializes and returns its own validated AppSettings object. You can subclass AppSettings to add application-specific fields while retaining its convenience defaults.",
     "concepts": ["App Settings Integration", "Get Settings Function", "AppSettings Class", "Post Init Lifecycle"]
   },
   {
     "id": "faq-052",
     "category": "Advanced Topics",
     "question": "How do I subclass MountainAshBaseSettings for my application?",
-    "answer": "To create custom application settings, define a class that inherits from MountainAshBaseSettings and declare your fields using standard Pydantic type annotations. Set model_config to customise behaviour such as env prefix, config file paths, and validation settings. Your fields can use any Pydantic-supported type, including nested models, enums, and SecretStr for sensitive values. You can use {FIELD_NAME} template syntax in default values to derive fields from other fields. Register your settings class with get_settings for cached construction. For connection profiles, subclass DescriptorProfile instead and let the ProfileDescriptor's dynamic field installation handle field creation. The framework handles file loading, environment variable binding, template expansion, secrets resolution, and caching automatically.",
+    "answer": "To create custom application settings, define a class that inherits from MountainAshBaseSettings and declare fields using standard Pydantic type annotations. Set model_config to customise behaviour such as env prefix, config file paths, and validation settings. Fields can use any Pydantic-supported type, including nested models, enums, and SecretStr, and may use {FIELD_NAME} template syntax in defaults. Use get_settings when you want structural source-context reuse with a fresh materialized result for each call. For connection profiles, subclass DescriptorProfile instead and let ProfileDescriptor's dynamic field installation handle field creation. The framework handles file loading, environment binding, template expansion, secrets resolution, and validation automatically.",
     "concepts": ["MountainAshBaseSettings Class", "Settings Model Config", "Template Syntax", "Get Settings Function", "DescriptorProfile Class"]
   },
   {
@@ -388,14 +388,14 @@
     "id": "faq-056",
     "category": "Advanced Topics",
     "question": "How do I test settings in a CI/CD environment?",
-    "answer": "For CI/CD testing, you can construct settings directly with keyword arguments, bypassing file loading and secrets resolution entirely. Pass all values as constructor kwargs, which have the highest source priority and will override any file or environment defaults. Alternatively, use SettingsParameters to point at test-specific configuration files with mock values. For secrets, you can either register a mock secrets provider that returns test values, or simply provide the secret values directly as kwargs (since kwargs are resolved before the secrets pipeline runs). The invariant test generator produces tests for your ProfileDescriptors automatically. The caching system can be cleared between tests to ensure isolation.",
-    "concepts": ["Settings Source Priority", "SettingsParameters Class", "Secret Provider Protocol", "Invariant Test Generator", "LRU Cache Decorator"]
+    "answer": "For CI/CD testing, you can construct settings directly with keyword arguments, bypassing file loading and secrets resolution entirely. Pass all values as constructor kwargs, which have the highest source priority and will override any file or environment defaults. Alternatively, use SettingsParameters to point at test-specific configuration files with mock values. For secrets, you can either register a mock secrets provider that returns test values, or simply provide the secret values directly as kwargs (since kwargs are resolved before the secrets pipeline runs). The invariant test generator produces tests for ProfileDescriptors automatically. Calls through get_settings already materialize isolated results, so instance isolation does not require clearing a result cache.",
+    "concepts": ["Settings Source Priority", "SettingsParameters Class", "Secret Provider Protocol", "Invariant Test Generator", "Fresh Result Materialization"]
   },
   {
     "id": "faq-057",
     "category": "Advanced Topics",
     "question": "What is the relationship between SettingsParameters and MountainAshBaseSettings?",
-    "answer": "SettingsParameters controls how a MountainAshBaseSettings instance is constructed, while MountainAshBaseSettings defines what the settings contain. Think of SettingsParameters as the \"how\" (which files to load, what env prefix to use, which secrets providers to consult) and MountainAshBaseSettings as the \"what\" (the actual typed fields with their values). The get_settings function bridges the two: it takes a MountainAshBaseSettings class and a SettingsParameters instance, uses the parameters to construct the settings, and returns the validated instance. The structural fields of SettingsParameters determine the cache key, so different parameter configurations for the same settings class produce separate cached instances. This separation of concerns keeps settings definitions clean and construction logic configurable.",
-    "concepts": ["SettingsParameters Class", "MountainAshBaseSettings Class", "Get Settings Function", "Structural Cache Key"]
+    "answer": "SettingsParameters describes how MountainAshBaseSettings should be materialized, while MountainAshBaseSettings defines the typed fields in the result. Think of SettingsParameters as the \"how\"—which sources to capture and which runtime inputs apply to this call—and MountainAshBaseSettings as the \"what.\" The get_settings function bridges them by combining parameters, locating or capturing the structural source context, and returning a fully validated fresh instance. The structural fields select that source context; runtime keyword arguments affect only the current materialization. This keeps source capture reusable without making results shared state.",
+    "concepts": ["SettingsParameters Class", "MountainAshBaseSettings Class", "Get Settings Function", "Structural Context Key"]
   }
 ]

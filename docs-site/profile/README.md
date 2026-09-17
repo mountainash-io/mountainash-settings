@@ -40,9 +40,17 @@ Subclass `MountainAshBaseSettings` to declare your application's configuration a
 
 Use `{FIELD_NAME}` syntax in default values to build fields that derive their value from other settings. Combined with the UPath operator, this makes cross-platform path construction straightforward and declarative. Connection strings build themselves from host, port, and database fields. Log file paths compose from application name and run date. The derivation is always visible in the class definition.
 
-### Cached Settings Instances
+### Cached Settings Retrieval
 
-`get_settings()` retrieves settings using structural cache identity. MAS-SEC-001 privately owns supported source-form reconstruction recipes. It does not yet prevent cold runtime-input contamination or nested mutable-state sharing through shallow overlays; those remain MAS-SEC-002 work. `SettingsParameters.create()` and `merge()` normalize and combine source selectors and runtime inputs.
+`get_settings()` identifies a private source context from the five structural
+selectors and materializes a fresh, independently owned result for every
+caller. Selected source inputs and their prevalidation-resolved baseline
+references are pinned per context; runtime fields and explicit runtime secret
+references are invocation-local. Defaults and default factories remain
+Pydantic behavior evaluated per materialization. This does not claim the
+later Profile origin/template integration (MAS-SEC-005), direct-constructor
+source isolation (MAS-SEC-004), common errors (MAS-SEC-006), or lifecycle
+refresh work.
 
 ### Secrets Resolution
 
@@ -58,7 +66,14 @@ Choose from built-in auth modes including password, token, OAuth2, IAM, service 
 
 ## Architecture
 
-The current cache has an `_get_settings()` LRU and a `SettingsManager` dictionary keyed by structural parameters. Cold construction retains runtime inputs, no-input retrieval returns the cached object, and later overlays use shallow copies. The private reconstruction lifecycle protects provenance, not all live state. MAS-SEC-002 owns the single-owner cache cutover and full invocation validation.
+Cached retrieval uses one private structural-context owner, not `_get_settings`
+or a public result dictionary. It captures source state once and validates each
+complete invocation before returning an owned object graph. Cacheable custom
+sources must opt into capture/project; legacy source hooks must explicitly
+adapt through `settings_capture_sources`, while unsupported cached hooks and
+plain `BaseSettings` custom constructors fail before reads. Ordinary direct
+construction remains unchanged. `reinitialise` is cached-retrieval operation
+control, not source reload or refresh.
 
 Connection profiles use dynamic Pydantic field installation at class creation time. `__pydantic_init_subclass__` fires and installs fields from the profile descriptor into `model_fields` and `__annotations__`, followed by a `model_rebuild(force=True)` to finalise the updated schema. The auth discriminated union is assembled dynamically from the descriptor's auth_modes list. Config files are dispatched by extension into categorised groups, and the appropriate source priority tuple layers values predictably.
 
@@ -72,8 +87,14 @@ Contributions welcome. The project uses hatch for environment management with pr
 
 ## Maintaining
 
-The two-level caching architecture requires care around concurrency. `model_config` mutation before `super().__init__()` operates at the class level, so concurrent first-construction of different file sets on the same class should be serialised. The `SettingsManager` dictionary is similarly designed for single-threaded first-creation.
+Cached contexts coordinate first source capture without retaining first-call
+runtime values or returned settings instances. A later same-context request
+uses the captured source baseline even if the external file is gone; a fresh
+result still validates defaults, runtime fields, and post-init state for that
+request. `CacheableSettingsSource.capture()` may perform the one external
+capture; `project(snapshot, current_state, sources_data)` must be pure and
+return terminal values. Do not treat its results as new source references.
 
-Dynamic field installation via `model_rebuild()` should be verified after Pydantic version upgrades, as it depends on internal Pydantic class-creation machinery. The `validate_assignment=True` invariant means all attribute assignment triggers full validation; internal metadata fields use `object.__setattr__` to bypass revalidation and avoid polluting `model_fields_set`.
-
-Secrets resolution runs in two passes during `__init__`: first, accepted kwargs are captured privately in source form and a working copy is resolved via `resolve_references_in_dict` before `super().__init__`; then loaded config fields are resolved via `resolve_references_in_model_tree` after construction. Nested BaseModel fields are rebuilt as fresh instances to respect the `frozen=True` constraint. When debugging secrets issues, trace through both passes without treating ordinary dumps or private reconstruction state as a generic redaction boundary.
+The profile-specific template/origin lifecycle, direct source framing,
+common error API, and refresh/rotation behavior remain the separately ordered
+MAS-SEC-005, MAS-SEC-004, MAS-SEC-006, and lifecycle work.

@@ -126,14 +126,14 @@ Total concepts: 110
 
 ## Caching (99-106)
 
-99. LRU Cache Decorator
+99. Structural Source Context
 100. Get Settings Function
-101. Internal Get Settings
-102. Structural Cache Key
-103. Runtime Override Application
-104. Model Copy For Overrides
+101. Settings Materialization
+102. Structural Context Key
+103. Runtime Input Projection
+104. Fresh Result Materialization
 105. SettingsManager Class
-106. Named Settings Lookup
+106. Private Context Ownership
 
 ## App Settings (107-110)
 

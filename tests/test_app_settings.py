@@ -1,7 +1,6 @@
 import pytest
 from datetime import datetime
 from upath import UPath
-from unittest.mock import patch, MagicMock
 from pydantic import Field
 
 from mountainash_settings import SettingsParameters
@@ -59,18 +58,6 @@ class TestAppSettings:
         assert len(settings.RUNTIME) == 6   # HHMMSS format
         assert settings.RUNDATE.isdigit()
         assert settings.RUNTIME.isdigit()
-
-    def test_post_init_calls_super_post_init(self):
-        settings = AppSettings()
-        with patch.object(settings.__class__.__bases__[0], 'post_init') as mock_super_post_init:
-            settings.post_init()
-            mock_super_post_init.assert_called_once_with(reinitialise=False)
-
-    def test_post_init_with_reinitialise_flag(self):
-        settings = AppSettings()
-        with patch.object(settings.__class__.__bases__[0], 'post_init') as mock_super_post_init:
-            settings.post_init(reinitialise=True)
-            mock_super_post_init.assert_called_once_with(reinitialise=True)
 
     def test_post_init_initializes_rundatetime_from_template(self):
         settings = AppSettings(RUNDATE="20240115", RUNTIME="143045")

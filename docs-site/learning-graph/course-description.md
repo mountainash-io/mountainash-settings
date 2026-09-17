@@ -12,7 +12,7 @@ Mountainash Settings: Typed Configuration Framework for Python Applications
 
 ## Target Audience
 
-Python developers and platform engineers who need a validated, multi-source configuration system with support for secrets resolution, connection profiles, pluggable authentication, and intelligent caching.
+Python developers and platform engineers who need a validated, multi-source configuration system with support for secrets resolution, connection profiles, pluggable authentication, and private structural source-context reuse.
 
 ## Prerequisites
 
@@ -31,7 +31,7 @@ Python developers and platform engineers who need a validated, multi-source conf
 6. **Connection Profiles** — ProfileDescriptor, ParameterSpec, MISSING sentinel, dynamic Pydantic field installation, DescriptorProfile
 7. **Profile Registry** — Name-keyed store, @decorator registration pattern, duplicate prevention, invariant testing
 8. **Auth System** — AuthSpec base with kind literal, 10+ concrete auth modes as discriminated union, dispatch to driver kwargs
-9. **Caching** — LRU cache on `_get_settings`, SettingsManager dictionary store, source-form runtime-overlay handoff
+9. **Caching** — private structural source-context capture, runtime input projection, fresh result materialization
 10. **App Settings** — AppSettings convenience class, app settings templates
 
 ## Topics Excluded
@@ -56,13 +56,13 @@ After studying this package, developers will be able to:
 
 - Explain the two-pass secrets resolution pipeline (kwargs then model tree)
 - Describe how ProfileDescriptor dynamically installs Pydantic fields at class creation
-- Explain the LRU caching strategy keyed by structural parameters
+- Explain how structural source contexts are reused while settings results are materialized afresh
 
 ### Apply
 
 - Subclass MountainAshBaseSettings to define typed application configuration
 - Use {FIELD_NAME} templates to derive field values from other settings
-- Register and retrieve cached settings instances via get_settings()
+- Materialize isolated settings results with get_settings()
 
 ### Analyze
 
@@ -82,4 +82,4 @@ After studying this package, developers will be able to:
 
 ## Context
 
-Mountainash-settings provides a typed configuration framework for Python applications built on Pydantic v2. It loads configuration from multiple file formats, resolves secrets transparently, supports field templating for derived values, and provides a profile system for building reusable connection configurations. The auth system offers 10+ pluggable authentication modes as a discriminated union. Intelligent LRU caching ensures settings are constructed once and reused efficiently.
+Mountainash-settings provides a typed configuration framework for Python applications built on Pydantic v2. It loads configuration from multiple file formats, resolves secrets transparently, supports field templating for derived values, and provides a profile system for building reusable connection configurations. The auth system offers 10+ pluggable authentication modes as a discriminated union. Private structural source contexts capture reusable inputs while each retrieval validates and returns a fresh settings result.

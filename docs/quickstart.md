@@ -144,7 +144,7 @@ print(settings.LOG_PATH)
 
 ## 4. Get cached settings with `get_settings()`
 
-`get_settings()` returns the same instance every time it is called with the same structural parameters (config files, settings class, env prefix). This is safe to call inside functions that run frequently — the settings are only loaded once.
+`get_settings()` pins selected source inputs for each structural context, then returns a fresh independently owned settings object on every call. Calls with the same structural selectors reuse the captured source baseline, not a returned instance.
 
 ```python
 from mountainash_settings import get_settings
@@ -165,10 +165,8 @@ settings = AppSettings.get_settings(config_files=["config/production.yaml"])
 
 ### Runtime overrides
 
-Pass extra keyword arguments to override specific fields without affecting the cache. Each call with different overrides gets a copy of the cached instance with the overrides applied — the cache is never mutated.
-
+Pass extra keyword arguments as invocation-local runtime values. They are validated together with the pinned baseline, never enter the retained context, and every result has its own mutable state.
 ```python
-# Cached base is shared; each call gets a lightweight copy with the override
 settings_a = get_settings(settings_class=AppSettings, PORT=8001)
 settings_b = get_settings(settings_class=AppSettings, PORT=8002)
 ```

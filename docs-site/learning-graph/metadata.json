@@ -1,6 +1,6 @@
 {
   "title": "Mountainash Settings Concept Graph",
-  "description": "A concept dependency graph for the mountainash-settings typed configuration framework. 110 concepts across 10 categories covering base settings, parameters, templating, secrets, profiles, registry, auth system, caching, and app settings.",
+  "description": "A concept dependency graph for the mountainash-settings typed configuration framework. 110 concepts across 10 categories covering base settings, parameters, templating, secrets, profiles, registry, auth system, structural source-context reuse, and app settings.",
   "creator": "Nathaniel Ramm",
   "date": "2026-06-03",
   "version": "1.0",

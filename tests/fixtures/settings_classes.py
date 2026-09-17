@@ -76,7 +76,11 @@ class TemplateTestSettings(MountainAshBaseSettings):
     log_file: str = Field(default="logs/{app_name}.log")
     full_log_path: str = Field(default="{log_dir}/{app_name}.log")
 
-    def post_init(self, reinitialise: bool = False) -> None:
+    def post_init(
+        self,
+        template_settings_parameters: Optional[SettingsParameters] = None,
+        reinitialise: Optional[bool] = False,
+    ) -> None:
         """Initialize templated fields."""
         self.log_file = self.init_setting_from_template(
             self.log_file,

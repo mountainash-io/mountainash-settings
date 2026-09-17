@@ -4,10 +4,9 @@ Comprehensive tests for SettingsParameters uncovered functionality.
 Tests cover:
 - __eq__() with non-SettingsParameters types
 - get_settings() method with and without settings_class
-- _get_valid_kwarg_names() with None settings_class
-- apply_runtime_overrides() method
-- Hash and equality with kwargs (should be ignored)
-- Hash with config_files variations
+- accepted kwarg-name discovery
+- hash and equality with runtime kwargs excluded
+- hash with config_files variations
 """
 
 import pytest
@@ -235,100 +234,6 @@ class TestGetValidKwargNames:
         assert "COUNT" in result
 
 
-class TestApplyRuntimeOverrides:
-    """Test apply_runtime_overrides() method."""
-
-    @pytest.mark.unit
-    def test_apply_runtime_overrides_with_no_kwargs(self, isolated_settings_manager):
-        """Test that apply_runtime_overrides returns original when no kwargs."""
-        params = SettingsParameters.create(
-            settings_class=SimpleSettings,
-            env_prefix="NO_OVERRIDE_"
-        )
-        original_settings = params.get_settings()
-
-        result = params.apply_runtime_overrides(original_settings)
-
-        # Should return the same object
-        assert result is original_settings
-
-    @pytest.mark.unit
-    def test_apply_runtime_overrides_with_kwargs(self, isolated_settings_manager):
-        """Test that apply_runtime_overrides creates copy with overrides."""
-        # Create cached settings
-        params_base = SettingsParameters.create(
-            settings_class=SimpleSettings,
-            env_prefix="WITH_OVERRIDE_",
-            VALUE="original"
-        )
-        cached_settings = params_base.get_settings()
-
-        # Create params with runtime overrides
-        params_override = SettingsParameters.create(
-            settings_class=SimpleSettings,
-            env_prefix="WITH_OVERRIDE_",
-            VALUE="overridden",
-            COUNT=99
-        )
-
-        result = params_override.apply_runtime_overrides(cached_settings)
-
-        # Should be a different object
-        assert result is not cached_settings
-        # Original should be unchanged
-        assert cached_settings.VALUE == "original"
-        # Result should have overrides
-        assert result.VALUE == "overridden"
-        assert result.COUNT == 99
-
-    @pytest.mark.unit
-    def test_apply_runtime_overrides_with_empty_override_kwargs(self, isolated_settings_manager):
-        """Test apply_runtime_overrides when kwargs exist but no valid overrides."""
-        params_base = SettingsParameters.create(
-            settings_class=SimpleSettings,
-            env_prefix="EMPTY_OVERRIDE_",
-            VALUE="original"
-        )
-        cached_settings = params_base.get_settings()
-
-        # Create params with kwargs but only invalid ones
-        params_override = SettingsParameters(
-            settings_class=SimpleSettings,
-            env_prefix="EMPTY_OVERRIDE_",
-            kwargs={"invalid_field": "value"}  # Not a valid field
-        )
-
-        result = params_override.apply_runtime_overrides(cached_settings)
-
-        # Should create a copy even though no valid overrides
-        assert result is not cached_settings
-        # Values should remain unchanged
-        assert result.VALUE == "original"
-
-    @pytest.mark.unit
-    def test_apply_runtime_overrides_preserves_unmodified_fields(self, isolated_settings_manager):
-        """Test that apply_runtime_overrides preserves unmodified fields."""
-        params_base = SettingsParameters.create(
-            settings_class=SimpleSettings,
-            env_prefix="PRESERVES_",
-            VALUE="original_value",
-            COUNT=10
-        )
-        cached_settings = params_base.get_settings()
-
-        # Override only one field
-        params_override = SettingsParameters.create(
-            settings_class=SimpleSettings,
-            env_prefix="PRESERVES_",
-            VALUE="new_value"
-        )
-
-        result = params_override.apply_runtime_overrides(cached_settings)
-
-        # VALUE should be overridden
-        assert result.VALUE == "new_value"
-        # COUNT should remain from cached settings
-        assert result.COUNT == 10
 
 
 class TestHashWithConfigFiles:
@@ -519,30 +424,25 @@ class TestIntegration:
         assert settings2.COUNT == 20
 
     @pytest.mark.integration
-    def test_caching_strategy_with_equality(self, isolated_settings_manager):
-        """Test caching strategy based on equality."""
-        # These should be equal (same structural params, different runtime kwargs)
+    def test_structural_equality_keeps_runtime_values_invocation_local(
+        self, isolated_settings_manager
+    ):
+        """Equal structural parameters must not retain either runtime value."""
         params1 = SettingsParameters.create(
             settings_class=SimpleSettings,
             env_prefix="CACHE_EQ_",
-            VALUE="value1"
+            VALUE="value1",
         )
         params2 = SettingsParameters.create(
             settings_class=SimpleSettings,
             env_prefix="CACHE_EQ_",
-            VALUE="value2"
+            VALUE="value2",
         )
 
-        # Should be equal and have same hash (runtime kwargs ignored)
         assert params1 == params2
         assert hash(params1) == hash(params2)
-
-        # Get settings - should use caching
-        settings1 = isolated_settings_manager.get_or_create_settings(params1)
-        settings2 = isolated_settings_manager.get_or_create_settings(params2)
-
-        # Cache should have only one entry (same structural params)
-        assert len(isolated_settings_manager.settings_object_cache) == 1
+        assert isolated_settings_manager.get_or_create_settings(params1).VALUE == "value1"
+        assert isolated_settings_manager.get_or_create_settings(params2).VALUE == "value2"
 
 
 class TestEdgeCases:
@@ -559,28 +459,21 @@ class TestEdgeCases:
 
 
     @pytest.mark.edge_case
-    def test_apply_runtime_overrides_with_model_copy_preservation(self, isolated_settings_manager):
-        """Test that apply_runtime_overrides preserves model integrity."""
-        params_base = SettingsParameters.create(
+    def test_runtime_retrieval_preserves_complete_model_shape(
+        self, isolated_settings_manager
+    ):
+        """A runtime call validates and returns the declared settings class."""
+        params = SettingsParameters.create(
             settings_class=SimpleSettings,
-            env_prefix="MODEL_COPY_",
+            env_prefix="MODEL_SHAPE_",
             VALUE="original",
-            COUNT=5
-        )
-        cached = params_base.get_settings()
-
-        params_override = SettingsParameters.create(
-            settings_class=SimpleSettings,
-            env_prefix="MODEL_COPY_",
-            COUNT=10
+            COUNT=10,
         )
 
-        result = params_override.apply_runtime_overrides(cached)
+        result = isolated_settings_manager.get_or_create_settings(params)
 
-        # Result should be valid SimpleSettings instance
         assert isinstance(result, SimpleSettings)
-        assert hasattr(result, "VALUE")
-        assert hasattr(result, "COUNT")
+        assert result.VALUE == "original"
         assert result.COUNT == 10
 
     @pytest.mark.edge_case
