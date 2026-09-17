@@ -56,7 +56,7 @@ The manual proceeds as 9 chapters, each building on the concepts introduced befo
 | 6 | Connection Profiles | `ProfileDescriptor`, `ParameterSpec`, dynamic field installation |
 | 7 | Profile Registry and Invariants | Registration, duplicate prevention, invariant testing |
 | 8 | Authentication System | `AuthSpec`, the auth-mode discriminated union, driver dispatch |
-| 9 | Caching, Settings Management, and App Settings | LRU caching, `SettingsManager`, `AppSettings` |
+| 9 | Caching, Settings Management, and App Settings | Structural source-context reuse, fresh owned materialization, `SettingsManager`, `AppSettings` |
 
 Together the chapters cover all 110 concepts in the manual's [learning graph](learning-graph/index.md), sequenced so no chapter depends on material introduced later. Out of scope, deliberately: application-specific business logic, cloud IAM setup, secrets-engine administration, database driver internals, and Pydantic internals beyond what `mountainash-settings` extends.
 

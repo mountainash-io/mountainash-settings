@@ -12,7 +12,7 @@ This textbook is organized into 9 chapters covering the mountainash-settings typ
 6. [Connection Profiles](./06-connection-profiles/index.md) — ProfileDescriptor, ParameterSpec with tiers/defaults/transforms/validators, MISSING sentinel, DescriptorProfile, and dynamic field installation.
 7. [Profile Registry and Invariants](./07-profile-registry-and-invariants/index.md) — The Registry class, name-keyed store, decorator registration, duplicate prevention, descriptor invariants, and invariant test generation.
 8. [Authentication System](./08-authentication-system/index.md) — AuthSpec base class, kind literal, discriminated union assembly, dispatch function, driver kwargs mapping, 11 concrete auth modes, and custom extension.
-9. [Caching, Settings Management, and App Settings](./09-caching-settings-management-and-app-settings/index.md) — LRU caching, get_settings function, structural cache keys, runtime overrides, SettingsManager, and the AppSettings convenience class.
+9. [Caching, Settings Management, and App Settings](./09-caching-settings-management-and-app-settings/index.md) — Structural source contexts, complete invocation validation, isolated runtime inputs and returns, SettingsManager, and the AppSettings convenience class.
 
 ## Concept Coverage
 

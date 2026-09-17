@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from typing import Optional, Any, Tuple, Type, List, Dict, TYPE_CHECKING, cast
+from typing import Optional, Any, Tuple, Type, List, Dict
 from dataclasses import dataclass, field
 
 from pydantic_settings import BaseSettings
 from upath import UPath
 
-if TYPE_CHECKING:
-    from mountainash_settings.settings.base_settings import MountainAshBaseSettings
 
 from .filehandler import SettingsFileHandler
 from .kwargshandler import SettingsKwargsHandler
@@ -44,7 +42,7 @@ class SettingsParameters():
         params2 = SettingsParameters(config_files=["config.yaml"],
                                    kwargs={"log_level": "INFO"})
     """
-    config_files:   Optional[List[str|UPath]|Tuple[str|UPath]] = None
+    config_files:   Optional[List[str|UPath]|Tuple[str|UPath, ...]] = None
     settings_class: Optional[Type[BaseSettings]] = None
     env_prefix:     Optional[str] = None
     secrets_dir:    Optional[str] = None
@@ -161,20 +159,22 @@ class SettingsParameters():
         )
 
 
-    def get_settings(self, **kwargs) -> MountainAshBaseSettings:
+    def get_settings(self, *, reinitialise: bool = False, **kwargs: Any) -> BaseSettings:
         # Lazy import to avoid circular dependency
         from ..settings_cache import get_settings
 
         if self.settings_class is None:
             raise ValueError("Settings class is required to get settings.")
 
-        return get_settings(settings_parameters=self, **kwargs)
+        return get_settings(
+            settings_parameters=self, reinitialise=reinitialise, **kwargs,
+        )
 
 
     # Creation methods
     @classmethod
     def create(cls,
-               config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+               config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath, ...]] = None,
                settings_class: Optional[Type[BaseSettings]] = None,
                env_prefix: Optional[str] = None,
                secrets_dir: Optional[str] = None,
@@ -358,37 +358,34 @@ class SettingsParameters():
 
         return {k: v for k, v in self.kwargs.items()} if self.kwargs else {}
 
-    def apply_runtime_overrides(self, cached_settings: BaseSettings) -> BaseSettings:
-        """
-        Apply runtime kwargs to a cached settings object without affecting cache identity.
+    def get_cache_runtime_kwargs(
+        self, settings_class: Optional[Type[BaseSettings]] = None,
+    ) -> Dict[str, Any]:
+        """Return runtime inputs after rejecting cache identity and source controls."""
+        settings_class = settings_class or self.settings_class
+        supplied = self.get_all_kwargs()
+        field_names = set(settings_class.model_fields) if settings_class is not None else set()
+        schema_controls = set(self._reserved_pydantic_modelconfig_kwargs)
+        structural_controls = {
+            "config_files",
+            "settings_class",
+            "env_prefix",
+            "secrets_dir",
+            "secrets_provider",
+            "reinitialise",
+        }
+        disallowed = {
+            name for name in supplied
+            if (
+                name in structural_controls
+                or name.startswith("_")
+                or (name in schema_controls and name not in field_names)
+            )
+        }
+        if disallowed:
+            raise ValueError("Cached retrieval does not accept source or schema controls")
+        return supplied
 
-        This method supports the caching strategy by allowing runtime parameter
-        modifications to be applied to cached settings objects. The cached object's
-        identity remains unchanged, but a modified copy is returned when runtime
-        overrides are present.
-
-        Args:
-            cached_settings: The cached BaseSettings object to apply overrides to
-
-        Returns:
-            BaseSettings: Original object if no runtime kwargs, or modified copy with overrides
-
-        Example:
-            cached = get_cached_settings(params.structural_key())
-            final_settings = params.apply_runtime_overrides(cached)
-        """
-        if self.kwargs:
-            # Create a copy and apply runtime overrides
-            settings_copy = cached_settings.model_copy()
-            override_kwargs = self.get_attribute_settings_kwargs()
-            if override_kwargs:
-                backend = None
-                if self.secrets_provider:
-                    from ..secrets.registry import get_secrets_backend
-                    backend = get_secrets_backend(self.secrets_provider)
-                cast("MountainAshBaseSettings", settings_copy)._apply_settings_inputs(override_kwargs, backend)
-            return settings_copy
-        return cached_settings
 
 
 

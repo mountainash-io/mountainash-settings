@@ -25,7 +25,7 @@ Python developers and platform engineers who configure applications, data pipeli
 
 # Package Overview
 
-mountainash-settings is a typed configuration framework for Python applications built on Pydantic v2. It loads configuration from multiple file formats, resolves secrets transparently, supports field templating for derived values, and provides a profile system for building reusable connection configurations. The auth system offers 10+ pluggable authentication modes as a discriminated union. Intelligent LRU caching ensures settings are constructed once and reused efficiently.
+mountainash-settings is a typed configuration framework for Python applications built on Pydantic v2. It loads configuration from multiple file formats, resolves secrets transparently, supports field templating for derived values, and provides a profile system for building reusable connection configurations. The auth system offers 10+ pluggable authentication modes as a discriminated union. Structural source-context caching reuses captured inputs while each retrieval validates a fresh, independently owned result.
 
 ## Target Audience
 
@@ -73,7 +73,7 @@ After working through this manual, you will know how to:
 6. **Connection Profiles** — ProfileDescriptor, ParameterSpec, MISSING sentinel, dynamic Pydantic field installation, DescriptorProfile
 7. **Profile Registry and Invariants** — Name-keyed store, @decorator registration pattern, duplicate prevention, invariant testing
 8. **Authentication System** — AuthSpec base with kind literal, 10+ concrete auth modes as discriminated union, dispatch to driver kwargs
-9. **Caching, Settings Management, and App Settings** — LRU cache on `_get_settings`, SettingsManager dictionary store, source-form runtime-overlay handoff, AppSettings convenience class
+9. **Caching, Settings Management, and App Settings** — Private structural source contexts, complete invocation materialization, source-form runtime inputs, isolated returns, and the AppSettings convenience class
 
 ## What This Manual Does Not Cover
 
@@ -95,7 +95,7 @@ After working through this manual, you will know how to:
 
 **Auth modes that cover every backend** — From password through OAuth2 to service accounts to Kerberos to "none", every auth mode is a Pydantic model with SecretStr-protected credentials. The discriminated union validates that the auth mode matches what the backend expects.
 
-**Smart caching for pipelines** — `get_settings()` returns the same instance on every call for the same configuration. Runtime overrides for batch IDs or run-specific parameters get their own instance without polluting the cache.
+**Source caching for pipelines** — `get_settings()` reuses a private structural source context while validating each invocation into a fresh, independently owned result. Runtime overrides stay invocation-local, including on the first call; no-override results are isolated too.
 
 ## Context
 

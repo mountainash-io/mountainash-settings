@@ -1,10 +1,10 @@
 {
   "audience": "maintainers",
-  "summary": "The settings framework is built on a two-level caching architecture, a strict validate_assignment invariant, a structural/runtime parameter split, dynamic Pydantic field installation for connection profiles, and a two-pass secrets resolution pipeline. Understanding these layers gives you full visibility into how configuration flows from files and environment variables through to cached, validated settings instances.",
+  "summary": "The settings framework combines structural-context caching, a strict validate_assignment invariant, a structural/runtime parameter split, dynamic Pydantic field installation for connection profiles, and secret resolution. Cached retrieval pins source state but materializes each complete invocation as an independently owned result.",
   "concepts": [
     {
-      "name": "Two-level caching architecture",
-      "description": "The _get_settings LRU and SettingsManager dictionary retain instances by structural identity. Runtime kwargs enter cold construction and later overlays are shallow copies. MAS-SEC-001 owns supported reconstruction recipes; MAS-SEC-002 must remove cold contamination and nested live-state sharing.",
+      "name": "Structural-context caching architecture",
+      "description": "A private SettingsManager context captures selected source inputs by five-field structural identity. Each retrieval validates the complete invocation and installs an owned result graph, so runtime values and mutable caller state never enter retained baseline state. Source refresh remains separate lifecycle work.",
       "module_ids": [
         "mountainash_settings.settings_cache.settings_functions",
         "mountainash_settings.settings_cache.settings_manager"
@@ -12,7 +12,7 @@
     },
     {
       "name": "SettingsParameters structural/runtime split",
-      "description": "Custom __hash__ and __eq__ on SettingsParameters include only structural fields (files, env prefix), making them suitable as cache keys. Runtime inputs are handed in source form to the private settings lifecycle after cache lookup. The merge() method uses field-specific strategies: union for file lists, last-wins for scalars, and deep-merge for dictionaries.",
+      "description": "Custom __hash__ and __eq__ on SettingsParameters include the five structural selectors, making them suitable for context lookup. Runtime inputs validate per invocation rather than becoming a cached overlay. The merge() method uses field-specific strategies: union for file lists, last-wins for scalars, and deep-merge for dictionaries.",
       "module_ids": [
         "mountainash_settings.settings_parameters.settings_parameters"
       ]
@@ -51,7 +51,7 @@
     },
     {
       "name": "Concurrency and evolution considerations",
-      "description": "model_config mutation before super().__init__ operates at the class level; concurrent first-construction of different file sets on the same class should be serialised. The SettingsManager dictionary is similarly designed for single-threaded first-creation. Dynamic field installation via model_rebuild() should be verified after Pydantic version upgrades.",
+      "description": "Per-context initialization coordinates source capture while callbacks and copies run outside broad manager locks. Dynamic field installation via model_rebuild() should be verified after Pydantic version upgrades. Profile origin/template integration, direct-constructor source framing, common errors, and lifecycle refresh remain separately sequenced work.",
       "module_ids": [
         "mountainash_settings.settings.base_settings",
         "mountainash_settings.settings_cache.settings_manager",

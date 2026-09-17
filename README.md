@@ -77,7 +77,10 @@ Use `UPath`'s `/` operator to build cross-platform path templates — no platfor
 
 ### Smart caching
 
-`get_settings()` returns the same instance for the same structural parameters (config files, settings class, env prefix). Call it freely inside frequently-executed code:
+`get_settings()` reuses captured sources for the same structural parameters:
+`config_files`, `settings_class`, `env_prefix`, `secrets_dir`, and
+`secrets_provider`. Each call validates a complete invocation and returns an
+independently owned settings object:
 
 ```python
 from mountainash_settings import get_settings
@@ -88,7 +91,11 @@ settings = get_settings(
 )
 ```
 
-Runtime overrides (extra kwargs) never pollute the cache — each override call gets a lightweight `model_copy()` with the overrides applied.
+Runtime overrides never become shared baseline values, and mutating a returned
+object cannot change another retrieval. Defaults and default factories remain
+per-materialization behavior. Explicit runtime secret references resolve fresh;
+baseline source values remain pinned. See the [cache lifecycle and compatibility
+boundaries](docs/advanced-usage.md#cache-contexts-and-runtime-materialization).
 
 ### SettingsParameters for reusable and composable configuration
 

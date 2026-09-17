@@ -1,97 +1,107 @@
-from typing import Optional, Any, Type, Dict
-from importlib import import_module
+"""Sole public owner for private structural settings contexts."""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from threading import Event, Lock, get_ident
+from typing import Any
+
+from pydantic_settings import BaseSettings
+
+from ..settings_parameters import SettingsParameters
+from ._context import _SettingsContext, _StructuralKey
 
 
-from ..settings_parameters import SettingsParameters, SettingsKwargsHandler
-from ..settings import MountainAshBaseSettings
+@dataclass
+class _InitializationCell:
+    context: _SettingsContext
+    initializer_thread: int
+    completed: bool = False
+    event: Event = field(default_factory=Event)
+
 
 class SettingsManager:
-    """
-    A manager class for handling multiple instances of application settings.
-
-    Maintains a cache of settings objects keyed by SettingsParameters.
-    When runtime override kwargs are present, returns a copy with overrides
-    applied -- the cached instance is never mutated.
-    """
+    """Materialize isolated settings from one owned source context per key."""
 
     def __init__(self) -> None:
-        self.settings_object_cache: Dict[Any, MountainAshBaseSettings] = {}
+        self._contexts: dict[_StructuralKey, _InitializationCell] = {}
+        self._lock = Lock()
 
+    @staticmethod
+    def _request(
+        settings_parameters: SettingsParameters, reinitialise: bool,
+    ) -> tuple[_StructuralKey, dict[str, Any], bool]:
+        if not isinstance(settings_parameters, SettingsParameters):
+            raise ValueError("settings_parameters must be an instance of SettingsParameters.")
+        key = _StructuralKey.from_parameters(settings_parameters)
+        from ..settings.base_settings import MountainAshBaseSettings
+        if (
+            not issubclass(key.settings_class, MountainAshBaseSettings)
+            and key.settings_class.__init__ is not BaseSettings.__init__
+        ):
+            raise ValueError("Cached retrieval requires BaseSettings.__init__ for plain settings classes")
+        return key, settings_parameters.get_cache_runtime_kwargs(key.settings_class), reinitialise
 
-    def get_settings_object(self, settings_parameters: SettingsParameters) -> MountainAshBaseSettings:
-        """
-        Gets the configuration object for a given set of parameters.
+    def _get_completed_context(self, key: _StructuralKey) -> _SettingsContext:
+        with self._lock:
+            cell = self._contexts.get(key)
+            if cell is None or not cell.completed:
+                raise ValueError("Cached settings context is not initialised.")
+            return cell.context
 
-        If the parameters contain runtime override kwargs, returns a copy
-        with overrides applied. The cached instance is never mutated.
-
-        Args:
-            settings_parameters: The parameters for the configuration.
-        Returns:
-            MountainAshBaseSettings: The configuration object for the given parameters.
-        Raises:
-            ValueError: If the configuration object is not a MountainAshBaseSettings object.
-        """
-
-        obj_settings: Optional[MountainAshBaseSettings] = self.settings_object_cache.get(settings_parameters, None)
-
-        if not isinstance(obj_settings, MountainAshBaseSettings):
-            raise ValueError(
-                f"Configuration for '{settings_parameters}' found, but is not a "
-                f"MountainAshBaseSettings object. Received a {type(obj_settings)}"
-            )
-
-        override_kwargs = settings_parameters.get_attribute_settings_kwargs()
-        if override_kwargs:
-            obj_settings = obj_settings.model_copy()
-            obj_settings.update_settings_from_dict(settings_dict=override_kwargs)
-
-        return obj_settings
+    def get_settings_object(
+        self, settings_parameters: SettingsParameters, *, reinitialise: bool = False,
+    ) -> BaseSettings:
+        """Materialize only from an already-complete structural source capture."""
+        key, runtime, reinitialise = self._request(settings_parameters, reinitialise)
+        return self._get_completed_context(key).materialize(runtime, reinitialise=reinitialise)
 
     def is_initialised(self, settings_parameters: SettingsParameters) -> bool:
-        """
-        Checks if the settings parameters are already initialised in the cache.
+        """Whether source capture, rather than a particular result, is complete."""
+        if not isinstance(settings_parameters, SettingsParameters):
+            return False
+        try:
+            key = _StructuralKey.from_parameters(settings_parameters)
+        except ValueError:
+            return False
+        with self._lock:
+            cell = self._contexts.get(key)
+            return cell is not None and cell.completed
 
-        Args:
-            settings_parameters: The parameters for the configuration.
-        Returns:
-            bool: True if already initialised, False otherwise.
-        """
-        return settings_parameters in self.settings_object_cache
-
-
-    def get_or_create_settings(self,
-                    settings_parameters: SettingsParameters) -> MountainAshBaseSettings:
-        """
-        Gets existing or creates new settings for a given set of parameters.
-
-        Args:
-            settings_parameters: The settings parameters for the configuration.
-        Returns:
-            MountainAshBaseSettings: The settings object.
-        Raises:
-            ValueError: If settings_class is not provided.
-        """
-
-        if self.is_initialised(settings_parameters=settings_parameters):
-            return self.get_settings_object(settings_parameters=settings_parameters)
-
-        else:
-            if not settings_parameters.settings_class:
-                raise ValueError("settings_parameters.settings_class cannot be empty.")
-
-            class_module = settings_parameters.settings_class.__module__
-            class_name = settings_parameters.settings_class.__name__
-            settings_class_ref: Type[MountainAshBaseSettings] = getattr(import_module(name=class_module), class_name)
-
-            if issubclass(settings_class_ref, MountainAshBaseSettings):
-                obj_settings = settings_class_ref(settings_parameters=settings_parameters)
+    def get_or_create_settings(
+        self, settings_parameters: SettingsParameters, *, reinitialise: bool = False,
+    ) -> BaseSettings:
+        """Capture sources once, then validate one complete isolated invocation."""
+        key, runtime, reinitialise = self._request(settings_parameters, reinitialise)
+        owner = False
+        with self._lock:
+            cell = self._contexts.get(key)
+            if cell is None:
+                cell = _InitializationCell(_SettingsContext(key), get_ident(), event=Event())
+                self._contexts[key] = cell
+                owner = True
+            elif not cell.completed:
+                if cell.initializer_thread == get_ident():
+                    raise ValueError("Cached settings source capture is reentrant.")
+                waiter = cell.event
             else:
-                settings_kwargs: Dict[str, Any]|None = SettingsKwargsHandler.format_kwargs_dict(p_kwargs=settings_parameters.kwargs)
-                if settings_kwargs:
-                    obj_settings = settings_class_ref(**settings_kwargs)
-                else:
-                    obj_settings = settings_class_ref()
-
-        self.settings_object_cache[settings_parameters] = obj_settings
-        return obj_settings
+                waiter = None
+        if not owner and waiter is not None:
+            waiter.wait()
+            with self._lock:
+                current = self._contexts.get(key)
+                if current is not cell or current is None or not current.completed:
+                    raise ValueError("Cached settings source capture failed.")
+                cell = current
+        if owner:
+            try:
+                cell.context.capture()
+            except BaseException:
+                with self._lock:
+                    if self._contexts.get(key) is cell:
+                        self._contexts.pop(key, None)
+                    cell.event.set()
+                raise
+            with self._lock:
+                cell.completed = True
+                cell.event.set()
+        return cell.context.materialize(runtime, reinitialise=reinitialise)

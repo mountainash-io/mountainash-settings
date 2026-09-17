@@ -1,7 +1,7 @@
 {
   "metadata": {
     "title": "Mountainash Settings Concept Graph",
-    "description": "A concept dependency graph for the mountainash-settings typed configuration framework. 110 concepts across 10 categories covering base settings, parameters, templating, secrets, profiles, registry, auth system, caching, and app settings.",
+    "description": "A concept dependency graph for the mountainash-settings typed configuration framework. 110 concepts across 10 categories covering base settings, parameters, templating, secrets, profiles, registry, auth system, structural source-context reuse, and app settings.",
     "creator": "Nathaniel Ramm",
     "date": "2026-06-03",
     "version": "1.0",
@@ -975,11 +975,11 @@
     },
     {
       "id": 99,
-      "label": "LRU Cache Decorator",
+      "label": "Structural Source Context",
       "group": "CACHE",
       "shape": "box",
-      "source_module": "mountainash_settings.profiles.registry",
-      "source_path": "src/mountainash_settings/profiles/registry.py",
+      "source_module": "mountainash_settings.settings_cache._context",
+      "source_path": "src/mountainash_settings/settings_cache/_context.py",
       "chapter": "09-caching-settings-management-and-app-settings",
       "match_confidence": 0.7
     },
@@ -994,37 +994,37 @@
     },
     {
       "id": 101,
-      "label": "Internal Get Settings",
+      "label": "Settings Materialization",
       "group": "CACHE",
-      "source_module": "mountainash_settings.settings_cache.settings_functions",
-      "source_path": "src/mountainash_settings/settings_cache/settings_functions.py",
+      "source_module": "mountainash_settings.settings_cache._context",
+      "source_path": "src/mountainash_settings/settings_cache/_context.py",
       "chapter": "09-caching-settings-management-and-app-settings",
       "match_confidence": 0.7
     },
     {
       "id": 102,
-      "label": "Structural Cache Key",
+      "label": "Structural Context Key",
       "group": "CACHE",
-      "source_module": null,
-      "source_path": null,
+      "source_module": "mountainash_settings.settings_cache._context",
+      "source_path": "src/mountainash_settings/settings_cache/_context.py",
       "chapter": "09-caching-settings-management-and-app-settings",
       "match_confidence": 0.3
     },
     {
       "id": 103,
-      "label": "Runtime Override Application",
+      "label": "Runtime Input Projection",
       "group": "CACHE",
-      "source_module": null,
-      "source_path": null,
+      "source_module": "mountainash_settings.settings_cache._context",
+      "source_path": "src/mountainash_settings/settings_cache/_context.py",
       "chapter": "09-caching-settings-management-and-app-settings",
       "match_confidence": 0.3
     },
     {
       "id": 104,
-      "label": "Model Copy For Overrides",
+      "label": "Fresh Result Materialization",
       "group": "CACHE",
-      "source_module": null,
-      "source_path": null,
+      "source_module": "mountainash_settings.settings_cache._context",
+      "source_path": "src/mountainash_settings/settings_cache/_context.py",
       "chapter": "09-caching-settings-management-and-app-settings",
       "match_confidence": 0.3
     },
@@ -1039,10 +1039,10 @@
     },
     {
       "id": 106,
-      "label": "Named Settings Lookup",
+      "label": "Private Context Ownership",
       "group": "CACHE",
-      "source_module": null,
-      "source_path": null,
+      "source_module": "mountainash_settings.settings_cache.settings_manager",
+      "source_path": "src/mountainash_settings/settings_cache/settings_manager.py",
       "chapter": "09-caching-settings-management-and-app-settings",
       "match_confidence": 0.3
     },

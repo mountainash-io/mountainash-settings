@@ -1,412 +1,704 @@
-"""
-Comprehensive tests for SettingsManager.
+"""Behavioral regressions for structural-context cache isolation."""
+from __future__ import annotations
 
-Tests cover:
-- Settings creation and caching
-- Initialization checks
-- Settings retrieval
-- Runtime override application
-- MountainAshBaseSettings and non-MountainAshBaseSettings paths
-- Error handling
-"""
+from typing import Any, ClassVar
 
 import pytest
-from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import AliasPath, BaseModel, Field, PrivateAttr, SecretStr, field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from mountainash_settings import (
+    CacheableSettingsSource,
+    MountainAshBaseSettings,
     SettingsManager,
     SettingsParameters,
+    get_settings,
     get_settings_manager,
 )
 from mountainash_settings.settings_parameters import SettingsFileHandler
-from fixtures.settings_classes import TestSettings, MockBaseSettings
+from fixtures.settings_classes import MockBaseSettings, TestSettings
 
 
-class TestSettingsManagerInitialization:
-    """Test SettingsManager initialization."""
+class _RequiredInvocationSettings(MountainAshBaseSettings):
+    LEFT: int
+    RIGHT: int
 
-    def test_init_creates_empty_cache(self):
-        """Test that __init__ creates an empty settings cache."""
+    @model_validator(mode="after")
+    def require_matching_pair(self):
+        if self.LEFT + self.RIGHT != 10:
+            raise ValueError("LEFT and RIGHT must sum to ten")
+        return self
+
+
+class _TransformingSettings(MountainAshBaseSettings):
+    VALUE: int = 0
+
+    @field_validator("VALUE")
+    @classmethod
+    def increment_raw_value(cls, value: int) -> int:
+        return value + 1
+
+
+_VALIDATOR_GLOBAL = {"items": ["baseline"]}
+
+
+class _RootOwnershipSettings(MountainAshBaseSettings):
+    model_config = SettingsConfigDict(extra="allow")
+
+    DATA: dict[str, list[str]]
+    _private_data: dict[str, list[str]] | None = PrivateAttr(default=None)
+
+    @field_validator("DATA")
+    @classmethod
+    def validator_returns_global(cls, value: dict[str, list[str]]) -> dict[str, list[str]]:
+        return _VALIDATOR_GLOBAL
+
+    def post_init(
+        self,
+        template_settings_parameters: SettingsParameters | None = None,
+        reinitialise: bool | None = False,
+    ) -> None:
+        self._private_data = self.DATA
+        self.extra_data = self.DATA
+        object.__setattr__(self, "non_field_data", self.DATA)
+
+
+class _CountingBackend:
+    def __init__(self, value: str):
+        self.value = value
+        self.calls = 0
+
+    def get(self, key: str) -> dict[str, str]:
+        self.calls += 1
+        return {"password": self.value}
+
+    def set(self, key: str, data: dict[str, Any]) -> None:
+        pass
+
+    def delete(self, key: str) -> None:
+        pass
+
+    def transaction(self, key: str):
+        from contextlib import nullcontext
+
+        return nullcontext()
+
+
+class _SimpleAliasSettings(MountainAshBaseSettings):
+    value: str = Field(default="default", validation_alias="input")
+
+
+class _SharedAliasSettings(MountainAshBaseSettings):
+    left: dict[str, str] = Field(validation_alias=AliasPath("pair", "left"))
+    right: str = Field(validation_alias=AliasPath("pair", "right"))
+
+
+class _NestedDefault(BaseModel):
+    value: int = 3
+
+
+class _ExplicitDefaultSettings(BaseSettings):
+    model_config = SettingsConfigDict(nested_model_default_partial_update=True)
+    nested: _NestedDefault = _NestedDefault()
+
+
+class _StaticAliasSecretSettings(MountainAshBaseSettings):
+    PASSWORD: SecretStr = Field(
+        default=SecretStr("secret:service.password"),
+        validation_alias=AliasPath("credentials", "password"),
+    )
+    NAME: str = Field(validation_alias=AliasPath("credentials", "name"))
+
+
+class _TransformingConstructorSettings(MountainAshBaseSettings):
+    value: str
+
+    def __init__(self, **kwargs):
+        kwargs["value"] = "outer:" + kwargs["value"]
+        super().__init__(**kwargs)
+
+
+class _NestedConstructorSettings(MountainAshBaseSettings):
+    value: str = "default"
+    entering: ClassVar[bool] = False
+
+    def __init__(self, **kwargs):
+        if not type(self).entering:
+            type(self).entering = True
+            try:
+                nested = type(self)(value="nested-direct")
+                assert nested.value == "nested-direct"
+            finally:
+                type(self).entering = False
+        super().__init__(**kwargs)
+
+
+class _SecretSettings(MountainAshBaseSettings):
+    PASSWORD: str
+
+
+class _CapturedProjectSource(CacheableSettingsSource):
+    __name__ = "named_capture"
+    source_value = "captured"
+    captures = 0
+
+
+    def get_field_value(self, field, field_name: str):
+        return None, field_name, False
+
+    def __call__(self) -> dict[str, Any]:
+        return self.project(self.capture(), self.current_state, self.settings_sources_data)
+
+    def capture(self) -> dict[str, Any]:
+        type(self).captures += 1
+        return {"VALUE": self.source_value}
+
+    @staticmethod
+    def project(
+        owned_resolved_snapshot: dict[str, Any],
+        owned_current_state: dict[str, Any],
+        owned_sources_data: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        return {
+            "VALUE": owned_resolved_snapshot["VALUE"] + ":" + owned_current_state["REQUEST"],
+            "LITERAL": "secret:terminal.value",
+        }
+
+
+class _NamedDependencySource(_CapturedProjectSource):
+    __name__ = "named_dependency"
+
+    def capture(self) -> dict[str, Any]:
+        return {}
+
+    @staticmethod
+    def project(snapshot, current_state, sources_data):
+        return {"MIRROR": sources_data["named_capture"]["VALUE"]}
+
+
+class _CaptureProjectSettings(MountainAshBaseSettings):
+    VALUE: str
+    REQUEST: str
+    LITERAL: str
+    MIRROR: str
+
+    @classmethod
+    def settings_capture_sources(cls, sources):
+        return sources[:1] + (_CapturedProjectSource(cls), _NamedDependencySource(cls)) + sources[1:]
+
+
+class _LegacyHookSettings(MountainAshBaseSettings):
+    VALUE: str = "direct"
+
+    @classmethod
+    def settings_customise_sources(
+        cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings
+    ):
+        return init_settings, env_settings, dotenv_settings, file_secret_settings
+
+
+class _PlainCustomConstructorSettings(BaseSettings):
+    VALUE: str = "default"
+
+    def __init__(self, **kwargs):
+        if "VALUE" in kwargs:
+            kwargs["VALUE"] = f"direct:{kwargs['VALUE']}"
+        super().__init__(**kwargs)
+
+
+class _ReinitialiseSettings(MountainAshBaseSettings):
+    REINITIALISED: bool = False
+
+    def post_init(self, template_settings_parameters: SettingsParameters | None = None, reinitialise: bool | None = False) -> None:
+        self.REINITIALISED = bool(reinitialise)
+
+
+class _DerivedSettings(MountainAshBaseSettings):
+    HOST: str = "primary"
+    URL: str = ""
+
+    @field_validator("URL")
+    @classmethod
+    def transform_url(cls, value: str) -> str:
+        return value + "!"
+
+    def post_init(self, template_settings_parameters: SettingsParameters | None = None, reinitialise: bool | None = False) -> None:
+        self.URL = "https://" + self.HOST
+
+
+class _FieldNamedExtraSettings(MountainAshBaseSettings):
+    extra: str
+
+
+class TestSettingsManagerRoutes:
+    def test_manager_factory_returns_singleton(self):
+        assert get_settings_manager() is get_settings_manager()
+
+    def test_manager_reports_context_only_after_capture(self):
         manager = SettingsManager()
-        assert isinstance(manager.settings_object_cache, dict)
-        assert len(manager.settings_object_cache) == 0
+        params = SettingsParameters.create(settings_class=TestSettings)
 
-    def test_get_settings_manager_returns_singleton(self):
-        """Test that get_settings_manager returns cached singleton."""
-        manager1 = get_settings_manager()
-        manager2 = get_settings_manager()
-        assert manager1 is manager2
+        assert manager.is_initialised(params) is False
+        manager.get_or_create_settings(params)
+        assert manager.is_initialised(SettingsParameters.create(settings_class=TestSettings)) is True
 
+    def test_direct_manager_rejects_missing_settings_class(self):
+        with pytest.raises(ValueError, match="settings_class"):
+            SettingsManager().get_or_create_settings(SettingsParameters.create())
 
-class TestIsInitialised:
-    """Test is_initialised method."""
+    def test_existing_context_route_fails_without_context(self):
+        params = SettingsParameters.create(settings_class=TestSettings)
+        with pytest.raises(ValueError):
+            SettingsManager().get_settings_object(params)
 
-    def test_returns_false_for_new_params(self, isolated_settings_manager):
-        """Test that new params returns False."""
-        params = SettingsParameters.create(
-            settings_class=TestSettings
+    def test_direct_manager_and_existing_context_return_declared_class(self):
+        manager = SettingsManager()
+        params = SettingsParameters.create(settings_class=TestSettings, TEST_VAR="current")
+
+        created = manager.get_or_create_settings(params)
+        existing = manager.get_settings_object(params)
+
+        assert isinstance(created, TestSettings)
+        assert isinstance(existing, TestSettings)
+        assert existing.TEST_VAR == "current"
+
+    def test_reinitialise_is_keyword_only_manager_control(self):
+        params = SettingsParameters.create(settings_class=TestSettings)
+        with pytest.raises(TypeError):
+            SettingsManager().get_or_create_settings(params, True)
+
+    def test_structural_selectors_choose_independent_source_contexts(self):
+        manager = SettingsManager()
+        first = manager.get_or_create_settings(
+            SettingsParameters.create(
+                settings_class=TestSettings,
+                env_prefix="FIRST_",
+                TEST_VAR="first",
+            )
         )
-        assert isolated_settings_manager.is_initialised(params) is False
-
-    def test_returns_true_after_initialization(self, isolated_settings_manager):
-        """Test that initialized params returns True."""
-        params = SettingsParameters.create(
-            settings_class=TestSettings
-        )
-
-        # Create settings
-        isolated_settings_manager.get_or_create_settings(params)
-
-        # Should now be initialized
-        assert isolated_settings_manager.is_initialised(params) is True
-
-    def test_uses_hash_for_cache_key(self, isolated_settings_manager):
-        """Test that cache key is based on SettingsParameters hash."""
-        params1 = SettingsParameters.create(
-            settings_class=TestSettings
-        )
-        params2 = SettingsParameters.create(
-            settings_class=TestSettings
-        )
-
-        # Initialize with params1
-        isolated_settings_manager.get_or_create_settings(params1)
-
-        # params2 has same hash, should also be initialized
-        assert isolated_settings_manager.is_initialised(params2) is True
-
-
-class TestGetOrCreateSettings:
-    """Test get_or_create_settings method."""
-
-    @pytest.mark.unit
-    def test_creates_new_settings_for_first_call(self, isolated_settings_manager):
-        """Test that first call creates new settings instance."""
-        params = SettingsParameters.create(
-            settings_class=TestSettings,
-            TEST_VAL_1="value1"
+        second = manager.get_or_create_settings(
+            SettingsParameters.create(
+                settings_class=TestSettings,
+                env_prefix="SECOND_",
+                TEST_VAR="second",
+            )
         )
 
-        settings = isolated_settings_manager.get_or_create_settings(params)
+        assert first.TEST_VAR == "first"
+        assert second.TEST_VAR == "second"
 
-        assert settings is not None
-        assert isinstance(settings, TestSettings)
-        assert settings.TEST_VAL_1 == "value1"
-
-    @pytest.mark.unit
-    def test_returns_cached_settings_for_second_call(self, isolated_settings_manager):
-        """Test that second call returns cached instance."""
-        params = SettingsParameters.create(
-            settings_class=TestSettings
+    def test_public_retrieval_routes_reinitialise_as_operation_control(self, monkeypatch):
+        manager = SettingsManager()
+        monkeypatch.setattr(
+            "mountainash_settings.settings_cache.settings_functions.get_settings_manager",
+            lambda: manager,
         )
 
-        # First call
-        settings1 = isolated_settings_manager.get_or_create_settings(params)
+        settings = get_settings(settings_class=_ReinitialiseSettings, reinitialise=True)
 
-        # Second call should return same instance
-        settings2 = isolated_settings_manager.get_or_create_settings(params)
+        assert settings.REINITIALISED is True
 
-        assert settings1 is settings2
-
-    @pytest.mark.unit
-    def test_raises_error_if_settings_class_missing(self, isolated_settings_manager):
-        """Test that missing settings_class raises ValueError."""
-        params = SettingsParameters.create(
-            settings_class=None
-        )
-
-        with pytest.raises(ValueError, match="settings_class cannot be empty"):
-            isolated_settings_manager.get_or_create_settings(params)
-
-    @pytest.mark.unit
-    def test_creates_mountainash_base_settings_subclass(self, isolated_settings_manager):
-        """Test MountainAshBaseSettings subclass creation path."""
-        params = SettingsParameters.create(
-            settings_class=TestSettings,
-            TEST_VAL_1="mountainash_value"
-        )
-
-        settings = isolated_settings_manager.get_or_create_settings(params)
-
-        assert isinstance(settings, TestSettings)
-        assert settings.TEST_VAL_1 == "mountainash_value"
-
-    @pytest.mark.unit
-    def test_creates_non_mountainash_settings_with_kwargs(self, isolated_settings_manager):
-        """Test non-MountainAshBaseSettings class creation with kwargs."""
+    def test_standard_plain_base_settings_is_materialized_on_warm_retrieval(self):
+        manager = SettingsManager()
         params = SettingsParameters.create(
             settings_class=MockBaseSettings,
-            env_prefix="NON_MA_WITH_KWARGS_",
-            test_field="custom_value",
-            test_int=100
+            env_prefix="PLAIN_STANDARD_",
+            test_field="configured",
         )
 
-        settings = isolated_settings_manager.get_or_create_settings(params)
+        first = manager.get_or_create_settings(params)
+        second = manager.get_or_create_settings(params)
 
-        assert isinstance(settings, MockBaseSettings)
-        assert settings.test_field == "custom_value"
-        assert settings.test_int == 100
+        assert isinstance(first, MockBaseSettings)
+        assert isinstance(second, MockBaseSettings)
+        assert second.test_field == "configured"
 
-    @pytest.mark.unit
-    def test_creates_non_mountainash_settings_without_kwargs(self, isolated_settings_manager):
-        """Test non-MountainAshBaseSettings class creation without kwargs."""
-        params = SettingsParameters.create(
-            settings_class=MockBaseSettings,
-            env_prefix="NON_MA_NO_KWARGS_"
-        )
+    def test_cached_plain_custom_constructor_is_rejected_without_changing_direct_use(self):
+        assert _PlainCustomConstructorSettings(VALUE="value").VALUE == "direct:value"
 
-        settings = isolated_settings_manager.get_or_create_settings(params)
+        with pytest.raises(ValueError, match="BaseSettings.__init__"):
+            SettingsManager().get_or_create_settings(
+                SettingsParameters.create(
+                    settings_class=_PlainCustomConstructorSettings,
+                    VALUE="value",
+                )
+            )
 
-        assert isinstance(settings, MockBaseSettings)
-        # Should have default values
-        assert settings.test_field == "default_value"
-        assert settings.test_int == 42
 
-    @pytest.mark.unit
-    def test_different_env_prefixes_create_different_settings(self, isolated_settings_manager):
-        """Test that different env_prefix values create separate settings instances."""
-        params1 = SettingsParameters.create(
+@pytest.mark.unit
+class TestOwnedStructuralContexts:
+    def test_cold_runtime_value_does_not_become_source_default(self):
+        manager = SettingsManager()
+        overridden = manager.get_or_create_settings(SettingsParameters.create(
+            settings_class=TestSettings, TEST_VAR="request-only",
+        ))
+        baseline = manager.get_or_create_settings(SettingsParameters.create(
             settings_class=TestSettings,
-            env_prefix="PREFIX1_",
-            TEST_VAL_1="value_p1"
-        )
-        params2 = SettingsParameters.create(
-            settings_class=TestSettings,
-            env_prefix="PREFIX2_",
-            TEST_VAL_1="value_p2"
-        )
+        ))
+        assert overridden.TEST_VAR == "request-only"
+        assert baseline.TEST_VAR == "default_value"
 
-        settings1 = isolated_settings_manager.get_or_create_settings(params1)
-        settings2 = isolated_settings_manager.get_or_create_settings(params2)
+    def test_returned_nested_mutation_does_not_reach_next_caller(self):
+        manager = SettingsManager()
+        params = SettingsParameters.create(settings_class=TestSettings)
+        first = manager.get_or_create_settings(params)
+        first.COMPLEX_VAR["key"] = "caller-mutation"
+        second = manager.get_or_create_settings(params)
+        assert second.COMPLEX_VAR == {"key": "value"}
 
-        assert settings1 is not settings2
-        assert settings1.TEST_VAL_1 == "value_p1"
-        assert settings2.TEST_VAL_1 == "value_p2"
+    def test_file_snapshot_survives_cold_runtime_override_and_source_deletion(self, tmp_path):
+        path = tmp_path / "settings.yaml"
+        path.write_text("TEST_VAR: captured-source\nCOMPLEX_VAR:\n  key: captured\n")
+        manager = SettingsManager()
+        first = manager.get_or_create_settings(SettingsParameters.create(
+            settings_class=TestSettings, config_files=str(path), TEST_VAR="request-only",
+        ))
+        path.unlink()
+        second = manager.get_or_create_settings(SettingsParameters.create(
+            settings_class=TestSettings, config_files=str(path),
+        ))
+        assert first.TEST_VAR == "request-only"
+        assert second.TEST_VAR == "captured-source"
+        assert second.COMPLEX_VAR == {"key": "captured"}
 
 
-class TestGetSettingsObject:
-    """Test get_settings_object method."""
-
-    @pytest.mark.unit
-    def test_retrieves_cached_settings(self, isolated_settings_manager):
-        """Test retrieving settings from cache."""
-        params = SettingsParameters.create(
-            settings_class=TestSettings
-        )
-
-        # Create and cache settings
-        created_settings = isolated_settings_manager.get_or_create_settings(params)
-
-        # Retrieve from cache
-        retrieved_settings = isolated_settings_manager.get_settings_object(params)
-
-        assert retrieved_settings is created_settings
-
-    @pytest.mark.unit
-    def test_raises_error_for_non_mountainash_settings(self, isolated_settings_manager):
-        """Test that non-MountainAshBaseSettings in cache raises ValueError."""
-        params = SettingsParameters.create(
-            settings_class=MockBaseSettings,
-            env_prefix="NON_MA_ERR_"
+class TestCompleteInvocationAndOwnership:
+    def test_required_and_model_policy_inputs_validate_as_one_runtime_invocation(self):
+        settings = SettingsManager().get_or_create_settings(
+            SettingsParameters.create(
+                settings_class=_RequiredInvocationSettings,
+                LEFT=4,
+                RIGHT=6,
+            )
         )
 
-        # Manually add non-MountainAshBaseSettings to cache
-        isolated_settings_manager.settings_object_cache[params] = MockBaseSettings()
+        assert (settings.LEFT, settings.RIGHT) == (4, 6)
 
-        with pytest.raises(ValueError, match="is not a MountainAshBaseSettings object"):
-            isolated_settings_manager.get_settings_object(params)
-
-    @pytest.mark.unit
-    def test_applies_runtime_override_kwargs(self, isolated_settings_manager):
-        """Test that runtime override kwargs are applied to a copy, not the cached instance."""
-        params_create = SettingsParameters.create(
-            settings_class=TestSettings,
-            TEST_VAL_1="original_value"
+    def test_non_idempotent_validator_receives_raw_runtime_input_each_time(self):
+        manager = SettingsManager()
+        first = manager.get_or_create_settings(
+            SettingsParameters.create(settings_class=_TransformingSettings, VALUE=4)
         )
-        created_settings = isolated_settings_manager.get_or_create_settings(params_create)
-        assert created_settings.TEST_VAL_1 == "original_value"
-
-        params_override = SettingsParameters.create(
-            settings_class=TestSettings,
-            TEST_VAL_1="overridden_value"
-        )
-        retrieved_settings = isolated_settings_manager.get_settings_object(params_override)
-
-        # Retrieved copy has the override
-        assert retrieved_settings.TEST_VAL_1 == "overridden_value"
-        # Original cached instance is untouched
-        assert created_settings.TEST_VAL_1 == "original_value"
-
-    @pytest.mark.unit
-    def test_runtime_overrides_do_not_mutate_cached_instance(self, isolated_settings_manager):
-        """Test that runtime override kwargs do NOT mutate the cached instance."""
-        params_create = SettingsParameters.create(
-            settings_class=TestSettings,
-            TEST_VAL_1="original_value"
-        )
-        created_settings = isolated_settings_manager.get_or_create_settings(params_create)
-        assert created_settings.TEST_VAL_1 == "original_value"
-
-        params_override = SettingsParameters.create(
-            settings_class=TestSettings,
-            TEST_VAL_1="overridden_value"
-        )
-        retrieved_settings = isolated_settings_manager.get_settings_object(params_override)
-        assert retrieved_settings.TEST_VAL_1 == "overridden_value"
-
-        # The CACHED instance must NOT have been mutated
-        cached_directly = isolated_settings_manager.settings_object_cache[params_create]
-        assert cached_directly.TEST_VAL_1 == "original_value"
-
-
-class TestCacheBehavior:
-    """Test caching behavior and cache key logic."""
-
-    @pytest.mark.unit
-    def test_cache_key_based_on_structural_params(self, isolated_settings_manager):
-        """Test that cache key is based on structural parameters only."""
-        # Same structural params (class) but different kwargs
-        params1 = SettingsParameters.create(
-            settings_class=TestSettings,
-            TEST_VAL_1="value1"
-        )
-        params2 = SettingsParameters.create(
-            settings_class=TestSettings,
-            TEST_VAL_1="value2"
+        second = manager.get_or_create_settings(
+            SettingsParameters.create(settings_class=_TransformingSettings, VALUE=4)
         )
 
-        # Both should have the same hash (structural params are identical)
-        assert hash(params1) == hash(params2)
+        assert first.VALUE == 5
+        assert second.VALUE == 5
 
-        # First creation
-        settings1 = isolated_settings_manager.get_or_create_settings(params1)
+    def test_raw_derived_carry_preserves_flag_off_and_explicit_precedence(self):
+        manager = SettingsManager()
+        selectors = {"settings_class": _DerivedSettings}
+        baseline = manager.get_or_create_settings(SettingsParameters.create(**selectors))
+        off = manager.get_or_create_settings(SettingsParameters.create(**selectors, HOST="alternate"))
+        on = manager.get_or_create_settings(
+            SettingsParameters.create(**selectors, HOST="alternate"), reinitialise=True,
+        )
+        explicit = manager.get_or_create_settings(
+            SettingsParameters.create(**selectors, HOST="alternate", URL="custom"), reinitialise=True,
+        )
+        later = manager.get_or_create_settings(SettingsParameters.create(**selectors))
 
-        # Second call with different kwargs but same structural params
-        # Should return from cache (as a copy since override kwargs differ)
-        settings2 = isolated_settings_manager.get_or_create_settings(params2)
-
-        # Both resolve to the same cache entry (same structural hash)
-        assert len(isolated_settings_manager.settings_object_cache) == 1
-        # But the returned object has the override applied
-        assert settings2.TEST_VAL_1 == "value2"
-        # Original cached instance is untouched
-        assert settings1.TEST_VAL_1 == "value1"
-
-    @pytest.mark.unit
-    def test_cache_stores_by_settings_parameters(self, isolated_settings_manager):
-        """Test that cache uses SettingsParameters as key."""
-        params = SettingsParameters.create(
-            settings_class=TestSettings
+        assert (baseline.URL, off.URL, on.URL, explicit.URL, later.URL) == (
+            "https://primary!", "https://primary!", "https://alternate!", "custom!", "https://primary!",
         )
 
-        settings = isolated_settings_manager.get_or_create_settings(params)
+    def test_final_owned_root_detaches_globals_and_preserves_internal_aliases(self):
+        _VALIDATOR_GLOBAL["items"][:] = ["baseline"]
+        manager = SettingsManager()
+        params = SettingsParameters.create(settings_class=_RootOwnershipSettings, DATA={})
 
-        # Check cache has the SettingsParameters as key
-        assert params in isolated_settings_manager.settings_object_cache
-        # And the value should be the settings instance
-        assert isolated_settings_manager.settings_object_cache[params] is settings
+        first = manager.get_or_create_settings(params)
+        assert first.DATA is first._private_data
+        assert first.DATA is first.__pydantic_extra__["extra_data"]
+        assert first.DATA is first.non_field_data
 
-    @pytest.mark.unit
-    def test_multiple_settings_in_cache(self, isolated_settings_manager):
-        """Test that cache can hold multiple settings instances."""
-        params1 = SettingsParameters.create(
-            settings_class=TestSettings,
-            env_prefix="MULTI1_"
+        first.DATA["items"].append("caller")
+        second = manager.get_or_create_settings(params)
+
+        assert _VALIDATOR_GLOBAL == {"items": ["baseline"]}
+        assert second.DATA == {"items": ["baseline"]}
+        assert second.DATA is second._private_data
+        assert second.DATA is second.__pydantic_extra__["extra_data"]
+        assert second.DATA is second.non_field_data
+
+
+class TestSourceCaptureContracts:
+    def test_explicit_runtime_reference_is_fresh_while_baseline_reference_stays_retained(
+        self, tmp_path
+    ):
+        from mountainash_settings.secrets import clear_secrets_registry, register_secrets_backend
+
+        config = tmp_path / "settings.yaml"
+        config.write_text("PASSWORD: secret:service.password\n")
+        backend = _CountingBackend("baseline")
+        clear_secrets_registry()
+        register_secrets_backend("counting", backend)
+        try:
+            manager = SettingsManager()
+            baseline_params = SettingsParameters.create(
+                settings_class=_SecretSettings,
+                secrets_provider="counting",
+                config_files=[config],
+            )
+            baseline = manager.get_or_create_settings(baseline_params)
+            assert baseline.PASSWORD == "baseline"
+
+            backend.value = "runtime-one"
+            assert manager.get_or_create_settings(baseline.extract_settings_parameters()).PASSWORD == "baseline"
+            runtime_params = SettingsParameters.create(
+                settings_class=_SecretSettings,
+                secrets_provider="counting",
+                config_files=[config],
+                PASSWORD="secret:service.password",
+            )
+            assert manager.get_or_create_settings(runtime_params).PASSWORD == "runtime-one"
+
+            backend.value = "runtime-two"
+            assert manager.get_or_create_settings(runtime_params).PASSWORD == "runtime-two"
+            assert manager.get_or_create_settings(baseline_params).PASSWORD == "baseline"
+            assert backend.calls == 3
+        finally:
+            clear_secrets_registry()
+
+    def test_capture_project_source_is_selected_once_and_projects_terminal_values(self, monkeypatch):
+        from mountainash_settings.secrets import clear_secrets_registry, register_secrets_backend
+
+        _CapturedProjectSource.captures = 0
+        monkeypatch.setattr(_CapturedProjectSource, "source_value", "captured")
+        backend = _CountingBackend("should-not-resolve")
+        clear_secrets_registry()
+        register_secrets_backend("projecting", backend)
+        try:
+            manager = SettingsManager()
+            selectors = {"settings_class": _CaptureProjectSettings, "secrets_provider": "projecting"}
+
+            first = manager.get_or_create_settings(SettingsParameters.create(**selectors, REQUEST="first"))
+            monkeypatch.setattr(_CapturedProjectSource, "source_value", "changed")
+            second = manager.get_or_create_settings(SettingsParameters.create(**selectors, REQUEST="second"))
+            assert first.VALUE == first.MIRROR == "captured:first"
+            assert second.VALUE == second.MIRROR == "captured:second"
+            assert first.LITERAL == second.LITERAL == "secret:terminal.value"
+            assert _CapturedProjectSource.captures == 1
+            assert backend.calls == 0
+        finally:
+            clear_secrets_registry()
+
+    def test_legacy_source_hook_requires_explicit_cached_capture_adaptation(self):
+        manager = SettingsManager()
+        params = SettingsParameters.create(settings_class=_LegacyHookSettings)
+        with pytest.raises(ValueError):
+            manager.get_or_create_settings(params)
+        assert not manager.is_initialised(params)
+        assert _LegacyHookSettings(VALUE="direct-input").VALUE == "direct-input"
+
+    def test_declared_nonunderscore_control_name_remains_a_runtime_field(self):
+        settings = SettingsManager().get_or_create_settings(
+            SettingsParameters.create(
+                settings_class=_FieldNamedExtraSettings,
+                extra="field-value",
+            )
         )
-        params2 = SettingsParameters.create(
-            settings_class=TestSettings,
-            env_prefix="MULTI2_"
-        )
-        params3 = SettingsParameters.create(
-            settings_class=TestSettings,
-            env_prefix="MULTI3_"
-        )
 
-        settings1 = isolated_settings_manager.get_or_create_settings(params1)
-        settings2 = isolated_settings_manager.get_or_create_settings(params2)
-        settings3 = isolated_settings_manager.get_or_create_settings(params3)
+        assert settings.extra == "field-value"
 
-        # All should be in cache
-        assert isolated_settings_manager.is_initialised(params1)
-        assert isolated_settings_manager.is_initialised(params2)
-        assert isolated_settings_manager.is_initialised(params3)
-
-        # All should be different instances
-        assert settings1 is not settings2
-        assert settings2 is not settings3
-        assert settings1 is not settings3
-
-
-class TestIntegration:
-    """Integration tests for SettingsManager with realistic scenarios."""
-
-    @pytest.mark.integration
-    def test_full_workflow_create_retrieve_reuse(self, isolated_settings_manager):
-        """Test complete workflow: create, retrieve, reuse."""
-        # Step 1: Create new settings
-        params = SettingsParameters.create(
-            settings_class=TestSettings,
-            TEST_VAL_1="initial_value"
-        )
-
-        # Should not be initialized yet
-        assert not isolated_settings_manager.is_initialised(params)
-
-        # Create settings
-        settings1 = isolated_settings_manager.get_or_create_settings(params)
-        assert settings1.TEST_VAL_1 == "initial_value"
-
-        # Should now be initialized
-        assert isolated_settings_manager.is_initialised(params)
-
-        # Step 2: Retrieve cached settings (returns copy when kwargs present)
-        settings2 = isolated_settings_manager.get_or_create_settings(params)
-        assert settings2.TEST_VAL_1 == "initial_value"
-
-        # Step 3: Get settings object directly (returns copy when kwargs present)
-        settings3 = isolated_settings_manager.get_settings_object(params)
-        assert settings3.TEST_VAL_1 == "initial_value"
-
-        # Cache should still have only one entry
-        assert len(isolated_settings_manager.settings_object_cache) == 1
-
-    @pytest.mark.integration
-    def test_with_config_files(self, isolated_settings_manager, temp_yaml_file):
-        """Test SettingsManager with config files."""
-        from mountainash_settings.settings.app.app_settings import AppSettings
-
-        params = SettingsParameters.create(
-            settings_class=AppSettings,
-            config_files=temp_yaml_file
-        )
-
-        settings = isolated_settings_manager.get_or_create_settings(params)
-
-        assert settings.DEBUG is True
-        assert settings.LOCALE_TIMEZONE == "EST"
+    def test_cached_source_controls_are_rejected_before_retrieval(self, tmp_path):
+        with pytest.raises(ValueError):
+            SettingsManager().get_or_create_settings(
+                SettingsParameters.create(
+                    settings_class=TestSettings,
+                    _env_file=tmp_path / "other.env",
+                )
+            )
 
 
 class TestEdgeCases:
-    """Test edge cases and error conditions."""
-
-    @pytest.mark.edge_case
-    def test_validate_config_files_exist_raises_error(self, settings_manager):
-        """Test that non-existing config files raise FileNotFoundError."""
+    def test_validate_config_files_exist_raises_error(self):
         with pytest.raises(FileNotFoundError):
             SettingsFileHandler.validate_config_files_exist(
                 config_files=["non_existing_file.yaml"]
             )
 
-    @pytest.mark.edge_case
-    def test_none_params_handled_correctly(self, isolated_settings_manager):
-        """Test that params with no namespace are handled correctly."""
-        params = SettingsParameters.create(
-            settings_class=TestSettings
+
+class TestReviewedCacheBoundaries:
+    def test_named_override_preserves_lower_indexed_source_and_sibling(self, tmp_path):
+        from pydantic import AliasChoices
+
+        class IndexedAliasSettings(MountainAshBaseSettings):
+            value: str = Field(validation_alias=AliasChoices("named", AliasPath("items", 0)))
+            sibling: str = Field(validation_alias=AliasPath("items", 1))
+
+        path = tmp_path / "indexed.yaml"
+        path.write_text("items: [source, sibling]\n")
+        settings = SettingsManager().get_or_create_settings(SettingsParameters.create(
+            settings_class=IndexedAliasSettings, config_files=[path], named="override",
+        ))
+        assert settings.value == "override"
+        assert settings.sibling == "sibling"
+
+    def test_aliased_derived_value_survives_warm_retrieval(self):
+        class AliasedDerivedSettings(MountainAshBaseSettings):
+            value: str = Field(default="default", validation_alias="input")
+
+            def post_init(self, template_settings_parameters: SettingsParameters | None = None, reinitialise: bool | None = False) -> None:
+                self.value = "derived"
+
+        manager = SettingsManager()
+        parameters = SettingsParameters.create(settings_class=AliasedDerivedSettings)
+        assert manager.get_or_create_settings(parameters).value == "derived"
+        assert manager.get_or_create_settings(parameters).value == "derived"
+
+    def test_plain_nested_partial_defaults_survive_source_and_runtime_inputs(self, monkeypatch):
+        class Nested(BaseModel):
+            a: int = 1
+            b: int = 2
+
+        class PartialSettings(BaseSettings):
+            model_config = SettingsConfigDict(nested_model_default_partial_update=True)
+            nested: Nested = Nested(a=1, b=9)
+
+        monkeypatch.setenv("MASPARTIAL_nested", '{"a":5}')
+        manager = SettingsManager()
+        parameters = SettingsParameters.create(settings_class=PartialSettings, env_prefix="MASPARTIAL_")
+        assert manager.get_or_create_settings(parameters).nested == Nested(a=5, b=9)
+        assert manager.get_or_create_settings(SettingsParameters.create(
+            settings_class=PartialSettings, env_prefix="MASPARTIAL_", nested={"a": 7},
+        )).nested == Nested(a=7, b=9)
+
+    def test_named_override_allows_absent_indexed_alias_alternative(self):
+        from pydantic import AliasChoices
+
+        class IndexedAliasSettings(MountainAshBaseSettings):
+            value: str = Field(validation_alias=AliasChoices("named", AliasPath("items", 0)))
+
+        settings = SettingsManager().get_or_create_settings(
+            SettingsParameters.create(settings_class=IndexedAliasSettings, named="override"),
         )
+        assert settings.value == "override"
 
-        settings = isolated_settings_manager.get_or_create_settings(params)
+    def test_caught_invalid_assignment_does_not_poison_later_calls(self):
+        from pydantic import ValidationError
 
-        # Should create successfully
-        assert settings is not None
-        assert isinstance(settings, TestSettings)
+        class CatchingSettings(MountainAshBaseSettings):
+            VALUE: int = Field(default=3, gt=0)
+
+            def post_init(
+                self,
+                template_settings_parameters: SettingsParameters | None = None,
+                reinitialise: bool | None = False,
+            ) -> None:
+                try:
+                    self.VALUE = -1
+                except ValidationError:
+                    pass
+
+        manager = SettingsManager()
+        parameters = SettingsParameters.create(settings_class=CatchingSettings)
+        assert manager.get_or_create_settings(parameters).VALUE == 3
+        assert manager.get_or_create_settings(parameters).VALUE == 3
+
+    @pytest.mark.parametrize("record_first", [False, True])
+    def test_unrecorded_postinit_mutation_is_rejected(self, record_first):
+        class BypassSettings(MountainAshBaseSettings):
+            VALUE: str = "original"
+
+            def post_init(
+                self,
+                template_settings_parameters: SettingsParameters | None = None,
+                reinitialise: bool | None = False,
+            ) -> None:
+                if record_first:
+                    self.VALUE = "recorded"
+                object.__setattr__(self, "VALUE", "bypass-private-canary")
+
+        assert BypassSettings().VALUE == "bypass-private-canary"
+        with pytest.raises(ValueError) as error:
+            SettingsManager().get_or_create_settings(SettingsParameters.create(settings_class=BypassSettings))
+        assert "bypass-private-canary" not in str(error.value)
+
+    def test_runtime_simple_alias_keeps_validation_alias_semantics(self):
+        settings = SettingsManager().get_or_create_settings(
+            SettingsParameters.create(settings_class=_SimpleAliasSettings, input="override"),
+        )
+        assert settings.value == "override"
+
+    def test_shared_alias_root_preserves_sibling_and_replaces_logical_field(self, tmp_path):
+        path = tmp_path / "shared.yaml"
+        path.write_text("pair:\n  left:\n    old: source\n  right: sibling\n")
+        settings = SettingsManager().get_or_create_settings(
+            SettingsParameters.create(
+                settings_class=_SharedAliasSettings, config_files=[path],
+                pair={"left": {"new": "runtime"}},
+            ),
+        )
+        assert settings.left == {"new": "runtime"}
+        assert settings.right == "sibling"
+
+    def test_explicit_source_equal_to_default_remains_in_exclude_unset_dump(self, tmp_path):
+        path = tmp_path / "defaults.env"
+        path.write_text('nested={"value":3}\n')
+        params = SettingsParameters.create(settings_class=_ExplicitDefaultSettings, config_files=[path])
+        manager = SettingsManager()
+        first = manager.get_or_create_settings(params)
+        path.unlink()
+        second = manager.get_or_create_settings(params)
+        assert first.model_dump(exclude_unset=True) == {"nested": {"value": 3}}
+        assert second.model_dump(exclude_unset=True) == {"nested": {"value": 3}}
+
+    def test_first_reinitialise_only_call_does_not_seed_baseline_carry(self):
+        manager = SettingsManager()
+        params = SettingsParameters.create(settings_class=_ReinitialiseSettings)
+        first = manager.get_or_create_settings(params, reinitialise=True)
+        baseline = manager.get_or_create_settings(params)
+        assert first.REINITIALISED is True
+        assert baseline.REINITIALISED is False
+
+    def test_same_class_nested_constructor_cannot_consume_outer_capture(self, tmp_path):
+        path = tmp_path / "nested-constructor.yaml"
+        path.write_text("value: captured\n")
+        params = SettingsParameters.create(settings_class=_NestedConstructorSettings, config_files=[path])
+        manager = SettingsManager()
+        first = manager.get_or_create_settings(params)
+        path.unlink()
+        second = manager.get_or_create_settings(params)
+        assert (first.value, second.value) == ("captured", "captured")
+
+    def test_extraction_does_not_replay_custom_constructor_transform(self):
+        manager = SettingsManager()
+        original = manager.get_or_create_settings(
+            SettingsParameters.create(settings_class=_TransformingConstructorSettings, value="input"),
+        )
+        reconstructed = manager.get_or_create_settings(original.extract_settings_parameters())
+        assert original.value == reconstructed.value == "outer:input"
+
+    @pytest.mark.parametrize("controls", [{"reinitialise": True}, {"env_prefix": "OTHER_"}])
+    def test_nested_operation_and_source_controls_fail_before_capture(self, tmp_path, controls):
+        params = SettingsParameters.create(
+            settings_class=TestSettings, config_files=[tmp_path / "must-not-read.yaml"], kwargs=controls,
+        )
+        manager = SettingsManager()
+        with pytest.raises(ValueError):
+            manager.get_or_create_settings(params)
+        assert not manager.is_initialised(params)
+
+    def test_shared_root_static_secret_is_resolved_and_pinned(self, tmp_path):
+        from mountainash_settings.secrets import clear_secrets_registry, register_secrets_backend
+
+        path = tmp_path / "static-default.yaml"
+        path.write_text("credentials:\n  name: caller\n")
+        backend = _CountingBackend("baseline")
+        clear_secrets_registry()
+        register_secrets_backend("static-default", backend)
+        try:
+            manager = SettingsManager()
+            params = SettingsParameters.create(
+                settings_class=_StaticAliasSecretSettings, config_files=[path], secrets_provider="static-default",
+            )
+            first = manager.get_or_create_settings(params)
+            backend.value = "changed"
+            second = manager.get_or_create_settings(params)
+            assert first.NAME == second.NAME == "caller"
+            assert first.PASSWORD.get_secret_value() == second.PASSWORD.get_secret_value() == "baseline"
+            assert backend.calls == 1
+        finally:
+            clear_secrets_registry()

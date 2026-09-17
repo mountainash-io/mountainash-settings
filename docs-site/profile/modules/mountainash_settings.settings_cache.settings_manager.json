@@ -1,7 +1,7 @@
 {
   "id": "mountainash_settings.settings_cache.settings_manager",
   "path": "src/mountainash_settings/settings_cache/settings_manager.py",
-  "summary": "SettingsManager holds a dictionary of settings instances keyed by structural SettingsParameters. Cold construction currently retains runtime inputs; get_settings_object returns the cached instance or a shallow overlay. MAS-SEC-001 protects supported reconstruction recipes, but cold contamination and shared nested live state remain MAS-SEC-002 work.",
+  "summary": "SettingsManager owns private structural contexts keyed by the five SettingsParameters selectors. It captures selected source state once, materializes every complete invocation as a fresh owned result, and exposes direct get_or_create/get-existing/status routes without a public result map.",
   "role": "orchestration",
   "visibility": "semi-public",
   "stability": "stable",
@@ -30,9 +30,9 @@
   ],
   "extension_points": [],
   "lifecycle_notes": [
-    "settings_object_cache is a plain dict — not thread-safe for concurrent write (first creation of new settings class)",
-    "Falls back to plain BaseSettings construction for non-MountainAshBaseSettings classes",
-    "get_settings_object() raises ValueError if cache entry is not a MountainAshBaseSettings — indicates cache corruption"
+    "Context initialization captures source inputs outside broad manager locks and publishes only complete capture",
+    "get_or_create_settings and get_settings_object accept keyword-only reinitialise operation control",
+    "Standard BaseSettings inherited constructors remain cached-compatible; plain custom constructors fail before source reads"
   ],
   "documentation_hooks": [],
   "examples": [],
@@ -40,7 +40,7 @@
     "tests/test_settings_manager.py"
   ],
   "risks": [
-    "Non-thread-safe dict cache — concurrent first-access could create multiple instances"
+    "Contexts deliberately pin selected source inputs until separate lifecycle work introduces an approved refresh contract"
   ],
   "open_questions": [],
   "evidence": [

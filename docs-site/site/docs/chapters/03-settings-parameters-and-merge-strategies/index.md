@@ -19,7 +19,7 @@ This chapter introduces the SettingsParameters class that controls how settings 
 
 Between the caller who says "give me database settings from this config file with debug=True" and the actual construction of a `MountainAshBaseSettings` instance, there is an important abstraction layer: the `SettingsParameters` class. This frozen dataclass captures everything needed to construct (or retrieve from cache) a settings instance. It separates the identity of a configuration -- which files, which class, which prefix -- from the source-form runtime inputs that may change on each access.
 
-`SettingsParameters` drives structural cache identity. Requests with different runtime inputs share a cached instance. MAS-SEC-001 privately owns supported reconstruction recipes before resolving values, but cold runtime inputs can still contaminate the cache and shallow overlays can share nested state; MAS-SEC-002 owns those remaining defects.
+`SettingsParameters` drives structural context identity. Requests with different runtime inputs share pinned source state, while every retrieval receives a fresh owned instance after complete invocation validation.
 
 <!-- concept:23 -->
 ## SettingsParameters Class
@@ -63,7 +63,7 @@ A partition diagram showing the six SettingsParameters fields divided into two g
 <!-- concept:25 -->
 ## Structural Fields
 
-**Structural fields** are the parameters that define the core identity of a configuration. They determine which cached settings instance will be retrieved -- if two `SettingsParameters` have identical structural fields, they reference the same cached object regardless of differences in their runtime fields.
+**Structural fields** are the parameters that define a private source context. Identical structural fields select the same pinned source baseline; they do not return the same settings object.
 
 The structural fields are:
 
@@ -79,12 +79,13 @@ These five fields answer the question: "What configuration am I loading?" Two se
 
 ## Runtime Fields
 
-**Runtime fields** do not affect cache identity. Currently `kwargs` carries source-form inputs. The public overlay passes accepted inputs to `_apply_settings_inputs()` before reference resolution so reconstruction does not retain a resolved-value duplicate.
-
-This is provenance protection, not cache isolation. Cold construction still retains runtime inputs, while later overlays use shallow copies. Runtime reference freshness and independently owned returns across every retrieval route remain MAS-SEC-002 work.
+**Runtime fields** do not affect structural identity. `kwargs` carries
+invocation-local source-form inputs. Cached retrieval resolves selected source
+references before final validation, resolves explicit runtime references once
+per invocation, and validates the complete candidate before returning an
+independently owned result.
 
 ```python
-# These two produce the same cached base instance:
 params_a = SettingsParameters.create(
     settings_class=DbSettings,
     config_files=["db.yaml"],
@@ -294,28 +295,45 @@ Type: workflow
 A decision tree showing how the merge method selects a strategy for each field. The root node asks "Which field?" and branches to five leaf strategies: config_files -> File List Union, settings_class -> Validate Match, env_prefix/secrets_dir/secrets_provider -> Scalar Last Wins, kwargs -> Dict Merge. Each leaf shows the rationale. A "prioritise_base" toggle at the top flips the precedence direction for applicable strategies. Clicking a leaf shows before/after examples with real values. Learning objective: Select and justify the appropriate merge strategy for each SettingsParameters field type (Bloom: Evaluate).
 </details>
 
-## Putting It Together: The Caching Flow
+## Putting It Together: Structural Contexts and Runtime Materialization
 
-The structural/runtime split, custom hash, create factory, and merge framework all serve a single purpose: efficient settings caching. The complete flow works as follows:
+The structural/runtime split, custom hash, create factory, and merge framework
+identify a private source context rather than a retained settings instance.
+The complete cached flow is:
 
 1. Caller invokes `get_settings(settings_class=X, config_files=["a.yaml"], debug=True)`.
-2. The `get_settings` function creates a `SettingsParameters` via `create()`.
-3. The structural parameters are passed to `_get_settings()`, which is decorated with `@lru_cache`.
-4. `lru_cache` calls `__hash__` -- only structural fields contribute.
-5. On a cache hit, the existing `MountainAshBaseSettings` instance supplies the baseline.
-6. `apply_runtime_overrides()` makes a shallow copy and hands `debug=True` to `_apply_settings_inputs()` in source form.
-7. That lifecycle owns a supported reconstruction recipe before resolving the patch for assignment.
-8. Nested live values may still be shared; the cold construction may already contain runtime overrides.
+2. `get_settings` creates or merges a `SettingsParameters`.
+3. The five structural selectors identify a private context: config files,
+   settings class, environment prefix, secrets directory, and secrets
+   provider.
+4. The context captures selected source inputs once, resolves source
+   references before final validation, and retains separate owned source-form
+   and resolved baseline trees.
+5. Every request combines that baseline with its current runtime fields and
+   validates the complete invocation.
+6. Every request receives a fresh owned result. Runtime values, including
+   explicit runtime secret references, do not become shared baseline state.
 
-Source loading is cached, but full invocation validation and caller/cache ownership are not yet established. MAS-SEC-002 addresses these limitations.
+Absent source fields remain absent from the retained candidate, so Pydantic
+evaluates defaults and default factories per materialization with the normal
+class validation policy. A runtime `secret:` reference resolves once for its
+invocation even if its source text equals a baseline reference. Pure source
+projection output is terminal candidate data; it is not recursively treated
+as another reference.
 
-| Component | Role in Caching |
-|-----------|----------------|
-| Structural Fields | Define cache key identity |
-| Runtime Fields | Applied as post-cache overlay |
-| Custom Hash/Eq | Enable lru_cache lookup |
-| Create Factory | Normalizes inputs for consistent hashing |
-| Merge Framework | Combines layered parameter sets before cache lookup |
+`reinitialise` is a keyword-only cached-retrieval control, not structural
+identity, source reload, or refresh. Profile-origin/template behavior remains
+the later MAS-SEC-005 joint integration; direct-constructor source framing,
+common error handling, and context/provider lifecycle refresh remain
+MAS-SEC-004, MAS-SEC-006, and lifecycle work respectively.
+
+| Component | Role in Cached Retrieval |
+|-----------|--------------------------|
+| Structural fields | Select the private source context |
+| Runtime fields | Invocation-local complete-validation inputs |
+| Custom hash/eq | Normalize the five structural selectors |
+| Create/merge | Build a caller's structural and runtime input set |
+| Result ownership | Isolate every returned object graph |
 
 #### Diagram: Caching Flow with Structural/Runtime Split
 
@@ -327,15 +345,15 @@ Type: microsim
 **Library:** p5.js<br/>
 **Status:** Specified
 
-An animated simulation showing multiple settings requests arriving (represented as colored packets with structural + runtime data). Structural data is used to look up the cache (shown as a hash table). On cache hit, the cached instance is cloned and runtime overrides are applied (shown as a thin overlay layer). On cache miss, full construction occurs. A counter shows cache hit rate. Users can click "Send Request" to generate new requests with varying structural/runtime combinations. Learning objective: Evaluate how the structural/runtime split improves cache efficiency in high-throughput settings access patterns (Bloom: Evaluate).
+The planned simulation represents settings requests carrying structural and runtime data. Structural data selects a private source context; each request materializes a separately owned result from the pinned baseline plus its runtime inputs. It must not portray a cached settings instance, a shallow overlay, or a source reload. The textbook simulation has not been regenerated here: the documented textbook-refresh tooling remains unavailable.
 </details>
 
 ## Key Takeaways
 
-- **SettingsParameters** is a frozen dataclass that captures everything needed to construct or retrieve a settings instance from cache.
-- **Structural fields** (config_files, settings_class, env_prefix, secrets_dir, secrets_provider) define the cache key identity -- same structure means same cached instance.
-- **Runtime fields** (`kwargs`) are source-form overlays handed to the private settings lifecycle; their resolved values are not cache provenance.
-- **Custom Hash and Eq** deliberately exclude runtime fields, allowing `lru_cache` to share base instances across callers with different overrides.
+- **SettingsParameters** is a frozen dataclass that captures structural selectors and caller runtime inputs for retrieval.
+- **Structural fields** (config_files, settings_class, env_prefix, secrets_dir, secrets_provider) select the private source context.
+- **Runtime fields** (`kwargs`) are invocation-local complete-validation inputs; they do not enter the retained baseline.
+- **Custom Hash and Eq** deliberately exclude runtime fields so equal structural selectors share pinned source inputs, not a returned settings instance.
 - **Parameter Create Factory** normalizes flexible input types into a canonical frozen form suitable for hashing and caching.
 - **File List Union Strategy** combines config file lists from both parameter sets, deduplicating but never dropping explicitly requested files.
 - **Scalar Last Wins Strategy** gives precedence to the later (more specific) parameter set for env_prefix, secrets_dir, and secrets_provider.

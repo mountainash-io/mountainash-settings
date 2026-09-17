@@ -38,7 +38,11 @@ class CustomPostInitSettings(MountainAshBaseSettings):
     VALUE: str = Field(default="initial")
     COMPUTED: str = Field(default=None)
 
-    def post_init(self, reinitialise: bool = False) -> None:
+    def post_init(
+        self,
+        template_settings_parameters: Optional[SettingsParameters] = None,
+        reinitialise: Optional[bool] = False,
+    ) -> None:
         """Custom post_init that computes a value."""
         self.COMPUTED = f"computed_{self.VALUE}"
 
@@ -539,26 +543,33 @@ class TestIntegration:
 
     @pytest.mark.integration
     def test_get_settings_multiple_calls(self, isolated_settings_manager):
-        """Test that get_settings works correctly across multiple calls."""
-        # First call - create settings
+        """Runtime values remain local across equal structural requests."""
         params1 = SettingsParameters.create(
             settings_class=TestSettings,
-            TEST_VAL_1="value1"
+            TEST_VAL_1="value1",
         )
-        settings1 = isolated_settings_manager.get_or_create_settings(params1)
-        assert settings1.TEST_VAL_1 == "value1"
-
-        # Second call with different kwargs but same structural params
         params2 = SettingsParameters.create(
             settings_class=TestSettings,
-            TEST_VAL_1="value2"
+            TEST_VAL_1="value2",
         )
-        settings2 = isolated_settings_manager.get_or_create_settings(params2)
 
-        # Cache should have only one entry (same structural params)
-        assert len(isolated_settings_manager.settings_object_cache) == 1
-        # But returned values reflect the kwargs
-        assert settings2.TEST_VAL_1 == "value2"
+        assert isolated_settings_manager.get_or_create_settings(params1).TEST_VAL_1 == "value1"
+        assert isolated_settings_manager.get_or_create_settings(params2).TEST_VAL_1 == "value2"
+
+    @pytest.mark.integration
+    def test_public_get_settings_keeps_runtime_and_mutable_values_local(
+        self, settings_manager
+    ):
+        first = get_settings(
+            settings_class=TestSettings,
+            TEST_VAR="request-only",
+        )
+        first.COMPLEX_VAR["key"] = "caller-mutation"
+
+        baseline = get_settings(settings_class=TestSettings)
+
+        assert baseline.TEST_VAR == "default_value"
+        assert baseline.COMPLEX_VAR == {"key": "value"}
 
 
 class TestEdgeCases:

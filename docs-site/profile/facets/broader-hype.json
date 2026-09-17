@@ -27,7 +27,7 @@
     },
     {
       "capability": "Smart caching for pipelines",
-      "essence": "get_settings() returns the same instance on every call for the same configuration — no redundant file I/O or environment reads. Runtime overrides for batch IDs or run-specific parameters get their own instance without polluting the cache."
+      "essence": "get_settings() pins selected source inputs once per structural context, avoiding redundant source reads while returning a fresh independently owned settings object for every caller. Runtime values stay invocation-local and cannot pollute the retained baseline."
     }
   ],
 

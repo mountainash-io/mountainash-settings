@@ -1,6 +1,6 @@
 {
   "audience": "users",
-  "summary": "Define fully-typed application settings with Pydantic, load configuration from YAML, TOML, JSON, or .env files, and retrieve a cached instance with a single call. Template strings let you derive fields from other fields automatically. Connection profiles give you ready-made typed settings for databases, storage backends, and APIs, with built-in support for the authentication mode your target expects.",
+  "summary": "Define fully-typed application settings with Pydantic, load configuration from YAML, TOML, JSON, or .env files, and retrieve a fresh owned settings object from pinned structural source state with a single call. Template strings let you derive fields from other fields automatically. Connection profiles give you ready-made typed settings for databases, storage backends, and APIs, with built-in support for the authentication mode your target expects.",
   "use_cases": [
     "Configure a data pipeline that reads connection details from a YAML file and resolves secrets from Vault at startup",
     "Build a CLI application where environment variables override file-based defaults, with template-derived output paths",

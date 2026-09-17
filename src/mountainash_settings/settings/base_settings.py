@@ -4,10 +4,11 @@ from string import Formatter
 from importlib import import_module
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
+from enum import Enum
 from pathlib import PurePosixPath, PureWindowsPath, PosixPath, WindowsPath
 from uuid import UUID
 
-from pydantic import BaseModel, Field, PrivateAttr, SecretStr, SecretBytes
+from pydantic import AliasPath, BaseModel, Field, PrivateAttr, SecretStr, SecretBytes
 from pydantic_settings import (
     BaseSettings,
     DotEnvSettingsSource,
@@ -24,6 +25,7 @@ from mountainash_settings.settings_parameters import SettingsFileHandler, Settin
 T = TypeVar('T', BaseSettings, 'MountainAshBaseSettings')
 
 
+_CACHE_SOURCE_UNSET = object()
 _LOCAL_PATH_TYPE = type(UPath("."))
 
 
@@ -44,11 +46,17 @@ def _reconstruction_key_is_safe(value: Any) -> bool:
     )
 
 
+def _enum_value_is_immutable(value: Any) -> bool:
+    if type(value) in (tuple, frozenset):
+        return all(_enum_value_is_immutable(child) for child in value)
+    return type(value) in (type(None), bool, int, float, complex, str, bytes)
+
+
 def _copy_reconstruction(value: Any, memo: dict[int, Any], active: set[int]) -> Any:
     """Copy source values without trusting arbitrary user copy hooks.
 
     Exact value types are deliberate: subclasses may carry mutable state.
-    Cycles and opaque state affect extraction only, never model admission.
+    Extraction may discard unsupported state; cached materialization rejects it.
     """
     value_type = type(value)
     if value_type in (type(None), bool, int, float, complex, str, bytes):
@@ -75,6 +83,18 @@ def _copy_reconstruction(value: Any, memo: dict[int, Any], active: set[int]) -> 
             ):
                 raise _UnownedReconstruction
             result = value_type(_copy_reconstruction(child, memo, active) for child in value)
+        elif isinstance(value, Enum):
+            # Standard enum members are schema identities, not per-call objects.
+            # Mutable values or custom member state cannot cross this boundary.
+            if any(cls.__dict__.get("__slots__") for cls in value_type.__mro__):
+                raise _UnownedReconstruction
+            state = object.__getattribute__(value, "__dict__")
+            if (
+                state.keys() - {"_value_", "_name_", "__objclass__", "_sort_order_"}
+                or not _enum_value_is_immutable(state.get("_value_"))
+            ):
+                raise _UnownedReconstruction
+            result = value
         elif value_type in (date, datetime, time, timedelta, Decimal, UUID, PurePosixPath, PureWindowsPath, PosixPath, WindowsPath):
             if value_type in (datetime, time) and value.tzinfo is not None and type(value.tzinfo) is not timezone:
                 raise _UnownedReconstruction
@@ -161,7 +181,6 @@ def _patch_reconstruction(
     recipe: dict[str, Any], patch: dict[str, Any], model_type: Type[BaseSettings],
 ) -> Optional[dict[str, Any]]:
     """Patch accepted paths only when every logical input remains faithful."""
-    from pydantic import AliasPath
     from pydantic_core import PydanticUndefined
     from mountainash_settings.resolve import _validation_paths
 
@@ -214,6 +233,181 @@ def _patch_reconstruction(
     return result
 
 
+def _cache_field_input_paths(
+    model_type: Type[BaseSettings], field_name: str,
+) -> tuple[tuple[str | int, ...], ...]:
+    """Return every input path Pydantic accepts for one logical field."""
+    from mountainash_settings.resolve import _validation_paths
+
+    field = model_type.model_fields[field_name]
+    paths = _validation_paths(field_name, field)
+    if model_type.model_config.get("validate_by_name") or model_type.model_config.get("populate_by_name"):
+        if (field_name,) not in paths:
+            paths += ((field_name,),)
+    return paths
+
+
+def _cache_path_value(
+    inputs: dict[str, Any], path: tuple[str | int, ...],
+) -> Any:
+
+    return AliasPath(cast(str, path[0]), *path[1:]).search_dict_for_path(inputs)
+
+
+def _cache_input_field_names(
+    model_type: Type[BaseSettings], inputs: dict[str, Any],
+) -> frozenset[str]:
+    """Return logical fields represented by complete supplied input paths."""
+    from pydantic_core import PydanticUndefined
+
+    return frozenset(
+        field_name
+        for field_name in model_type.model_fields
+        if any(
+            _cache_path_value(inputs, path) is not PydanticUndefined
+            for path in _cache_field_input_paths(model_type, field_name)
+        )
+    )
+
+
+
+
+def _cache_remove_path(
+    tree: dict[str, Any], path: tuple[str | int, ...],
+) -> bool:
+    """Remove one dictionary path without disturbing a shared alias sibling."""
+    from pydantic_core import PydanticUndefined
+
+    if path and _cache_path_value(tree, path) is PydanticUndefined:
+        return True
+    if not path or any(isinstance(segment, int) for segment in path):
+        return False
+    current: Any = tree
+    parents: list[tuple[dict[str, Any], str]] = []
+    for segment in path[:-1]:
+        if not isinstance(current, dict) or segment not in current:
+            return True
+        parents.append((current, cast(str, segment)))
+        current = current[segment]
+    leaf = cast(str, path[-1])
+    if not isinstance(current, dict) or leaf not in current:
+        return True
+    del current[leaf]
+    while parents and not current:
+        parent, segment = parents.pop()
+        del parent[segment]
+        current = parent
+    return True
+
+
+def _cache_overlay_fields(
+    candidate: dict[str, Any], patch: dict[str, Any], model_type: Type[BaseSettings],
+    *, logical_fields: bool = False,
+) -> dict[str, Any]:
+    """Replace represented logical fields while retaining shared alias siblings."""
+    from pydantic_core import PydanticUndefined
+
+    result = _snapshot_reconstruction(candidate)
+    patch_copy = _snapshot_reconstruction(patch)
+    if result is None or patch_copy is None:
+        raise ValueError("Cached settings candidate cannot be safely owned")
+
+    selected: dict[str, tuple[tuple[str | int, ...], Any]] = {}
+    for field_name in model_type.model_fields:
+        if logical_fields:
+            if field_name in patch_copy:
+                selected[field_name] = (_cache_field_input_paths(model_type, field_name)[0], patch_copy[field_name])
+            continue
+        for path in _cache_field_input_paths(model_type, field_name):
+            value = _cache_path_value(patch_copy, path)
+            if value is not PydanticUndefined:
+                selected[field_name] = (path, value)
+                break
+
+    if not logical_fields:
+        represented_roots = {cast(str, path[0]) for path, _ in selected.values()}
+        for name, value in patch_copy.items():
+            if name not in represented_roots:
+                result[name] = value
+
+    for field_name, (selected_path, value) in selected.items():
+        field_paths = _cache_field_input_paths(model_type, field_name)
+        for path in field_paths:
+            if path == selected_path:
+                break
+            if not _cache_remove_path(result, path):
+                raise ValueError("Cached settings aliases cannot be represented safely")
+        result = cast(dict[str, Any], _replace_reconstruction_path(result, selected_path, value))
+    for field_name in model_type.model_fields:
+        paths = _cache_field_input_paths(model_type, field_name)
+        actual = next((value for path in paths if (value := _cache_path_value(result, path)) is not PydanticUndefined), PydanticUndefined)
+        expected = selected[field_name][1] if field_name in selected else next(
+            (value for path in paths if (value := _cache_path_value(candidate, path)) is not PydanticUndefined), PydanticUndefined,
+        )
+        if not _same_reconstruction_value(actual, expected):
+            raise ValueError("Cached settings aliases cannot preserve logical field values")
+    return result
+
+
+def _detach_cached_result(instance: BaseSettings) -> None:
+    """Install one independently-owned graph across every Pydantic compartment."""
+    original_dict = object.__getattribute__(instance, "__dict__")
+    source_dict = dict(original_dict)
+    framework_identity = (
+        isinstance(instance, MountainAshBaseSettings)
+        and source_dict.get("SETTINGS_CLASS") is type(instance)
+    )
+    retained_metadata = (
+        {"SETTINGS_CLASS": source_dict.pop("SETTINGS_CLASS")}
+        if framework_identity
+        else {}
+    )
+    memo: dict[int, Any] = {}
+    active: set[int] = set()
+    try:
+        detached_dict = _copy_reconstruction(source_dict, memo, active)
+        detached_extra = _copy_reconstruction(
+            object.__getattribute__(instance, "__pydantic_extra__"), memo, active,
+        )
+        detached_private = _copy_reconstruction(
+            object.__getattribute__(instance, "__pydantic_private__"), memo, active,
+        )
+        detached_fields_set = _copy_reconstruction(
+            object.__getattribute__(instance, "__pydantic_fields_set__"), memo, active,
+        )
+    except (_UnownedReconstruction, RecursionError):
+        raise ValueError("Cached settings result cannot be safely owned") from None
+    detached_dict.update(retained_metadata)
+    object.__setattr__(instance, "__dict__", detached_dict)
+    object.__setattr__(instance, "__pydantic_extra__", detached_extra)
+    object.__setattr__(instance, "__pydantic_private__", detached_private)
+    object.__setattr__(instance, "__pydantic_fields_set__", detached_fields_set)
+
+
+
+def _apply_cached_static_defaults(
+    instance: BaseSettings,
+    candidate: dict[str, Any],
+    resolved_defaults: dict[str, Any],
+) -> None:
+    """Assign capture-resolved declared defaults absent from all input paths."""
+    from pydantic_core import PydanticUndefined
+    from mountainash_settings.resolve import _raise_sanitized_resolution_error
+
+    for name, resolved in resolved_defaults.items():
+        if name not in type(instance).model_fields:
+            continue
+        if any(
+            _cache_path_value(candidate, path) is not PydanticUndefined
+            for path in _cache_field_input_paths(type(instance), name)
+        ):
+            continue
+        try:
+            setattr(instance, name, resolved)
+        except Exception:
+            _raise_sanitized_resolution_error(type(instance), [name])
+
+
 class MountainAshBaseSettings(BaseSettings):
     """Base settings class with template support, multi-format config files,
     and smart caching.
@@ -247,9 +441,81 @@ class MountainAshBaseSettings(BaseSettings):
     SETTINGS_SOURCE_SECRETS_DIR: Optional[str] = Field(default=None)
     SETTINGS_SOURCE_SECRETS_PROVIDER: Optional[str] =                              Field(default=None)
 
+    def __new__(cls, *args: Any, **kwargs: Any) -> "MountainAshBaseSettings":
+        """Bind the frame to this outer allocation before custom init can nest."""
+        instance = super().__new__(cls)
+        from mountainash_settings.settings_cache._context import bind_cache_frame_instance
+
+        bind_cache_frame_instance(instance)
+        return instance
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Record cached post-init field assignments before normal validation."""
+        from mountainash_settings.settings_cache._context import current_cache_assignment_recorder
+
+        recorder = current_cache_assignment_recorder(self)
+        if recorder is None or name not in type(self).model_fields:
+            super().__setattr__(name, value)
+            return
+        if name in recorder.suppressed_fields:
+            return
+        raw_value = recorder.prepare_assignment(name, value)
+        super().__setattr__(name, value)
+        recorder.record_validated_assignment(name, raw_value, object.__getattribute__(self, "__dict__").get(name))
+
 
     # protected_attributes: List[str] = ['BATCH_TIER', 'BATCH_VERSION']
     # reserved_kwargs = {"_env_file","_env_file_encoding", "_env_prefix"}
+    def _initialise_from_cache_frame(self, frame: Any, effective_runtime: Dict[str, Any]) -> None:
+        """Validate a complete pinned candidate without rebuilding settings sources."""
+        parameters = frame.context.key.parameters()
+        config_files = SettingsFileHandler.separate_config_files(parameters.config_files)
+        candidate = frame.candidate(effective_runtime)
+        try:
+            BaseModel.__init__(self, **candidate)
+        except Exception:
+            if frame.context.has_secret_reference(effective_runtime):
+                raise ValueError(f"Cached validation failed for {type(self).__name__}") from None
+            raise
+        _apply_cached_static_defaults(
+            self, candidate, frame.static_defaults_for_call(),
+        )
+        recipe = frame.context.recipe(frame.original_runtime)
+        self._settings_reconstruction_kwargs = recipe
+        object.__setattr__(self, "SETTINGS_SOURCE_KWARG_NAMES", tuple(recipe))
+        object.__setattr__(self, "SETTINGS_CLASS", type(self))
+        object.__setattr__(self, "SETTINGS_CLASS_NAME", type(self).__name__)
+        object.__setattr__(self, "SETTINGS_SOURCE_ENV_PREFIX", parameters.env_prefix)
+        object.__setattr__(self, "SETTINGS_SOURCE_ENV_FILES", config_files.env_files)
+        object.__setattr__(self, "SETTINGS_SOURCE_YAML_FILES", config_files.yaml_files)
+        object.__setattr__(self, "SETTINGS_SOURCE_TOML_FILES", config_files.toml_files)
+        object.__setattr__(self, "SETTINGS_SOURCE_JSON_FILES", config_files.json_files)
+        object.__setattr__(self, "SETTINGS_SOURCE_SECRETS_DIR", parameters.secrets_dir)
+        object.__setattr__(self, "SETTINGS_SOURCE_SECRETS_PROVIDER", parameters.secrets_provider)
+        fields = type(self).model_fields
+        expected = _snapshot_reconstruction({
+            name: value for name, value in object.__getattribute__(self, "__dict__").items()
+            if name in fields and name != "SETTINGS_CLASS"
+        })
+        if expected is None:
+            raise ValueError("Cached post-init state cannot be safely owned")
+        frame.expected_fields = expected
+        frame.recording_instance = self
+        try:
+            self.post_init(reinitialise=frame.reinitialise)
+        finally:
+            frame.recording_instance = None
+        from pydantic_core import PydanticUndefined
+
+        actual = object.__getattribute__(self, "__dict__")
+        if any(
+            not _same_reconstruction_value(
+                expected.get(name, PydanticUndefined), actual.get(name, PydanticUndefined),
+            )
+            for name in fields if name != "SETTINGS_CLASS"
+        ):
+            raise ValueError("Cached post-init mutation has no validated assignment origin")
+
 
 
     def __init__(self,
@@ -257,6 +523,13 @@ class MountainAshBaseSettings(BaseSettings):
                  settings_parameters:   Optional[SettingsParameters] = None,
                  template_settings_parameters:   Optional[SettingsParameters] = None,
                  **kwargs) -> None:
+
+        from mountainash_settings.settings_cache._context import consume_cache_frame
+
+        frame = consume_cache_frame(self)
+        if frame is not None:
+            self._initialise_from_cache_frame(frame, kwargs)
+            return
 
 
         # Create a baseline settings parameters object
@@ -353,15 +626,19 @@ class MountainAshBaseSettings(BaseSettings):
         self.post_init()
 
 
-    @classmethod
-    def settings_customise_sources(
-        cls,
+    @staticmethod
+    def _cache_default_sources(
         settings_cls: Type[BaseSettings],
         init_settings: PydanticBaseSettingsSource,
         env_settings: PydanticBaseSettingsSource,
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
+        *,
+        yaml_files: Any = _CACHE_SOURCE_UNSET,
+        toml_files: Any = _CACHE_SOURCE_UNSET,
+        json_files: Any = _CACHE_SOURCE_UNSET,
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        """Build the shared MountainAsh source ordering for direct and cached use."""
         unprefixed_dotenv_settings = DotEnvSettingsSource(
             settings_cls,
             env_file=dotenv_settings.env_file,
@@ -377,26 +654,51 @@ class MountainAshBaseSettings(BaseSettings):
             env_parse_enums=dotenv_settings.env_parse_enums,
             _init_state=dotenv_settings._init_state,
         )
-        return ( init_settings,
-                env_settings,
-                dotenv_settings,
-                unprefixed_dotenv_settings,
-                YamlConfigSettingsSource(settings_cls, deep_merge=True),
-                TomlConfigSettingsSource(settings_cls, deep_merge=True),
-                JsonConfigSettingsSource(settings_cls, deep_merge=True),
-                file_secret_settings
+        yaml_kwargs = {} if yaml_files is _CACHE_SOURCE_UNSET else {"yaml_file": yaml_files}
+        toml_kwargs = {} if toml_files is _CACHE_SOURCE_UNSET else {"toml_file": toml_files}
+        json_kwargs = {} if json_files is _CACHE_SOURCE_UNSET else {"json_file": json_files}
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            unprefixed_dotenv_settings,
+            YamlConfigSettingsSource(settings_cls, deep_merge=True, **yaml_kwargs),
+            TomlConfigSettingsSource(settings_cls, deep_merge=True, **toml_kwargs),
+            JsonConfigSettingsSource(settings_cls, deep_merge=True, **json_kwargs),
+            file_secret_settings,
         )
 
     @classmethod
-    # @abstractmethod
-    def get_settings(cls,
-                    settings_parameters:   Optional[SettingsParameters] = None,
-                    settings_class:        Optional[Type[T]] = None,
-                    config_files:          Optional[Union[UPath, str, List[UPath|str]]]  = None,
-                    env_prefix:            Optional[str] = None,
-                    **kwargs
+    def settings_customise_sources(
+        cls,
+        settings_cls: Type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        return cls._cache_default_sources(
+            settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+        )
 
-                     ) -> Any:
+    @classmethod
+    def settings_capture_sources(
+        cls, sources: Tuple[PydanticBaseSettingsSource, ...],
+    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        """Declare the cache-safe source order; subclasses opt in here."""
+        return sources
+
+    @classmethod
+    def get_settings(
+        cls,
+        settings_parameters: Optional[SettingsParameters] = None,
+        settings_class: Optional[Type[T]] = None,
+        config_files: Optional[Union[UPath, str, List[UPath | str]]] = None,
+        env_prefix: Optional[str] = None,
+        *,
+        reinitialise: bool = False,
+        **kwargs: Any,
+    ) -> Any:
         # Lazy import to avoid circular dependency
         from mountainash_settings.settings_cache import get_settings
 
@@ -411,6 +713,7 @@ class MountainAshBaseSettings(BaseSettings):
                                     settings_class = settings_class,
                                     config_files = config_files,
                                     env_prefix=env_prefix,
+                                    reinitialise=reinitialise,
                                     **kwargs
                             )
 

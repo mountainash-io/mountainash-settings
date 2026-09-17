@@ -55,18 +55,13 @@ def session_setup():
 
 # Additional helper fixtures
 @pytest.fixture
-def isolated_cache():
-    """
-    Provides an isolated cache environment for tests.
-
-    Note: This doesn't fully clear the global LRU cache, but uses
-    unique parameter combinations to ensure test isolation.
-    """
+def isolated_cache(monkeypatch):
+    """Provide a fresh cache owner for public and direct retrieval tests."""
     from mountainash_settings import SettingsManager
 
-    # Create a fresh manager instance
     manager = SettingsManager()
-    yield manager
-
-    # Cleanup: clear the cache for this manager
-    manager.settings_object_cache.clear()
+    monkeypatch.setattr(
+        "mountainash_settings.settings_cache.settings_functions.get_settings_manager",
+        lambda: manager,
+    )
+    return manager

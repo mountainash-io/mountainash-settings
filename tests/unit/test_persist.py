@@ -227,23 +227,24 @@ def test_nested_model_source_form_is_owned_before_resolution():
 
 
 @pytest.mark.unit
-def test_runtime_overlay_extraction_preserves_original_reference():
-    from mountainash_settings import SettingsParameters
+def test_cached_runtime_reference_extraction_preserves_original_source_form():
+    from mountainash_settings import SettingsManager, SettingsParameters
 
     backend = _InMemoryBackend()
     backend.set("login", {"token": "first"})
     register_secrets_backend("memory", backend)
-    baseline = _ProvenanceSettings(HOST="baseline", secrets_provider="memory")
     params = SettingsParameters.create(
-        settings_class=_ProvenanceSettings, secrets_provider="memory",
+        settings_class=_ProvenanceSettings,
+        secrets_provider="memory",
         TOKEN="secret:login.token",
     )
-    overlay = params.apply_runtime_overrides(baseline)
+
+    settings = SettingsManager().get_or_create_settings(params)
     backend.delete("login")
-    extracted = overlay.extract_settings_parameters()
-    assert overlay.TOKEN.get_secret_value() == "first"
-    assert extracted.kwargs == {"HOST": "baseline", "TOKEN": "secret:login.token"}
-    assert baseline.extract_settings_parameters().kwargs == {"HOST": "baseline"}
+    extracted = settings.extract_settings_parameters()
+
+    assert settings.TOKEN.get_secret_value() == "first"
+    assert extracted.kwargs["TOKEN"] == "secret:login.token"
 
 
 @pytest.mark.unit

@@ -61,7 +61,7 @@ class SettingsFileHandler:
     @classmethod
     def separate_config_files(
         cls,
-        config_files: Optional[Union[UPath, str, List[Union[UPath, str]], Tuple[Union[UPath, str]]]] = None
+        config_files: Optional[Union[UPath, str, List[Union[UPath, str]], Tuple[Union[UPath, str], ...]]] = None
     ) -> SettingsFiles:
         """
         Separates configuration files into their respective types.
@@ -155,7 +155,7 @@ class SettingsFileHandler:
 
     @staticmethod
     def validate_config_files_exist(
-                                    config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]] = None
+                                    config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str, ...]]] = None
                                     ) -> None:
         """
         Validates that the configuration files exist.
@@ -262,8 +262,8 @@ class SettingsFileHandler:
 
     @classmethod
     def format_config_file_tuple(cls,
-                                config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None
-                                ) -> Optional[Tuple[UPath|str]]:
+                                config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str, ...]]]  = None
+                                ) -> Optional[Tuple[UPath|str, ...]]:
         """
         Formats the config_files as a tuple for immutability in the parameters.
 
@@ -292,7 +292,7 @@ class SettingsFileHandler:
 
     @classmethod
     def format_config_file_list(cls,
-                                 config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str]]]  = None
+                                 config_files: Optional[Union[UPath, str, List[UPath|str], Tuple[UPath|str, ...]]]  = None
                                  ) -> Optional[List[UPath|str]]:
 
         """
