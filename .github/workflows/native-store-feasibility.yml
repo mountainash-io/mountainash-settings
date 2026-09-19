@@ -1,0 +1,53 @@
+name: Native Store Feasibility
+
+on:
+  push:
+    branches:
+      - feasibility/native-store-policy-20260919
+    paths:
+      - .github/workflows/native-store-feasibility.yml
+      - tools/native_feasibility/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-store-feasibility-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native-probes:
+    name: Native probes (${{ matrix.os }}, Python 3.12)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2022]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Provision Linux ACL fixture utilities
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends acl
+
+      - name: Run disposable native mechanisms
+        run: python -I tools/native_feasibility/run.py --output native-evidence/report.json
+
+      - name: Preserve feasibility observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-feasibility-${{ matrix.os }}-${{ github.run_attempt }}
+          path: native-evidence/report.json
+          if-no-files-found: error
+          retention-days: 30
