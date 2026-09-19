@@ -8,6 +8,11 @@ It is a probe, not a store implementation.
 from __future__ import annotations
 
 import ctypes as c
+import errno
+import json
+import re
+import secrets
+from contextlib import ExitStack, contextmanager
 import os
 from collections.abc import Callable
 from pathlib import Path
@@ -52,6 +57,8 @@ FILE_ATTRIBUTE_DIRECTORY = 0x00000010
 FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
 FILE_SHARE_READ = 0x00000001
 FILE_SHARE_WRITE = 0x00000002
+FILE_SHARE_DELETE = 0x00000004
+OPEN_EXISTING = 3
 GENERIC_READ = 0x80000000
 GENERIC_WRITE = 0x40000000
 GENERIC_ALL = 0x10000000
@@ -59,11 +66,13 @@ DELETE = 0x00010000
 READ_CONTROL = 0x00020000
 WRITE_DAC = 0x00040000
 SYNCHRONIZE = 0x00100000
+# List/add file/add directory/traverse/read attributes, plus metadata query and sync.
+DIRECTORY_ACCESS = 0x1 | 0x2 | 0x4 | 0x20 | 0x80 | READ_CONTROL | SYNCHRONIZE
 FILE_END = 2
 FILE_TYPE_DISK = 0x0001
 FILE_RENAME_INFORMATION = 10
 FILE_LINK_INFORMATION = 11
-FILE_DISPOSITION_INFORMATION = 13
+FILE_DISPOSITION_INFORMATION_CLASS = 13
 ERROR_INSUFFICIENT_BUFFER = 122
 ERROR_LOCK_VIOLATION = 33
 LOCKFILE_FAIL_IMMEDIATELY = 0x00000001
@@ -75,10 +84,22 @@ SE_FILE_OBJECT = 1
 DACL_SECURITY_INFORMATION = 0x00000004
 ACL_SIZE_INFORMATION = 2
 ACCESS_ALLOWED_ACE_TYPE = 0x00
+SE_DACL_PROTECTED = 0x1000
+FILE_ALL_ACCESS = 0x001F01FF
+STATUS_OBJECT_NAME_NOT_FOUND = 0xC0000034
+STATUS_OBJECT_PATH_NOT_FOUND = 0xC000003A
+STATUS_OBJECT_NAME_COLLISION = 0xC0000035
+STATUS_ACCESS_DENIED = 0xC0000022
+STATUS_REPARSE_POINT_ENCOUNTERED = 0xC000050B
+STATUS_STOPPED_ON_SYMLINK = 0x8000002D
 
 
 class UNICODE_STRING(c.Structure):
-    _fields_ = [("Length", USHORT), ("MaximumLength", USHORT), ("Buffer", c.POINTER(c.c_wchar))]
+    _fields_ = [
+        ("Length", USHORT),
+        ("MaximumLength", USHORT),
+        ("Buffer", c.POINTER(c.c_wchar)),
+    ]
 
 
 class OBJECT_ATTRIBUTES(c.Structure):
@@ -124,8 +145,8 @@ class FILE_STANDARD_INFO(c.Structure):
         ("AllocationSize", c.c_longlong),
         ("EndOfFile", c.c_longlong),
         ("NumberOfLinks", DWORD),
-        ("DeletePending", BOOL),
-        ("Directory", BOOL),
+        ("DeletePending", BYTE),  # BOOLEAN, not Win32 BOOL
+        ("Directory", BYTE),  # BOOLEAN, not Win32 BOOL
     ]
 
 
@@ -176,7 +197,11 @@ class _NtName:
             raise ValueError("native relative names must be non-empty and NUL-free")
         self.buffer = c.create_unicode_buffer(value)
         length = len(value.encode("utf-16-le"))
-        self.string = UNICODE_STRING(length, length + c.sizeof(c.c_wchar), c.cast(self.buffer, c.POINTER(c.c_wchar)))
+        self.string = UNICODE_STRING(
+            length,
+            length + c.sizeof(c.c_wchar),
+            c.cast(self.buffer, c.POINTER(c.c_wchar)),
+        )
 
 
 class _Api:
@@ -192,13 +217,24 @@ class _Api:
 
     def _bind(self) -> None:
         self.CreateFileW = self.k32.CreateFileW
-        self.CreateFileW.argtypes = [c.c_wchar_p, DWORD, DWORD, PVOID, DWORD, DWORD, HANDLE]
+        self.CreateFileW.argtypes = [
+            c.c_wchar_p,
+            DWORD,
+            DWORD,
+            PVOID,
+            DWORD,
+            DWORD,
+            HANDLE,
+        ]
         self.CreateFileW.restype = HANDLE
         self.CloseHandle = self.k32.CloseHandle
         self.CloseHandle.argtypes = [HANDLE]
         self.CloseHandle.restype = BOOL
         self.GetFileInformationByHandle = self.k32.GetFileInformationByHandle
-        self.GetFileInformationByHandle.argtypes = [HANDLE, c.POINTER(BY_HANDLE_FILE_INFORMATION)]
+        self.GetFileInformationByHandle.argtypes = [
+            HANDLE,
+            c.POINTER(BY_HANDLE_FILE_INFORMATION),
+        ]
         self.GetFileInformationByHandle.restype = BOOL
         self.GetFileInformationByHandleEx = self.k32.GetFileInformationByHandleEx
         self.GetFileInformationByHandleEx.argtypes = [HANDLE, c.c_int, PVOID, DWORD]
@@ -213,13 +249,31 @@ class _Api:
         self.ReadFile.argtypes = [HANDLE, PVOID, DWORD, c.POINTER(DWORD), PVOID]
         self.ReadFile.restype = BOOL
         self.SetFilePointerEx = self.k32.SetFilePointerEx
-        self.SetFilePointerEx.argtypes = [HANDLE, c.c_longlong, c.POINTER(c.c_longlong), DWORD]
+        self.SetFilePointerEx.argtypes = [
+            HANDLE,
+            c.c_longlong,
+            c.POINTER(c.c_longlong),
+            DWORD,
+        ]
         self.SetFilePointerEx.restype = BOOL
         self.LockFileEx = self.k32.LockFileEx
-        self.LockFileEx.argtypes = [HANDLE, DWORD, DWORD, DWORD, DWORD, c.POINTER(OVERLAPPED)]
+        self.LockFileEx.argtypes = [
+            HANDLE,
+            DWORD,
+            DWORD,
+            DWORD,
+            DWORD,
+            c.POINTER(OVERLAPPED),
+        ]
         self.LockFileEx.restype = BOOL
         self.UnlockFileEx = self.k32.UnlockFileEx
-        self.UnlockFileEx.argtypes = [HANDLE, DWORD, DWORD, DWORD, c.POINTER(OVERLAPPED)]
+        self.UnlockFileEx.argtypes = [
+            HANDLE,
+            DWORD,
+            DWORD,
+            DWORD,
+            c.POINTER(OVERLAPPED),
+        ]
         self.UnlockFileEx.restype = BOOL
         self.GetCurrentProcess = self.k32.GetCurrentProcess
         self.GetCurrentProcess.argtypes = []
@@ -230,34 +284,91 @@ class _Api:
 
         self.NtCreateFile = self.ntdll.NtCreateFile
         self.NtCreateFile.argtypes = [
-            PHANDLE, ULONG, c.POINTER(OBJECT_ATTRIBUTES), c.POINTER(IO_STATUS_BLOCK), PVOID,
-            ULONG, ULONG, ULONG, ULONG, PVOID, ULONG,
+            PHANDLE,
+            ULONG,
+            c.POINTER(OBJECT_ATTRIBUTES),
+            c.POINTER(IO_STATUS_BLOCK),
+            PVOID,
+            ULONG,
+            ULONG,
+            ULONG,
+            ULONG,
+            PVOID,
+            ULONG,
         ]
         self.NtCreateFile.restype = NTSTATUS
         self.NtSetInformationFile = self.ntdll.NtSetInformationFile
-        self.NtSetInformationFile.argtypes = [HANDLE, c.POINTER(IO_STATUS_BLOCK), PVOID, ULONG, c.c_int]
+        self.NtSetInformationFile.argtypes = [
+            HANDLE,
+            c.POINTER(IO_STATUS_BLOCK),
+            PVOID,
+            ULONG,
+            c.c_int,
+        ]
         self.NtSetInformationFile.restype = NTSTATUS
 
         self.OpenProcessToken = self.advapi.OpenProcessToken
         self.OpenProcessToken.argtypes = [HANDLE, DWORD, PHANDLE]
         self.OpenProcessToken.restype = BOOL
         self.GetTokenInformation = self.advapi.GetTokenInformation
-        self.GetTokenInformation.argtypes = [HANDLE, c.c_int, PVOID, DWORD, c.POINTER(DWORD)]
+        self.GetTokenInformation.argtypes = [
+            HANDLE,
+            c.c_int,
+            PVOID,
+            DWORD,
+            c.POINTER(DWORD),
+        ]
         self.GetTokenInformation.restype = BOOL
         self.ConvertSidToStringSidW = self.advapi.ConvertSidToStringSidW
         self.ConvertSidToStringSidW.argtypes = [PVOID, c.POINTER(c.c_wchar_p)]
         self.ConvertSidToStringSidW.restype = BOOL
-        self.ConvertStringSecurityDescriptorToSecurityDescriptorW = self.advapi.ConvertStringSecurityDescriptorToSecurityDescriptorW
-        self.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = [c.c_wchar_p, DWORD, c.POINTER(PVOID), c.POINTER(DWORD)]
+        self.ConvertStringSecurityDescriptorToSecurityDescriptorW = (
+            self.advapi.ConvertStringSecurityDescriptorToSecurityDescriptorW
+        )
+        self.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = [
+            c.c_wchar_p,
+            DWORD,
+            c.POINTER(PVOID),
+            c.POINTER(DWORD),
+        ]
         self.ConvertStringSecurityDescriptorToSecurityDescriptorW.restype = BOOL
         self.GetSecurityDescriptorDacl = self.advapi.GetSecurityDescriptorDacl
-        self.GetSecurityDescriptorDacl.argtypes = [PVOID, c.POINTER(BOOL), c.POINTER(PVOID), c.POINTER(BOOL)]
+        self.GetSecurityDescriptorDacl.argtypes = [
+            PVOID,
+            c.POINTER(BOOL),
+            c.POINTER(PVOID),
+            c.POINTER(BOOL),
+        ]
         self.GetSecurityDescriptorDacl.restype = BOOL
+        self.GetSecurityDescriptorControl = self.advapi.GetSecurityDescriptorControl
+        self.GetSecurityDescriptorControl.argtypes = [
+            PVOID,
+            c.POINTER(USHORT),
+            c.POINTER(DWORD),
+        ]
+        self.GetSecurityDescriptorControl.restype = BOOL
         self.SetSecurityInfo = self.advapi.SetSecurityInfo
-        self.SetSecurityInfo.argtypes = [HANDLE, c.c_int, DWORD, PVOID, PVOID, PVOID, PVOID]
+        self.SetSecurityInfo.argtypes = [
+            HANDLE,
+            c.c_int,
+            DWORD,
+            PVOID,
+            PVOID,
+            PVOID,
+            PVOID,
+        ]
         self.SetSecurityInfo.restype = DWORD
         self.GetSecurityInfo = self.advapi.GetSecurityInfo
-        self.GetSecurityInfo.argtypes = [HANDLE, c.c_int, DWORD, c.POINTER(PVOID), c.POINTER(PVOID), c.POINTER(PVOID), c.POINTER(PVOID), c.POINTER(PVOID)]
+        self.GetSecurityInfo.argtypes = [
+            HANDLE,
+            c.c_int,
+            DWORD,
+            c.POINTER(PVOID),
+            c.POINTER(PVOID),
+            c.POINTER(PVOID),
+            c.POINTER(PVOID),
+            c.POINTER(PVOID),
+        ]
         self.GetSecurityInfo.restype = DWORD
         self.GetAclInformation = self.advapi.GetAclInformation
         self.GetAclInformation.argtypes = [PVOID, PVOID, DWORD, c.c_int]
@@ -290,25 +401,50 @@ def _status_hex(status: int) -> str:
     return f"0x{status & 0xFFFFFFFF:08X}"
 
 
+class _NtError(OSError):
+    def __init__(self, status: int, action: str) -> None:
+        self.status = status & 0xFFFFFFFF
+        super().__init__(f"{action} failed with NTSTATUS {_status_hex(status)}")
+
+
 def _check_status(status: int, action: str) -> None:
-    if status < 0:
-        raise OSError(f"{action} failed with NTSTATUS {_status_hex(status)}")
+    if status != 0:
+        raise _NtError(status, action)
 
 
 def _close(handle: HANDLE) -> None:
-    if handle and handle.value not in (None, INVALID_HANDLE_VALUE):
-        _check_bool(_api().CloseHandle(handle), "CloseHandle")
+    value, handle.value = handle.value, None
+    if value not in (None, INVALID_HANDLE_VALUE):
+        _check_bool(_api().CloseHandle(HANDLE(value)), "CloseHandle")
 
 
-def _open_startup_directory(path: Path) -> HANDLE:
-    """Acquire the one trusted startup directory with CreateFileW backup semantics."""
-    handle = _api().CreateFileW(
-        str(path), GENERIC_ALL, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-        None, FILE_OPEN, 0x02000000, None,  # FILE_FLAG_BACKUP_SEMANTICS
+def _open_startup_directory(path: Path, access: int = DIRECTORY_ACCESS) -> HANDLE:
+    """Acquire and validate the one trusted startup directory."""
+    handle = HANDLE(
+        _api().CreateFileW(
+            str(path),
+            access,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            None,
+            OPEN_EXISTING,
+            0x02000000,
+            None,
+        )
     )
     if handle.value == INVALID_HANDLE_VALUE:
-        raise _last_error(f"CreateFileW startup directory {path}")
-    return handle
+        raise _last_error("CreateFileW startup directory")
+    try:
+        observed = _identity(handle)
+        if (
+            not observed["directory"]
+            or not observed["disk_file"]
+            or observed["reparse"]
+        ):
+            raise PermissionError("startup object is not a non-reparse disk directory")
+        return handle
+    except BaseException:
+        _close(handle)
+        raise
 
 
 def _open_relative(
@@ -319,12 +455,17 @@ def _open_relative(
     directory: bool = False,
     open_reparse_point: bool = False,
     access: int = GENERIC_ALL | SYNCHRONIZE,
+    security_descriptor: PVOID | None = None,
 ) -> HANDLE:
     """Open only beneath a retained directory handle, refusing reparse traversal."""
     native_name = _NtName(name)
     attributes = OBJECT_ATTRIBUTES(
-        c.sizeof(OBJECT_ATTRIBUTES), parent, c.pointer(native_name.string),
-        OBJ_CASE_INSENSITIVE | OBJ_DONT_REPARSE, None, None,
+        c.sizeof(OBJECT_ATTRIBUTES),
+        parent,
+        c.pointer(native_name.string),
+        OBJ_CASE_INSENSITIVE | OBJ_DONT_REPARSE,
+        security_descriptor,
+        None,
     )
     iosb = IO_STATUS_BLOCK()
     result = HANDLE()
@@ -333,40 +474,63 @@ def _open_relative(
     if open_reparse_point:
         options |= FILE_OPEN_REPARSE_POINT
     status = _api().NtCreateFile(
-        c.byref(result), access, c.byref(attributes), c.byref(iosb), None,
+        c.byref(result),
+        access,
+        c.byref(attributes),
+        c.byref(iosb),
+        None,
         FILE_ATTRIBUTE_DIRECTORY if directory else FILE_ATTRIBUTE_NORMAL,
-        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, disposition, options, None, 0,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        disposition,
+        options,
+        None,
+        0,
     )
-    _check_status(status, f"NtCreateFile relative {name!r}")
+    _check_status(status, "NtCreateFile relative")
     return result
 
 
 def _make_dir(parent: HANDLE, name: str) -> HANDLE:
-    return _open_relative(parent, name, FILE_CREATE, directory=True)
+    return _open_relative(
+        parent, name, FILE_CREATE, directory=True, access=DIRECTORY_ACCESS
+    )
 
 
 def _write(handle: HANDLE, value: bytes) -> None:
     data = c.create_string_buffer(value)
     written = DWORD()
-    _check_bool(_api().WriteFile(handle, data, len(value), c.byref(written), None), "WriteFile")
+    _check_bool(
+        _api().WriteFile(handle, data, len(value), c.byref(written), None), "WriteFile"
+    )
     if written.value != len(value):
         raise OSError(f"WriteFile made a short write ({written.value}/{len(value)})")
 
+
 def _append(handle: HANDLE, value: bytes) -> None:
     offset = c.c_longlong()
-    _check_bool(_api().SetFilePointerEx(handle, 0, c.byref(offset), FILE_END), "SetFilePointerEx(FILE_END)")
+    _check_bool(
+        _api().SetFilePointerEx(handle, 0, c.byref(offset), FILE_END),
+        "SetFilePointerEx(FILE_END)",
+    )
     _write(handle, value)
 
 
 def _read(handle: HANDLE) -> bytes:
     offset = c.c_longlong()
-    _check_bool(_api().SetFilePointerEx(handle, 0, c.byref(offset), 0), "SetFilePointerEx")
+    _check_bool(
+        _api().SetFilePointerEx(handle, 0, c.byref(offset), 0), "SetFilePointerEx"
+    )
     info = FILE_STANDARD_INFO()
-    _check_bool(_api().GetFileInformationByHandleEx(handle, 1, c.byref(info), c.sizeof(info)), "GetFileInformationByHandleEx(FileStandardInfo)")
+    _check_bool(
+        _api().GetFileInformationByHandleEx(handle, 1, c.byref(info), c.sizeof(info)),
+        "GetFileInformationByHandleEx(FileStandardInfo)",
+    )
     data = c.create_string_buffer(info.EndOfFile)
     got = DWORD()
-    _check_bool(_api().ReadFile(handle, data, info.EndOfFile, c.byref(got), None), "ReadFile")
-    return data.raw[:got.value]
+    _check_bool(
+        _api().ReadFile(handle, data, info.EndOfFile, c.byref(got), None), "ReadFile"
+    )
+    return data.raw[: got.value]
 
 
 def _identity(handle: HANDLE) -> dict[str, int | bool]:
@@ -374,9 +538,20 @@ def _identity(handle: HANDLE) -> dict[str, int | bool]:
     standard = FILE_STANDARD_INFO()
     tag = FILE_ATTRIBUTE_TAG_INFO()
     api = _api()
-    _check_bool(api.GetFileInformationByHandle(handle, c.byref(basic)), "GetFileInformationByHandle")
-    _check_bool(api.GetFileInformationByHandleEx(handle, 1, c.byref(standard), c.sizeof(standard)), "GetFileInformationByHandleEx(FileStandardInfo)")
-    _check_bool(api.GetFileInformationByHandleEx(handle, 9, c.byref(tag), c.sizeof(tag)), "GetFileInformationByHandleEx(FileAttributeTagInfo)")
+    _check_bool(
+        api.GetFileInformationByHandle(handle, c.byref(basic)),
+        "GetFileInformationByHandle",
+    )
+    _check_bool(
+        api.GetFileInformationByHandleEx(
+            handle, 1, c.byref(standard), c.sizeof(standard)
+        ),
+        "GetFileInformationByHandleEx(FileStandardInfo)",
+    )
+    _check_bool(
+        api.GetFileInformationByHandleEx(handle, 9, c.byref(tag), c.sizeof(tag)),
+        "GetFileInformationByHandleEx(FileAttributeTagInfo)",
+    )
     disk = api.GetFileType(handle) == FILE_TYPE_DISK
     return {
         "volume": basic.VolumeSerialNumber,
@@ -391,28 +566,42 @@ def _identity(handle: HANDLE) -> dict[str, int | bool]:
 
 def _assert_private_regular(handle: HANDLE) -> dict[str, object]:
     observed = _identity(handle)
-    if observed["directory"] or not observed["disk_file"] or observed["reparse"] or observed["links"] != 1:
-        raise PermissionError(f"unsafe leaf identity: {observed}")
+    if (
+        observed["directory"]
+        or not observed["disk_file"]
+        or observed["reparse"]
+        or observed["links"] != 1
+    ):
+        raise PermissionError("leaf is not regular, single-link and non-reparse")
     private, dacl = _dacl_private(handle)
     if not private:
-        raise PermissionError(f"leaf DACL is not conservatively private: {dacl}")
+        raise PermissionError("leaf DACL is not conservatively private")
     return {"identity": observed, "dacl": dacl}
 
 
 def _current_sid() -> str:
     api = _api()
     token = HANDLE()
-    _check_bool(api.OpenProcessToken(api.GetCurrentProcess(), TOKEN_QUERY, c.byref(token)), "OpenProcessToken")
+    _check_bool(
+        api.OpenProcessToken(api.GetCurrentProcess(), TOKEN_QUERY, c.byref(token)),
+        "OpenProcessToken",
+    )
     try:
         size = DWORD()
         api.GetTokenInformation(token, TOKEN_USER, None, 0, c.byref(size))
         if c.get_last_error() != ERROR_INSUFFICIENT_BUFFER:
             raise _last_error("GetTokenInformation size")
         buffer = c.create_string_buffer(size.value)
-        _check_bool(api.GetTokenInformation(token, TOKEN_USER, buffer, size, c.byref(size)), "GetTokenInformation")
+        _check_bool(
+            api.GetTokenInformation(token, TOKEN_USER, buffer, size, c.byref(size)),
+            "GetTokenInformation",
+        )
         user = c.cast(buffer, c.POINTER(TOKEN_USER_DATA)).contents
         text = c.c_wchar_p()
-        _check_bool(api.ConvertSidToStringSidW(user.Sid, c.byref(text)), "ConvertSidToStringSidW")
+        _check_bool(
+            api.ConvertSidToStringSidW(user.Sid, c.byref(text)),
+            "ConvertSidToStringSidW",
+        )
         try:
             return text.value
         finally:
@@ -421,24 +610,34 @@ def _current_sid() -> str:
         _close(token)
 
 
-def _set_sddl_dacl(handle: HANDLE, sddl: str) -> None:
+def _set_sddl_dacl(handle: HANDLE, sddl: str, *, protected: bool = True) -> None:
     api = _api()
     descriptor = PVOID()
     _check_bool(
-        api.ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, 1, c.byref(descriptor), None),
+        api.ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            sddl, 1, c.byref(descriptor), None
+        ),
         "ConvertStringSecurityDescriptorToSecurityDescriptorW",
     )
     try:
         present = BOOL()
         defaulted = BOOL()
         dacl = PVOID()
-        _check_bool(api.GetSecurityDescriptorDacl(descriptor, c.byref(present), c.byref(dacl), c.byref(defaulted)), "GetSecurityDescriptorDacl")
+        _check_bool(
+            api.GetSecurityDescriptorDacl(
+                descriptor, c.byref(present), c.byref(dacl), c.byref(defaulted)
+            ),
+            "GetSecurityDescriptorDacl",
+        )
         if not present.value:
-            raise PermissionError("constructed private descriptor unexpectedly lacks a DACL")
+            raise PermissionError(
+                "constructed private descriptor unexpectedly lacks a DACL"
+            )
+        information = DACL_SECURITY_INFORMATION
+        if protected:
+            information |= PROTECTED_DACL_SECURITY_INFORMATION
         status = api.SetSecurityInfo(
-            handle, SE_FILE_OBJECT,
-            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-            None, None, dacl, None,
+            handle, SE_FILE_OBJECT, information, None, None, dacl, None
         )
         if status:
             raise OSError(status, "SetSecurityInfo(DACL)")
@@ -446,18 +645,26 @@ def _set_sddl_dacl(handle: HANDLE, sddl: str) -> None:
         api.LocalFree(c.cast(descriptor, HANDLE))
 
 
-def _set_private_before_data(handle: HANDLE) -> str:
+def _private_descriptor() -> tuple[PVOID, str]:
     sid = _current_sid()
-    _set_sddl_dacl(handle, f"D:P(A;;FA;;;SY)(A;;FA;;;{sid})")
-    private, _ = _dacl_private(handle)
-    if not private:
-        raise PermissionError("private DACL did not round-trip as current-user + SYSTEM only")
-    return sid
+    descriptor = PVOID()
+    _check_bool(
+        _api().ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            f"O:{sid}D:P(A;;FA;;;SY)(A;;FA;;;{sid})",
+            1,
+            c.byref(descriptor),
+            None,
+        ),
+        "ConvertStringSecurityDescriptorToSecurityDescriptorW(private create)",
+    )
+    return descriptor, sid
 
 
 def _sid_text(sid: PVOID) -> str:
     text = c.c_wchar_p()
-    _check_bool(_api().ConvertSidToStringSidW(sid, c.byref(text)), "ConvertSidToStringSidW ACE")
+    _check_bool(
+        _api().ConvertSidToStringSidW(sid, c.byref(text)), "ConvertSidToStringSidW ACE"
+    )
     try:
         return text.value
     finally:
@@ -465,68 +672,129 @@ def _sid_text(sid: PVOID) -> str:
 
 
 def _dacl_private(handle: HANDLE) -> tuple[bool, dict[str, object]]:
-    """Deliberately narrow ACL check: protected allow ACEs only for user and SYSTEM."""
+    """Narrow effective policy: protected current-user/SYSTEM full-control DACL."""
     descriptor = PVOID()
     dacl = PVOID()
+    owner, group = PVOID(), PVOID()
     status = _api().GetSecurityInfo(
-        handle, SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
-        None, None, c.byref(dacl), None, c.byref(descriptor),
+        handle,
+        SE_FILE_OBJECT,
+        DACL_SECURITY_INFORMATION | 0x1 | 0x2,
+        c.byref(owner),
+        c.byref(group),
+        c.byref(dacl),
+        None,
+        c.byref(descriptor),
     )
     if status:
         raise OSError(status, "GetSecurityInfo(DACL)")
     try:
+        control = USHORT()
+        revision = DWORD()
+        _check_bool(
+            _api().GetSecurityDescriptorControl(
+                descriptor, c.byref(control), c.byref(revision)
+            ),
+            "GetSecurityDescriptorControl",
+        )
         if not dacl:
-            return False, {"scope": "protected-current-user-and-system-full-control", "reason": "null DACL"}
+            return False, {
+                "scope": "protected-current-user-and-system-full-control",
+                "reason": "null DACL",
+            }
         info = ACL_SIZE_INFORMATION_DATA()
-        _check_bool(_api().GetAclInformation(dacl, c.byref(info), c.sizeof(info), ACL_SIZE_INFORMATION), "GetAclInformation")
-        permitted = {_current_sid(), "S-1-5-18"}
+        _check_bool(
+            _api().GetAclInformation(
+                dacl, c.byref(info), c.sizeof(info), ACL_SIZE_INFORMATION
+            ),
+            "GetAclInformation",
+        )
+        current_sid = _current_sid()
+        owner_sid = _sid_text(owner) if owner.value else None
+        permitted = {current_sid, "S-1-5-18"}
         allow_sids: list[str] = []
+        masks: list[int] = []
+        ace_flags: list[int] = []
         rejected: list[str] = []
         for index in range(info.AceCount):
             ace = PVOID()
             _check_bool(_api().GetAce(dacl, index, c.byref(ace)), "GetAce")
             header = c.cast(ace, c.POINTER(ACE_HEADER)).contents
+            ace_flags.append(header.AceFlags)
             if header.AceType != ACCESS_ALLOWED_ACE_TYPE:
                 rejected.append(f"ace-type-{header.AceType}")
                 continue
-            # ACCESS_ALLOWED_ACE is ACE_HEADER + ACCESS_MASK followed by SID.
+            mask = c.cast(
+                PVOID(ace.value + c.sizeof(ACE_HEADER)), c.POINTER(DWORD)
+            ).contents.value
             sid_pointer = PVOID(ace.value + c.sizeof(ACE_HEADER) + c.sizeof(DWORD))
             sid = _sid_text(sid_pointer)
             allow_sids.append(sid)
-            if sid not in permitted:
-                rejected.append(sid)
-        private = not rejected and set(allow_sids) == permitted and len(allow_sids) == 2
+            masks.append(mask)
+            if sid not in permitted or mask != FILE_ALL_ACCESS:
+                rejected.append(f"{sid}:0x{mask:08X}")
+        protected = bool(control.value & SE_DACL_PROTECTED)
+        private = (
+            owner_sid == current_sid
+            and protected
+            and not rejected
+            and set(allow_sids) == permitted
+            and len(allow_sids) == 2
+        )
         return private, {
             "scope": "protected-current-user-and-system-full-control",
-            "ace_count": info.AceCount,
+            "owner_sid": owner_sid,
+            "group_sid": _sid_text(group) if group.value else None,
+            "protected": protected,
             "allow_sids": allow_sids,
+            "masks": masks,
+            "ace_flags": ace_flags,
             "rejected": rejected,
         }
     finally:
         _api().LocalFree(c.cast(descriptor, HANDLE))
 
 
-def _new_private_file(parent: HANDLE, name: str, payload: bytes) -> tuple[HANDLE, dict[str, object]]:
-    handle = _open_relative(parent, name, FILE_CREATE)
+def _new_private_file(
+    parent: HANDLE, name: str, payload: bytes
+) -> tuple[HANDLE, dict[str, object]]:
+    descriptor, sid = _private_descriptor()
     try:
-        sid = _set_private_before_data(handle)
-        _write(handle, payload)
+        handle = _open_relative(
+            parent, name, FILE_CREATE, security_descriptor=descriptor
+        )
+    finally:
+        _api().LocalFree(c.cast(descriptor, HANDLE))
+    try:
         facts = _assert_private_regular(handle)
+        _write(handle, payload)
         facts["owner_sid"] = sid
+        facts["acl_applied_in_create"] = True
         return handle, facts
     except BaseException:
-        _close(handle)
+        try:
+            _delete_on_handle(handle)
+        finally:
+            _close(handle)
         raise
 
 
 def _delete_on_handle(handle: HANDLE) -> None:
     info = FILE_DISPOSITION_INFORMATION(1)
     iosb = IO_STATUS_BLOCK()
-    status = _api().NtSetInformationFile(handle, c.byref(iosb), c.byref(info), c.sizeof(info), FILE_DISPOSITION_INFORMATION)
+    status = _api().NtSetInformationFile(
+        handle,
+        c.byref(iosb),
+        c.byref(info),
+        c.sizeof(info),
+        FILE_DISPOSITION_INFORMATION_CLASS,
+    )
     _check_status(status, "NtSetInformationFile(FileDispositionInformation)")
 
 
-def _rename_on_handle(handle: HANDLE, destination_parent: HANDLE, destination_name: str, replace: bool) -> None:
+def _rename_on_handle(
+    handle: HANDLE, destination_parent: HANDLE, destination_name: str, replace: bool
+) -> None:
     encoded = destination_name.encode("utf-16-le")
     size = FILE_RENAME_INFORMATION_FIXED.FileName.offset + len(encoded)
     buffer = c.create_string_buffer(size)
@@ -534,13 +802,21 @@ def _rename_on_handle(handle: HANDLE, destination_parent: HANDLE, destination_na
     fixed.ReplaceIfExists = 1 if replace else 0
     fixed.RootDirectory = destination_parent
     fixed.FileNameLength = len(encoded)
-    c.memmove(c.addressof(buffer) + FILE_RENAME_INFORMATION_FIXED.FileName.offset, encoded, len(encoded))
+    c.memmove(
+        c.addressof(buffer) + FILE_RENAME_INFORMATION_FIXED.FileName.offset,
+        encoded,
+        len(encoded),
+    )
     iosb = IO_STATUS_BLOCK()
-    status = _api().NtSetInformationFile(handle, c.byref(iosb), buffer, size, FILE_RENAME_INFORMATION)
+    status = _api().NtSetInformationFile(
+        handle, c.byref(iosb), buffer, size, FILE_RENAME_INFORMATION
+    )
     _check_status(status, "NtSetInformationFile(FileRenameInformation)")
 
 
-def _link_on_handle(handle: HANDLE, destination_parent: HANDLE, destination_name: str) -> None:
+def _link_on_handle(
+    handle: HANDLE, destination_parent: HANDLE, destination_name: str
+) -> None:
     encoded = destination_name.encode("utf-16-le")
     size = FILE_RENAME_INFORMATION_FIXED.FileName.offset + len(encoded)
     buffer = c.create_string_buffer(size)
@@ -548,26 +824,43 @@ def _link_on_handle(handle: HANDLE, destination_parent: HANDLE, destination_name
     fixed.ReplaceIfExists = 0
     fixed.RootDirectory = destination_parent
     fixed.FileNameLength = len(encoded)
-    c.memmove(c.addressof(buffer) + FILE_RENAME_INFORMATION_FIXED.FileName.offset, encoded, len(encoded))
+    c.memmove(
+        c.addressof(buffer) + FILE_RENAME_INFORMATION_FIXED.FileName.offset,
+        encoded,
+        len(encoded),
+    )
     iosb = IO_STATUS_BLOCK()
-    status = _api().NtSetInformationFile(handle, c.byref(iosb), buffer, size, FILE_LINK_INFORMATION)
+    status = _api().NtSetInformationFile(
+        handle, c.byref(iosb), buffer, size, FILE_LINK_INFORMATION
+    )
     _check_status(status, "NtSetInformationFile(FileLinkInformation)")
 
 
 def _exists_relative(parent: HANDLE, name: str, *, directory: bool = False) -> bool:
     try:
         handle = _open_relative(
-            parent, name, FILE_OPEN, directory=directory,
+            parent,
+            name,
+            FILE_OPEN,
+            directory=directory,
             access=GENERIC_READ | SYNCHRONIZE,
         )
-    except OSError:
-        return False
+    except _NtError as error:
+        if error.status in {STATUS_OBJECT_NAME_NOT_FOUND, STATUS_OBJECT_PATH_NOT_FOUND}:
+            return False
+        raise
+    try:
+        if not directory:
+            _assert_private_regular(handle)
+    except BaseException:
+        _close(handle)
+        raise
     _close(handle)
     return True
 
 
 def _open_and_read(parent: HANDLE, name: str) -> bytes:
-    handle = _open_relative(parent, name, FILE_OPEN)
+    handle = _open_private(parent, name, access=GENERIC_READ | SYNCHRONIZE)
     try:
         return _read(handle)
     finally:
@@ -577,264 +870,623 @@ def _open_and_read(parent: HANDLE, name: str) -> bytes:
 def _junction(link: Path, target: Path) -> None:
     result = subprocess.run(
         ["cmd.exe", "/d", "/c", "mklink", "/J", str(link), str(target)],
-        check=False, capture_output=True, text=True, timeout=15,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=15,
     )
     if result.returncode:
         raise OSError(f"mklink /J failed: {result.stdout} {result.stderr}")
 
 
+def _open_private(
+    parent: HANDLE, name: str, *, access: int = GENERIC_ALL | SYNCHRONIZE
+) -> HANDLE:
+    handle = _open_relative(parent, name, FILE_OPEN, access=access)
+    try:
+        _assert_private_regular(handle)
+        return handle
+    except BaseException:
+        _close(handle)
+        raise
+
+
+def _file_id(handle: HANDLE) -> tuple[int, int]:
+    facts = _identity(handle)
+    return (t.cast(int, facts["volume"]), t.cast(int, facts["file_index"]))
+
+
+def _snapshot(parent: HANDLE, name: str) -> dict[str, object]:
+    handle = _open_private(parent, name, access=GENERIC_READ | SYNCHRONIZE)
+    try:
+        basic = BY_HANDLE_FILE_INFORMATION()
+        _check_bool(
+            _api().GetFileInformationByHandle(handle, c.byref(basic)),
+            "snapshot metadata",
+        )
+        return {
+            "facts": _assert_private_regular(handle),
+            "content": _read(handle).hex(),
+            "attributes": basic.FileAttributes,
+            "created": (basic.CreationTimeHigh << 32) | basic.CreationTimeLow,
+            "written": (basic.LastWriteTimeHigh << 32) | basic.LastWriteTimeLow,
+        }
+    finally:
+        _close(handle)
+
+
+def _directory_policy(handle: HANDLE) -> dict[str, object]:
+    _, acl = _dacl_private(handle)
+    return {"identity": _file_id(handle), "acl": acl}
+
+
+def _refused(
+    action: Callable[[], object],
+    *,
+    expected: type[Exception],
+    codes: tuple[int, ...] = (),
+) -> str:
+    try:
+        action()
+    except expected as error:
+        actual = (
+            error.status
+            if isinstance(error, _NtError)
+            else getattr(error, "errno", None)
+        )
+        if codes and actual not in codes:
+            raise AssertionError("unexpected native refusal code") from error
+        return f"{type(error).__name__}:{actual}"
+    raise AssertionError("unsafe operation was accepted")
+
+
+def _cleanup_owned(parent: HANDLE, name: str, owned: HANDLE) -> None:
+    named = _open_private(parent, name, access=GENERIC_READ | SYNCHRONIZE)
+    try:
+        _assert_private_regular(owned)
+        if _file_id(named) != _file_id(owned):
+            raise PermissionError("cleanup entry identity changed")
+    finally:
+        _close(named)
+    _delete_on_handle(owned)
+
+
+def _publish_file(
+    parent: HANDLE, name: str, payload: bytes
+) -> tuple[HANDLE, dict[str, object]]:
+    temporary = f".record.{secrets.token_hex(16)}.tmp"
+    handle, facts = _new_private_file(parent, temporary, payload)
+    try:
+        _rename_on_handle(handle, parent, name, replace=False)
+        return handle, facts
+    except BaseException:
+        try:
+            _cleanup_owned(parent, temporary, handle)
+        finally:
+            _close(handle)
+        raise
+
+
+def _key_layout(key: str) -> tuple[str | None, str]:
+    parts = key.split(".")
+    if any(re.fullmatch(r"[a-z0-9_]+", part) is None for part in parts):
+        raise ValueError("invalid key segments")
+    return (
+        (None, f"{parts[0]}.yaml")
+        if len(parts) == 1
+        else (parts[0], "-".join(parts[1:]) + ".yaml")
+    )
+
+
+@contextmanager
+def _layout_parent(root: HANDLE, key: str) -> t.Iterator[tuple[HANDLE, str]]:
+    namespace, leaf = _key_layout(key)
+    if namespace is None:
+        yield root, leaf
+        return
+    try:
+        directory = _make_dir(root, namespace)
+    except _NtError as error:
+        if error.status != STATUS_OBJECT_NAME_COLLISION:
+            raise
+        directory = _open_relative(
+            root, namespace, FILE_OPEN, directory=True, access=DIRECTORY_ACCESS
+        )
+    try:
+        yield directory, leaf
+    finally:
+        _close(directory)
+
+
 def _scenario_root_pinning(root: Path) -> dict[str, object]:
     fixture = root / "root-pinning"
     fixture.mkdir()
-    target_a = fixture / "a"
-    target_b = fixture / "b"
-    target_a.mkdir()
-    target_b.mkdir()
-    alias = fixture / "startup-alias"
-    try:
-        _junction(alias, target_a)
-    except OSError as error:
-        return {"status": "blocked", "reason": f"junction fixture unavailable: {error}"}
-    pinned = _open_startup_directory(alias)
-    try:
-        os.rmdir(alias)  # Removes the disposable junction, not target_a.
-        try:
-            _junction(alias, target_b)
-        except OSError as error:
-            return {"status": "blocked", "reason": f"startup alias retarget fixture unavailable: {error}"}
-        leaf, facts = _new_private_file(pinned, "pinned.bin", b"pinned")
-        _close(leaf)
-        a = _open_startup_directory(target_a)
-        b = _open_startup_directory(target_b)
-        try:
-            in_a = _exists_relative(a, "pinned.bin")
-            in_b = _exists_relative(b, "pinned.bin")
-        finally:
-            _close(a)
-            _close(b)
-        if not in_a or in_b:
-            raise AssertionError("startup alias retarget changed an already-pinned directory handle")
-        return {"mechanism": "CreateFileW(FILE_FLAG_BACKUP_SEMANTICS) then NtCreateFile(RootDirectory)", "retargeted_alias": True, "leaf": facts}
-    finally:
-        _close(pinned)
+    physical, alternate = fixture / "physical", fixture / "alternate"
+    physical.mkdir()
+    alternate.mkdir()
+    first, second = physical / "store", alternate / "store"
+    first.mkdir()
+    second.mkdir()
+    with ExitStack() as resources:
+        setup = _open_startup_directory(fixture)
+        resources.callback(_close, setup)
+        ordinary, _ = _new_private_file(setup, "ordinary", b"not-a-directory")
+        _close(ordinary)
+        before = _snapshot(setup, "ordinary")
+        missing = _refused(
+            lambda: _open_startup_directory(fixture / "missing"),
+            expected=OSError,
+            codes=(2, 3),
+        )
+        invalid = _refused(
+            lambda: _open_startup_directory(fixture / "ordinary"),
+            expected=PermissionError,
+        )
+        if _exists_relative(setup, "missing") or _snapshot(setup, "ordinary") != before:
+            raise AssertionError(
+                "invalid startup selection created or repaired its target"
+            )
+        a, b = _open_startup_directory(first), _open_startup_directory(second)
+        resources.callback(_close, a)
+        resources.callback(_close, b)
+        sentinel, _ = _new_private_file(b, "sentinel", b"outside-retained-root")
+        _close(sentinel)
+        outside_before = _snapshot(b, "sentinel")
+        ancestor, alias = fixture / "ancestor", fixture / "alias"
+        _junction(ancestor, physical)
+        _junction(alias, ancestor / "store")
+        pinned = _open_startup_directory(alias)
+        resources.callback(_close, pinned)
+        if _file_id(pinned) != _file_id(a):
+            raise AssertionError("linked root did not select the direct directory")
+        os.rmdir(alias)
+        _junction(alias, second)
+        final, _ = _publish_file(pinned, "final.bin", b"final-pinned")
+        _close(final)
+        os.rmdir(alias)
+        _junction(alias, ancestor / "store")
+        os.rmdir(ancestor)
+        _junction(ancestor, alternate)
+        linked, _ = _publish_file(pinned, "ancestor.bin", b"ancestor-pinned")
+        _close(linked)
+        newer = _open_startup_directory(alias)
+        resources.callback(_close, newer)
+        if _file_id(newer) != _file_id(b):
+            raise AssertionError("new instance did not select retargeted root")
+        if (
+            _open_and_read(a, "final.bin") != b"final-pinned"
+            or _open_and_read(a, "ancestor.bin") != b"ancestor-pinned"
+            or _exists_relative(b, "final.bin")
+            or _exists_relative(b, "ancestor.bin")
+            or _snapshot(b, "sentinel") != outside_before
+        ):
+            raise AssertionError("retargeting redirected retained-root operations")
+        return {
+            "mechanism": "trusted final/ancestor junction selection then retained RootDirectory",
+            "missing_refusal": missing,
+            "non_directory_refusal": invalid,
+            "checks": {
+                name: True
+                for name in (
+                    "direct",
+                    "linked_final",
+                    "linked_ancestor",
+                    "retarget_existing",
+                    "retarget_new",
+                    "missing",
+                    "non_directory",
+                )
+            },
+        }
 
 
 def _scenario_namespace_inheritance_and_layouts(root: Path) -> dict[str, object]:
     fixture = root / "namespace-layout"
     fixture.mkdir()
-    root_handle = _open_startup_directory(fixture)
-    try:
-        one, one_facts = _new_private_file(root_handle, "solo.yaml", b"one")
-        domain = _make_dir(root_handle, "domain")
-        try:
-            two, two_facts = _new_private_file(domain, "stem.yaml", b"two")
-            three, three_facts = _new_private_file(domain, "rest-one-two.yaml", b"three")
-            _close(one)
-            _close(two)
-            _close(three)
-            domain_identity = _identity(domain)
-            # The application-owned namespace directory is created with no ACL
-            # rewrite; only credential and temporary leaves receive private ACLs.
-            return {
-                "layouts": {
-                    "one_segment": {"segments": ["solo"], "path": "solo.yaml"},
-                    "two_segments": {"segments": ["domain", "stem"], "path": "domain/stem.yaml"},
-                    "three_plus_segments": {"segments": ["domain", "rest", "one", "two"], "path": "domain/rest-one-two.yaml"},
-                },
-                "namespace_creation": "NtCreateFile(FILE_DIRECTORY_FILE) without an application ACL rewrite",
-                "namespace_identity": domain_identity,
-                "one": one_facts,
-                "two": two_facts,
-                "three_plus": three_facts,
-            }
-        finally:
-            _close(domain)
-    finally:
-        _close(root_handle)
+    with ExitStack() as resources:
+        parent = _open_startup_directory(fixture, access=GENERIC_ALL)
+        resources.callback(_close, parent)
+        sid = _current_sid()
+        _set_sddl_dacl(
+            parent, f"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;{sid})(A;OICI;GR;;;WD)"
+        )
+        policy = _directory_policy(parent)
+        layouts = {}
+        for key, expected_path in (
+            ("one", "one.yaml"),
+            ("domain.stem", "domain/stem.yaml"),
+            ("domain.middle.leaf", "domain/middle-leaf.yaml"),
+        ):
+            with _layout_parent(parent, key) as (directory, leaf):
+                handle, _ = _publish_file(directory, leaf, key.encode())
+                _close(handle)
+                if _open_and_read(directory, leaf) != key.encode():
+                    raise AssertionError("native key layout selected wrong payload")
+                namespace, mapped = _key_layout(key)
+                actual = mapped if namespace is None else f"{namespace}/{mapped}"
+                if actual != expected_path:
+                    raise AssertionError("native key layout differs from M1")
+                layouts[key] = actual
+        entries = sorted(path.name for path in fixture.iterdir())
+        for invalid in ("", "UPPER", "a/b", "a..b", "a-b"):
+            _refused(lambda invalid=invalid: _key_layout(invalid), expected=ValueError)
+        if sorted(path.name for path in fixture.iterdir()) != entries:
+            raise AssertionError("invalid key created native entries")
+        routes = {}
+        for route in ("set", "delete", "transaction"):
+            key = f"{route}_first.item"
+            with _layout_parent(parent, key) as (directory, leaf):
+                before = _directory_policy(directory)
+                if not any(flag & 0x10 for flag in before["acl"]["ace_flags"]):
+                    raise AssertionError("namespace did not inherit application ACEs")
+                with _layout_parent(parent, f"{route}_first.existing"):
+                    pass
+                if route == "set":
+                    handle, _ = _publish_file(directory, leaf, b"record")
+                else:
+                    handle, _ = _new_private_file(directory, f".{leaf}.{route}", b"")
+                try:
+                    if route == "transaction":
+                        if not _lock(handle, fail_immediately=True):
+                            raise AssertionError("new first-use lock was already held")
+                        _unlock(handle)
+                    elif route == "delete" and _exists_relative(directory, leaf):
+                        raise AssertionError("first-use delete created a credential")
+                finally:
+                    _close(handle)
+                if _directory_policy(directory) != before:
+                    raise AssertionError("existing namespace policy was repaired")
+                routes[route] = before
+        if _directory_policy(parent) != policy:
+            raise AssertionError(
+                "native child operations modified application root policy"
+            )
+        return {
+            "layouts": layouts,
+            "first_use_routes": routes,
+            "checks": {
+                name: True
+                for name in (
+                    "layouts",
+                    "invalid_keys",
+                    "set_first_use",
+                    "delete_first_use",
+                    "transaction_first_use",
+                    "existing_policy",
+                    "inherited_policy",
+                )
+            },
+        }
 
 
 def _scenario_redirect_refusal(root: Path) -> dict[str, object]:
     fixture = root / "redirect-refusal"
     fixture.mkdir()
-    target = fixture / "target"
-    target.mkdir()
-    target_handle = _open_startup_directory(target)
-    try:
-        victim, _ = _new_private_file(target_handle, "victim", b"fixture")
-        _close(victim)
-    finally:
-        _close(target_handle)
-    junction = fixture / "junction"
-    try:
-        _junction(junction, target)
-    except OSError as error:
-        return {"status": "blocked", "reason": f"junction fixture unavailable: {error}"}
-    parent = _open_startup_directory(fixture)
-    try:
+    store, outside = fixture / "store", fixture / "outside"
+    store.mkdir()
+    outside.mkdir()
+    with ExitStack() as resources:
+        parent = _open_startup_directory(store)
+        target = _open_startup_directory(outside)
+        resources.callback(_close, parent)
+        resources.callback(_close, target)
+        sentinel, _ = _new_private_file(target, "sentinel", b"outside-unchanged")
+        _close(sentinel)
+        before = _snapshot(target, "sentinel")
+        statuses = {}
+        expected = (STATUS_REPARSE_POINT_ENCOUNTERED, STATUS_STOPPED_ON_SYMLINK)
+        for surface in ("namespace", "credential", "temp", "marker", "lock"):
+            name = f"{surface}.entry"
+            link = store / name
+            _junction(link, outside)
+            try:
+                relative = name + "\\sentinel" if surface == "namespace" else name
+                statuses[surface] = _refused(
+                    lambda relative=relative: _open_private(parent, relative),
+                    expected=_NtError,
+                    codes=expected,
+                )
+                if _snapshot(target, "sentinel") != before:
+                    raise AssertionError(
+                        "internal refusal changed outside sentinel metadata/content"
+                    )
+            finally:
+                os.rmdir(link)
+        owned, _ = _new_private_file(parent, "substitution.bin", b"owned")
+        resources.callback(_close, owned)
+        _rename_on_handle(owned, parent, "detached-owned.bin", replace=False)
+        _junction(store / "substitution.bin", outside)
+        statuses["substitution"] = _refused(
+            lambda: _cleanup_owned(parent, "substitution.bin", owned),
+            expected=_NtError,
+            codes=expected,
+        )
+        if _snapshot(target, "sentinel") != before:
+            raise AssertionError("substitution refusal changed outside sentinel")
+        outside_lock = _open_private(target, "sentinel")
         try:
-            handle = _open_relative(parent, "junction\\victim", FILE_OPEN)
-        except OSError as error:
-            return {
-                "mechanism": "NtCreateFile RootDirectory + OBJ_DONT_REPARSE",
-                "junction_fixture": "cmd.exe mklink /J",
-                "refused": True,
-                "native_error": str(error),
-            }
-        else:
-            _close(handle)
-            raise AssertionError("NtCreateFile traversed a junction despite OBJ_DONT_REPARSE")
-    finally:
-        _close(parent)
+            if not _lock(outside_lock, fail_immediately=True):
+                raise AssertionError("internal lock refusal retained an outside lock")
+            _unlock(outside_lock)
+        finally:
+            _close(outside_lock)
+        return {
+            "reparse_fixture": "native NTFS mount-point junctions, final and ancestor",
+            "statuses": statuses,
+            "checks": {
+                name: True
+                for name in (
+                    "namespace",
+                    "credential",
+                    "temp",
+                    "marker",
+                    "lock",
+                    "substitution",
+                    "outside_unchanged",
+                )
+            },
+        }
 
 
 def _scenario_object_privacy(root: Path) -> dict[str, object]:
     fixture = root / "object-privacy"
     fixture.mkdir()
-    parent = _open_startup_directory(fixture)
+    with ExitStack() as resources:
+        parent = _open_startup_directory(fixture)
+        resources.callback(_close, parent)
+        policy = _directory_policy(parent)
+        leaf, facts = _new_private_file(parent, "private.bin", b"private")
+        resources.callback(_close, leaf)
+        exposed, _ = _new_private_file(parent, "exposed.bin", b"")
+        resources.callback(_close, exposed)
+        _set_sddl_dacl(exposed, "D:P(A;;FA;;;WD)")
+        exposed_refusal = _refused(
+            lambda: _assert_private_regular(exposed), expected=PermissionError
+        )
+        _link_on_handle(leaf, parent, "private-link.bin")
+        hardlink_refusal = _refused(
+            lambda: _open_private(parent, "private-link.bin"), expected=PermissionError
+        )
+        directory = _make_dir(parent, "nonregular")
+        resources.callback(_close, directory)
+        nonregular_refusal = _refused(
+            lambda: _assert_private_regular(directory), expected=PermissionError
+        )
+        if _directory_policy(parent) != policy:
+            raise AssertionError(
+                "private leaf operations changed application namespace policy"
+            )
+        return {
+            "private": facts,
+            "exposed_refusal": exposed_refusal,
+            "hardlink_refusal": hardlink_refusal,
+            "nonregular_refusal": nonregular_refusal,
+            "special_fixture_scope": "NTFS directory leaf; POSIX FIFO is not an NTFS leaf type",
+            "checks": {
+                name: True
+                for name in (
+                    "nonregular",
+                    "hardlink",
+                    "exposed",
+                    "private_before_payload",
+                    "namespace_acl_unchanged",
+                )
+            },
+        }
+
+
+def _precommit_fault(parent: HANDLE, phase: str) -> None:
+    payload = json.dumps(
+        {"value": object() if phase == "serialization" else "candidate"}
+    ).encode()
+    name = f".record.{secrets.token_hex(16)}.tmp"
+    temporary, _ = _new_private_file(parent, name, b"")
+    expected_identity = _file_id(temporary)
     try:
-        leaf, private_facts = _new_private_file(parent, "private.bin", b"private")
-        try:
-            exposed = _open_relative(parent, "exposed.bin", FILE_CREATE)
+        if phase == "write":
+            readonly = _open_private(parent, name, access=GENERIC_READ | SYNCHRONIZE)
             try:
-                _set_sddl_dacl(exposed, "D:P(A;;FA;;;WD)")
-                _write(exposed, b"exposed")
-                private, exposed_facts = _dacl_private(exposed)
-                if private:
-                    raise AssertionError("Everyone full-control fixture passed private-DACL check")
+                _write(readonly, payload)
             finally:
-                _close(exposed)
-            _link_on_handle(leaf, parent, "private-link.bin")
-            linked = _open_relative(parent, "private-link.bin", FILE_OPEN)
+                _close(readonly)
+        _write(temporary, payload)
+        if phase == "close":
+            _close(temporary)
+            raise OSError(
+                errno.EIO, "injected close-boundary error after native release"
+            )
+        if phase == "replace":
+            readonly = _open_private(parent, name, access=GENERIC_READ | SYNCHRONIZE)
             try:
-                try:
-                    _assert_private_regular(linked)
-                except PermissionError as error:
-                    link_refused = str(error)
-                else:
-                    raise AssertionError("hard-linked credential fixture was accepted")
+                _rename_on_handle(readonly, parent, "record.bin", replace=True)
             finally:
-                _close(linked)
-            return {
-                "private_created_before_payload": True,
-                "private": private_facts,
-                "broad_acl_refused": exposed_facts,
-                "hardlink_refused": link_refused,
-            }
-        finally:
-            _close(leaf)
+                _close(readonly)
+        raise AssertionError("requested precommit fault was not observed")
     finally:
-        _close(parent)
+        if temporary.value is None:
+            temporary = _open_private(parent, name)
+        try:
+            if _file_id(temporary) != expected_identity:
+                raise PermissionError("temporary identity changed before cleanup")
+            _cleanup_owned(parent, name, temporary)
+        finally:
+            _close(temporary)
 
 
 def _scenario_temp_replace_cleanup(root: Path) -> dict[str, object]:
     fixture = root / "temp-replace"
     fixture.mkdir()
-    parent = _open_startup_directory(fixture)
-    try:
-        record, _ = _new_private_file(parent, "record.bin", b"old")
-        _close(record)
-        temporary, _ = _new_private_file(parent, "record.tmp", b"new")
-        try:
-            # Exercise an actual precommit exception path before the rename boundary.
-            try:
-                raise OSError("injected-before-rename")
-            except OSError as error:
-                precommit_error = str(error)
-            if _open_and_read(parent, "record.bin") != b"old":
-                raise AssertionError("precommit interruption did not preserve prior record")
-            _delete_on_handle(temporary)
-        finally:
-            _close(temporary)
-        if _exists_relative(parent, "record.tmp"):
-            raise AssertionError("same-handle temporary disposition did not remove temporary")
-
-        replacement, _ = _new_private_file(parent, "replace.tmp", b"new")
-        try:
-            _rename_on_handle(replacement, parent, "record.bin", replace=True)
-        finally:
-            _close(replacement)
-        if _open_and_read(parent, "record.bin") != b"new":
-            raise AssertionError("handle-relative replacement did not commit new content")
-
-        marker, _ = _new_private_file(parent, "record.marker", b"marker")
-        # Existing GENERIC_ALL rights would retain DELETE after the DACL change,
-        # so cleanup is deliberately attempted through a newly opened read-only
-        # handle, as a real later cleanup pass would be.
-        _set_sddl_dacl(marker, f"D:P(D;;SD;;;{_current_sid()})(A;;FA;;;SY)(A;;FR;;;{_current_sid()})")
-        _close(marker)
-        marker = None
-        cleanup_reader = _open_relative(
-            parent, "record.marker", FILE_OPEN, access=GENERIC_READ | SYNCHRONIZE,
+    with ExitStack() as resources:
+        parent = _open_startup_directory(fixture)
+        resources.callback(_close, parent)
+        for name, value in (
+            ("record.bin", b"old"),
+            ("record.marker", b"marker"),
+            (".collision.tmp", b"stale"),
+        ):
+            handle, _ = _new_private_file(parent, name, value)
+            _close(handle)
+        before = {
+            name: _snapshot(parent, name)
+            for name in ("record.bin", "record.marker", ".collision.tmp")
+        }
+        collision = _refused(
+            lambda: _new_private_file(parent, ".collision.tmp", b"wrong"),
+            expected=_NtError,
+            codes=(STATUS_OBJECT_NAME_COLLISION,),
+        )
+        faults = {}
+        for phase, expected, codes in (
+            ("serialization", TypeError, ()),
+            ("write", OSError, (5,)),
+            ("close", OSError, (errno.EIO,)),
+            ("replace", _NtError, (STATUS_ACCESS_DENIED,)),
+        ):
+            faults[phase] = _refused(
+                lambda phase=phase: _precommit_fault(parent, phase),
+                expected=expected,
+                codes=codes,
+            )
+            if {name: _snapshot(parent, name) for name in before} != before:
+                raise AssertionError(
+                    "precommit fault changed record, marker or collision"
+                )
+            if {path.name for path in fixture.iterdir()} != set(before):
+                raise AssertionError("precommit fault left an owned temporary")
+        name = f".record.{secrets.token_hex(16)}.tmp"
+        replacement, _ = _new_private_file(parent, name, b"committed")
+        _rename_on_handle(replacement, parent, "record.bin", replace=True)
+        _close(replacement)
+        marker = _open_private(
+            parent, "record.marker", access=GENERIC_READ | SYNCHRONIZE
         )
         try:
-            # This is an actual AccessDenied result from NtSetInformationFile.
-            try:
-                _delete_on_handle(cleanup_reader)
-            except OSError as error:
-                postcommit_error = str(error)
-            else:
-                raise AssertionError("delete-protected marker unexpectedly cleaned up")
+            postcommit = _refused(
+                lambda: _cleanup_owned(parent, "record.marker", marker),
+                expected=_NtError,
+                codes=(STATUS_ACCESS_DENIED,),
+            )
         finally:
-            _close(cleanup_reader)
-        if _open_and_read(parent, "record.bin") != b"new" or not _exists_relative(parent, "record.marker"):
-            raise AssertionError("postcommit failure did not honestly retain marker beside committed record")
-
+            _close(marker)
+        if (
+            _open_and_read(parent, "record.bin") != b"committed"
+            or _snapshot(parent, "record.marker") != before["record.marker"]
+        ):
+            raise AssertionError(
+                "postcommit cleanup failure misreported committed state"
+            )
         owned, _ = _new_private_file(parent, "owned.tmp", b"owned")
-        expected_identity = _identity(owned)
-        _close(owned)
-        unrelated, _ = _new_private_file(parent, "unrelated.tmp", b"unrelated")
-        try:
-            _rename_on_handle(unrelated, parent, "owned.tmp", replace=True)
-        finally:
-            _close(unrelated)
-        current = _open_relative(parent, "owned.tmp", FILE_OPEN)
-        try:
-            current_identity = _identity(current)
-        finally:
-            _close(current)
-        mismatch_refused = current_identity != expected_identity
-        if not mismatch_refused or _open_and_read(parent, "owned.tmp") != b"unrelated":
-            raise AssertionError("ownership mismatch cleanup was not left untouched")
+        resources.callback(_close, owned)
+        _rename_on_handle(owned, parent, "detached-owned.tmp", replace=False)
+        intruder, _ = _new_private_file(parent, "owned.tmp", b"intruder")
+        _close(intruder)
+        substituted = _snapshot(parent, "owned.tmp")
+        mismatch = _refused(
+            lambda: _cleanup_owned(parent, "owned.tmp", owned), expected=PermissionError
+        )
+        if _snapshot(parent, "owned.tmp") != substituted:
+            raise AssertionError("mismatch cleanup changed the substituted named entry")
         return {
-            "precommit_fault": precommit_error,
-            "same_handle_temp_cleanup": True,
-            "handle_relative_replace": True,
-            "postcommit_marker_cleanup_failure": postcommit_error,
-            "marker_retained": True,
-            "identity_mismatch_refused": mismatch_refused,
-            "atomicity_claim": "none against an authorized protocol-bypass replacement",
+            "collision_refusal": collision,
+            "precommit_faults": faults,
+            "close_fault_kind": "injected EIO after actual native CloseHandle",
+            "postcommit_marker_error": postcommit,
+            "mismatch_refusal": mismatch,
+            "checks": {
+                name: True
+                for name in (
+                    "exclusive_random",
+                    "collision_preserved",
+                    "serialization_fault",
+                    "write_fault",
+                    "close_fault",
+                    "replace_fault",
+                    "precommit_preserved",
+                    "postcommit_failure",
+                    "mismatch_preserved",
+                )
+            },
         }
-    finally:
-        _close(parent)
 
 
 def _scenario_marker_interruption(root: Path) -> dict[str, object]:
     fixture = root / "marker-interruption"
     fixture.mkdir()
-    parent = _open_startup_directory(fixture)
-    try:
-        record, _ = _new_private_file(parent, "record.bin", b"raw-record")
-        marker, _ = _new_private_file(parent, "record.marker", b"delete-intent")
-        try:
-            raw = _read(record)
-            marker_present = _exists_relative(parent, "record.marker")
-            if raw != b"raw-record" or not marker_present:
-                raise AssertionError("marker-first interruption did not leave distinct raw and marker observations")
-            return {
-                "ordering": "record then marker; interruption leaves both",
-                "raw_get": raw.decode("ascii"),
-                "marker_present": marker_present,
-                "repair_attempted": False,
-            }
-        finally:
-            _close(marker)
+    with ExitStack() as resources:
+        parent = _open_startup_directory(fixture)
+        resources.callback(_close, parent)
+        states = {}
+        for phase in ("interruption", "handled", "normal"):
+            name, marker_name = f"{phase}.record", f"{phase}.marker"
+            record, _ = _new_private_file(parent, name, b"raw-record")
+            marker, _ = _new_private_file(parent, marker_name, b"cleared")
+            resources.callback(_close, record)
+            resources.callback(_close, marker)
+            before_record, before_marker = (
+                _snapshot(parent, name),
+                _snapshot(parent, marker_name),
+            )
+            if phase == "handled":
+                readonly = _open_private(
+                    parent, name, access=GENERIC_READ | SYNCHRONIZE
+                )
+                try:
+                    _refused(
+                        lambda: _cleanup_owned(parent, name, readonly),
+                        expected=_NtError,
+                        codes=(STATUS_ACCESS_DENIED,),
+                    )
+                finally:
+                    _close(readonly)
+            if phase != "normal":
+                if (
+                    _snapshot(parent, name) != before_record
+                    or _snapshot(parent, marker_name) != before_marker
+                ):
+                    raise AssertionError(
+                        "failed/interrupted delete repaired stored state"
+                    )
+                states[phase] = {"get": "raw-record", "is_cleared": True}
+                continue
+            _cleanup_owned(parent, name, record)
             _close(record)
-    finally:
-        _close(parent)
+            if (
+                _exists_relative(parent, name)
+                or _snapshot(parent, marker_name) != before_marker
+            ):
+                raise AssertionError("normal delete did not retain only the marker")
+            states["normal_delete"] = {"get": None, "is_cleared": True}
+            recreated, _ = _publish_file(parent, name, b"recreated")
+            _close(recreated)
+            _cleanup_owned(parent, marker_name, marker)
+            _close(marker)
+            if (
+                _exists_relative(parent, marker_name)
+                or _open_and_read(parent, name) != b"recreated"
+            ):
+                raise AssertionError(
+                    "recreate did not clear the marker after publication"
+                )
+            states["recreate"] = {"get": "recreated", "is_cleared": False}
+        return {
+            "states": states,
+            "checks": {
+                name: True
+                for name in (
+                    "normal_delete",
+                    "recreate",
+                    "handled_failure",
+                    "interruption",
+                    "no_repair",
+                )
+            },
+        }
 
 
 def _lock(handle: HANDLE, fail_immediately: bool) -> bool:
-    flags = LOCKFILE_EXCLUSIVE_LOCK | (LOCKFILE_FAIL_IMMEDIATELY if fail_immediately else 0)
+    flags = LOCKFILE_EXCLUSIVE_LOCK | (
+        LOCKFILE_FAIL_IMMEDIATELY if fail_immediately else 0
+    )
     overlapped = OVERLAPPED()
     ok = _api().LockFileEx(handle, flags, 0, 1, 0, c.byref(overlapped))
     if not ok and c.get_last_error() == ERROR_LOCK_VIOLATION:
@@ -845,10 +1497,14 @@ def _lock(handle: HANDLE, fail_immediately: bool) -> bool:
 
 def _unlock(handle: HANDLE) -> None:
     overlapped = OVERLAPPED()
-    _check_bool(_api().UnlockFileEx(handle, 0, 1, 0, c.byref(overlapped)), "UnlockFileEx")
+    _check_bool(
+        _api().UnlockFileEx(handle, 0, 1, 0, c.byref(overlapped)), "UnlockFileEx"
+    )
 
 
-def _bounded_line(stream: t.TextIO, timeout: float, process: subprocess.Popen[str]) -> str:
+def _bounded_line(
+    stream: t.TextIO, timeout: float, process: subprocess.Popen[str]
+) -> str:
     result: list[str] = []
     done = threading.Event()
 
@@ -871,195 +1527,402 @@ def _bounded_line(stream: t.TextIO, timeout: float, process: subprocess.Popen[st
 def _scenario_cooperative_locking(root: Path) -> dict[str, object]:
     fixture = root / "cooperative-locking"
     fixture.mkdir()
-    parent = _open_startup_directory(fixture)
-    process: subprocess.Popen[str] | None = None
-    locked: HANDLE | None = None
-    try:
-        locked, _ = _new_private_file(parent, "record.bin", b"locked")
-        if not _lock(locked, fail_immediately=False):
-            raise AssertionError("owner failed to acquire exclusive LockFileEx lock")
-        process = subprocess.Popen(
-            [sys.executable, __file__, "--lock-worker", str(fixture), "record.bin"],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, bufsize=1,
+    with ExitStack() as resources:
+        parent = _open_startup_directory(fixture)
+        resources.callback(_close, parent)
+        record, _ = _new_private_file(parent, "record.bin", b"old")
+        _close(record)
+        locked, facts = _new_private_file(parent, ".record.lock", b"")
+        resources.callback(_close, locked)
+        same = _open_private(parent, ".record.lock")
+        resources.callback(_close, same)
+        invalid, _ = _new_private_file(parent, "invalid.lock", b"")
+        resources.callback(_close, invalid)
+        _set_sddl_dacl(invalid, "D:P(A;;FA;;;WD)")
+        _refused(
+            lambda: _open_private(parent, "invalid.lock"), expected=PermissionError
         )
-        assert process.stdout is not None and process.stdin is not None
-        if _bounded_line(process.stdout, 15, process) != "BLOCKED":
-            raise AssertionError("participating writer was not blocked by existing exclusive lock")
-        process.stdin.write("ACQUIRE\n")
-        process.stdin.flush()
-        if _bounded_line(process.stdout, 15, process) != "WAITING":
-            raise AssertionError("participating writer did not enter its blocking-lock phase")
-        # The same child now blocks in LockFileEx until cleanup and release finish.
-        cleanup, _ = _new_private_file(parent, "cleanup.tmp", b"cleanup")
+        process = None
+        held = False
         try:
-            _delete_on_handle(cleanup)
-        finally:
-            _close(cleanup)
-        _unlock(locked)
-        if _bounded_line(process.stdout, 15, process) != "ACQUIRED":
-            raise AssertionError("writer did not acquire only after cleanup and owner unlock")
-        process.stdin.write("RELEASE\n")
-        process.stdin.flush()
-        process.wait(timeout=15)
-        if process.returncode:
-            assert process.stderr is not None
-            raise RuntimeError(f"lock worker failed: {process.stderr.read()}")
-        return {
-            "mechanism": "LockFileEx exclusive byte-range lock with child-process IPC",
-            "child_initial_observation": "BLOCKED",
-            "child_blocking_phase": "WAITING",
-            "cleanup_while_owner_lock_held": True,
-            "child_after_release": "ACQUIRED",
-            "scope": "participating writers; external modification requires owner quiescence",
-        }
-    finally:
-        if locked is not None:
+            if not _lock(locked, fail_immediately=True):
+                raise AssertionError("initial lock acquisition failed")
+            held = True
+            if _lock(same, fail_immediately=True):
+                _unlock(same)
+                raise AssertionError(
+                    "same-process independent handle bypassed exclusive lock"
+                )
+            inherited_before = os.get_handle_inheritable(parent.value)
+            os.set_handle_inheritable(parent.value, True)
             try:
-                _unlock(locked)
-            except OSError:
-                pass
-            _close(locked)
-        if process is not None and process.poll() is None:
-            process.kill()
-            process.wait(timeout=5)
+                startup = subprocess.STARTUPINFO(
+                    lpAttributeList={"handle_list": [parent.value]}
+                )
+                process = subprocess.Popen(
+                    [
+                        sys.executable,
+                        "-I",
+                        __file__,
+                        "--lock-worker",
+                        str(parent.value),
+                        ".record.lock",
+                    ],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
+                    close_fds=True,
+                    startupinfo=startup,
+                )
+            finally:
+                os.set_handle_inheritable(parent.value, inherited_before)
+            assert process.stdout is not None and process.stdin is not None
+            if _bounded_line(process.stdout, 15, process) != "BLOCKED":
+                raise AssertionError("independent process did not observe contention")
+            process.stdin.write("ACQUIRE\n")
+            process.stdin.flush()
+            if _bounded_line(process.stdout, 15, process) != "WAITING":
+                raise AssertionError(
+                    "same contender did not enter blocking acquisition"
+                )
+            cleanup, _ = _new_private_file(parent, ".cleanup.tmp", b"cleanup")
+            try:
+                _cleanup_owned(parent, ".cleanup.tmp", cleanup)
+            finally:
+                _close(cleanup)
+            if _exists_relative(parent, ".cleanup.tmp"):
+                raise AssertionError("protected cleanup left the named temporary")
+            replacement, _ = _new_private_file(
+                parent, f".{secrets.token_hex(16)}.tmp", b"committed"
+            )
+            try:
+                _rename_on_handle(replacement, parent, "record.bin", replace=True)
+            finally:
+                _close(replacement)
+            if _identity(locked) != facts["identity"]:
+                raise AssertionError(
+                    "credential replacement changed the stable lock object"
+                )
+            _unlock(locked)
+            held = False
+            if _bounded_line(process.stdout, 15, process) != "ACQUIRED":
+                raise AssertionError(
+                    "same contender failed to acquire after owner release"
+                )
+            process.stdin.write("RELEASE\n")
+            process.stdin.flush()
+            _, stderr = process.communicate(timeout=15)
+            if process.returncode:
+                raise RuntimeError(f"native lock worker failed: {stderr}")
+            if not _lock(same, fail_immediately=True):
+                raise AssertionError(
+                    "same-process handle could not acquire after release"
+                )
+            _unlock(same)
+            return {
+                "mechanism": "independent LockFileEx handles and inherited pinned directory",
+                "checks": {
+                    name: True
+                    for name in (
+                        "independent_process",
+                        "same_process",
+                        "stable_lock",
+                        "invalid_lock",
+                        "protected_cleanup",
+                    )
+                },
+            }
+        finally:
+            try:
+                if held:
+                    _unlock(locked)
+            finally:
+                if process is not None:
+                    if process.poll() is None:
+                        process.kill()
+                        process.wait(timeout=5)
+                    for stream in (process.stdin, process.stdout, process.stderr):
+                        if stream is not None:
+                            stream.close()
 
 
 class _OwnedDirectory:
-    """Minimal ownership model: application work must quiesce before detach/close."""
+    """Native ownership model; the application must quiesce users before close."""
 
     def __init__(self, handle: HANDLE) -> None:
-        self._handle: HANDLE | None = handle
-        self._closed = False
-        self._quiesced = False
+        self._guard = threading.Lock()
+        self._handle: HANDLE | None = None
+        try:
+            facts = _identity(handle)
+            if not facts["directory"] or not facts["disk_file"] or facts["reparse"]:
+                raise PermissionError("owner root is not a non-reparse disk directory")
+        except BaseException:
+            _close(handle)
+            raise
+        self._handle = handle
 
     def take_for_entry(self) -> HANDLE:
-        if self._closed or self._handle is None:
-            raise ValueError("deferred entry after owner close")
-        return self._handle
-
-    def quiesce_application_work(self) -> None:
-        # This probe has no backend worker to drain; quiescence is a caller-side
-        # lifecycle boundary, recorded before the minimal handle release below.
-        self._quiesced = True
+        with self._guard:
+            if self._handle is None:
+                raise ValueError("owner is closed")
+            return self._handle
 
     def close(self) -> None:
-        if self._closed:
-            return
-        if not self._quiesced:
-            raise RuntimeError("owner close before application work quiesced")
-        self._closed = True
-        detached, self._handle = self._handle, None
+        with self._guard:
+            detached, self._handle = self._handle, None
         if detached is not None:
             _close(detached)
 
+    def __enter__(self) -> _OwnedDirectory:
+        self.take_for_entry()
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass  # Best effort only; explicit close exposes native errors.
+
 
 class _DeferredDirectoryEntry:
-    """A deferred context created before close, whose entry resolves ownership late."""
+    """Late admission and per-key lock ownership, not ownership of the store."""
 
     def __init__(self, owner: _OwnedDirectory) -> None:
         self._owner = owner
+        self._lock: HANDLE | None = None
 
     def __enter__(self) -> HANDLE:
-        return self._owner.take_for_entry()
+        parent = self._owner.take_for_entry()
+        handle = _open_private(parent, ".lifecycle.lock")
+        try:
+            if not _lock(handle, fail_immediately=False):
+                raise AssertionError("deferred native lock was not acquired")
+        except BaseException:
+            _close(handle)
+            raise
+        self._lock = handle
+        return parent
 
     def __exit__(self, *_: object) -> None:
-        return None
+        handle, self._lock = self._lock, None
+        if handle is not None:
+            try:
+                _unlock(handle)
+            finally:
+                _close(handle)
 
 
 def _scenario_owner_quiescent_lifecycle(root: Path) -> dict[str, object]:
     fixture = root / "owner-lifecycle"
     fixture.mkdir()
-    base = _open_startup_directory(fixture)
-    private, _ = _new_private_file(base, "unrelated.bin", b"before")
-    _close(private)
-    owner = _OwnedDirectory(base)
-    deferred = _DeferredDirectoryEntry(owner)
-    released_value = owner.take_for_entry().value
-    owner.quiesce_application_work()
-    owner.close()
-    try:
-        with deferred:
-            raise AssertionError("deferred context entry succeeded after owner close")
-    except ValueError as error:
-        deferred_refused = str(error)
+    with ExitStack() as resources:
+        auxiliary = _open_startup_directory(fixture)
+        resources.callback(_close, auxiliary)
+        for name, value in (
+            ("owned.bin", b"owned"),
+            ("unrelated.bin", b"unrelated"),
+            (".lifecycle.lock", b""),
+            (".owned.marker", b"marker"),
+        ):
+            handle, _ = _new_private_file(auxiliary, name, value)
+            _close(handle)
+        reused_values = []
 
-    reused: HANDLE | None = None
-    for _ in range(512):
-        bootstrap = _open_startup_directory(fixture)
-        try:
-            candidate = _open_relative(bootstrap, "unrelated.bin", FILE_OPEN)
-        finally:
-            _close(bootstrap)
-        if candidate.value == released_value:
-            reused = candidate
-            break
-    if reused is None:
-        return {
+        def prove_reuse(value: int, stale: _OwnedDirectory | None = None) -> bool:
+            with ExitStack() as candidates:
+                for _ in range(4096):
+                    candidate = _open_private(auxiliary, "unrelated.bin")
+                    candidates.callback(_close, candidate)
+                    if candidate.value != value:
+                        continue
+                    if stale is not None:
+                        stale.close()
+                        stale.close()
+                        stale.__del__()
+                    if _read(candidate) != b"unrelated":
+                        raise AssertionError(
+                            "stale owner affected the reused unrelated handle"
+                        )
+                    reused_values.append(value)
+                    return True
+            return False
+
+        blocked = {
             "status": "blocked",
-            "reason": "Windows did not reuse released native HANDLE for an unrelated file in 512 bounded allocations",
+            "reason": "native HANDLE reuse not observed in 4096 bounded live allocations",
         }
-    try:
+        bad = _open_private(auxiliary, "owned.bin")
+        bad_value = bad.value
+        _refused(lambda: _OwnedDirectory(bad), expected=PermissionError)
+        if not prove_reuse(bad_value):
+            return blocked
+        with _OwnedDirectory(_open_startup_directory(fixture)) as contextual:
+            context_value = contextual.take_for_entry().value
+            if _open_and_read(contextual.take_for_entry(), "owned.bin") != b"owned":
+                raise AssertionError("owner context selected the wrong directory")
+        if not prove_reuse(context_value, contextual):
+            return blocked
+        finalizing = _OwnedDirectory(_open_startup_directory(fixture))
+        final_value = finalizing.take_for_entry().value
+        del finalizing
+        if not prove_reuse(final_value):
+            return blocked
+        owner = _OwnedDirectory(_open_startup_directory(fixture))
+        resources.callback(owner.close)
+        with _DeferredDirectoryEntry(owner) as admitted:
+            if _open_and_read(admitted, "owned.bin") != b"owned":
+                raise AssertionError("transaction admission selected the wrong root")
+        if _open_and_read(owner.take_for_entry(), "owned.bin") != b"owned":
+            raise AssertionError("transaction exit closed the store")
+        entered, release = threading.Event(), threading.Event()
+        failures: list[BaseException] = []
+
+        def active_user() -> None:
+            try:
+                admitted = owner.take_for_entry()
+                _identity(admitted)
+                entered.set()
+                if not release.wait(5):
+                    raise TimeoutError("application did not release its active user")
+                if _open_and_read(admitted, "owned.bin") != b"owned":
+                    raise AssertionError(
+                        "active native user lost the retained directory"
+                    )
+            except BaseException as error:
+                failures.append(error)
+                entered.set()
+
+        worker = threading.Thread(target=active_user, daemon=True)
+        worker.start()
+        try:
+            if not entered.wait(5):
+                raise TimeoutError("native user did not reach admission barrier")
+            deferred = _DeferredDirectoryEntry(owner)
+        finally:
+            release.set()
+            worker.join(5)
+        if worker.is_alive():
+            raise AssertionError("application failed to quiesce before close")
+        if failures:
+            raise failures[0]
+        value = owner.take_for_entry().value
         owner.close()
-        owner.close()
-        _append(reused, b"-after")
-        data = _read(reused)
-        if data != b"before-after":
-            raise AssertionError("reused unrelated native handle was affected by repeated owner close")
+
+        def delete_closed() -> None:
+            parent = owner.take_for_entry()
+            handle = _open_private(parent, "owned.bin")
+            try:
+                _cleanup_owned(parent, "owned.bin", handle)
+            finally:
+                _close(handle)
+
+        operations = {
+            "postclose_read": lambda: _open_and_read(
+                owner.take_for_entry(), "owned.bin"
+            ),
+            "postclose_write": lambda: _new_private_file(
+                owner.take_for_entry(), "forbidden.bin", b"no"
+            ),
+            "postclose_delete": delete_closed,
+            "postclose_marker": lambda: _exists_relative(
+                owner.take_for_entry(), ".owned.marker"
+            ),
+            "deferred_entry": lambda: deferred.__enter__(),
+        }
+        refusals = {
+            name: _refused(operation, expected=ValueError)
+            for name, operation in operations.items()
+        }
+        if not prove_reuse(value, owner):
+            return blocked
+        if _open_and_read(auxiliary, "owned.bin") != b"owned" or _exists_relative(
+            auxiliary, "forbidden.bin"
+        ):
+            raise AssertionError("post-close operation changed stored state")
         return {
-            "detach_before_release": True,
-            "deferred_entry_refused": deferred_refused,
-            "released_handle_value": released_value,
-            "reused_handle_value": reused.value,
-            "reused_unrelated_handle_usable_after_repeated_close": True,
+            "native_reused_handles": reused_values,
+            "postclose_refusals": refusals,
+            "scope": "native operation equivalents, not product API qualification",
+            "checks": {
+                name: True
+                for name in (
+                    "construction_failure",
+                    "context_exit",
+                    "finalization",
+                    "quiescent_close",
+                    "postclose_read",
+                    "postclose_write",
+                    "postclose_delete",
+                    "postclose_marker",
+                    "deferred_entry",
+                    "transaction_exit_open",
+                    "native_reuse",
+                    "idempotent_close",
+                )
+            },
         }
-    finally:
-        _close(reused)
 
 
-def _lock_worker(directory: Path, name: str) -> int:
-    """A real second Windows process participating in LockFileEx protocol."""
-    parent = _open_startup_directory(directory)
-    handle: HANDLE | None = None
-    try:
-        handle = _open_relative(parent, name, FILE_OPEN)
+def _lock_worker(directory: int, name: str) -> int:
+    """Independent client using an inherited pinned directory, never a path fallback."""
+    parent = HANDLE(directory)
+    with ExitStack() as resources:
+        resources.callback(_close, parent)
+        facts = _identity(parent)
+        if not facts["directory"] or facts["reparse"]:
+            raise PermissionError("inherited root is not a safe directory")
+        handle = _open_private(parent, name)
+        resources.callback(_close, handle)
         if _lock(handle, fail_immediately=True):
-            print("UNEXPECTED", flush=True)
             _unlock(handle)
-            return 2
+            raise AssertionError("contender acquired while parent held the lock")
         print("BLOCKED", flush=True)
         if sys.stdin.readline().strip() != "ACQUIRE":
             return 3
         print("WAITING", flush=True)
         if not _lock(handle, fail_immediately=False):
             return 4
-        print("ACQUIRED", flush=True)
-        if sys.stdin.readline().strip() != "RELEASE":
-            return 5
-        _unlock(handle)
+        try:
+            if _open_and_read(parent, "record.bin") != b"committed":
+                raise AssertionError(
+                    "participating client missed protected replacement"
+                )
+            print("ACQUIRED", flush=True)
+            if sys.stdin.readline().strip() != "RELEASE":
+                return 5
+        finally:
+            _unlock(handle)
         return 0
-    finally:
-        if handle is not None:
-            _close(handle)
-        _close(parent)
 
 
-def run(root: Path, record: Callable[[str, Callable[[], dict[str, object]]], None]) -> None:
+def run(
+    root: Path, record: Callable[[str, Callable[[], dict[str, object]]], None]
+) -> None:
     """Register exactly the Windows native feasibility scenarios expected by the parent runner."""
     if os.name != "nt":
         raise RuntimeError("windows_probe.run must only be dispatched on Windows")
     _api()  # Bind FFI before callbacks are registered, but do not perform filesystem work yet.
     record("root_pinning", lambda: _scenario_root_pinning(root))
-    record("namespace_inheritance_and_layouts", lambda: _scenario_namespace_inheritance_and_layouts(root))
+    record(
+        "namespace_inheritance_and_layouts",
+        lambda: _scenario_namespace_inheritance_and_layouts(root),
+    )
     record("redirect_refusal", lambda: _scenario_redirect_refusal(root))
     record("object_privacy", lambda: _scenario_object_privacy(root))
     record("temp_replace_cleanup", lambda: _scenario_temp_replace_cleanup(root))
     record("marker_interruption", lambda: _scenario_marker_interruption(root))
     record("cooperative_locking", lambda: _scenario_cooperative_locking(root))
-    record("owner_quiescent_lifecycle", lambda: _scenario_owner_quiescent_lifecycle(root))
+    record(
+        "owner_quiescent_lifecycle", lambda: _scenario_owner_quiescent_lifecycle(root)
+    )
 
 
 if __name__ == "__main__":
     if os.name != "nt" or len(sys.argv) != 4 or sys.argv[1] != "--lock-worker":
         raise SystemExit("windows_probe.py --lock-worker DIRECTORY NAME (Windows only)")
-    raise SystemExit(_lock_worker(Path(sys.argv[2]), sys.argv[3]))
+    raise SystemExit(_lock_worker(int(sys.argv[2]), sys.argv[3]))

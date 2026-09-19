@@ -19,16 +19,81 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-CASES = (
-    "root_pinning",
-    "namespace_inheritance_and_layouts",
-    "redirect_refusal",
-    "object_privacy",
-    "temp_replace_cleanup",
-    "marker_interruption",
-    "cooperative_locking",
-    "owner_quiescent_lifecycle",
-)
+CASES = {
+    "root_pinning": (
+        "direct",
+        "linked_final",
+        "linked_ancestor",
+        "retarget_existing",
+        "retarget_new",
+        "missing",
+        "non_directory",
+    ),
+    "namespace_inheritance_and_layouts": (
+        "layouts",
+        "invalid_keys",
+        "set_first_use",
+        "delete_first_use",
+        "transaction_first_use",
+        "existing_policy",
+        "inherited_policy",
+    ),
+    "redirect_refusal": (
+        "namespace",
+        "credential",
+        "temp",
+        "marker",
+        "lock",
+        "substitution",
+        "outside_unchanged",
+    ),
+    "object_privacy": (
+        "nonregular",
+        "hardlink",
+        "exposed",
+        "private_before_payload",
+        "namespace_acl_unchanged",
+    ),
+    "temp_replace_cleanup": (
+        "exclusive_random",
+        "collision_preserved",
+        "serialization_fault",
+        "write_fault",
+        "close_fault",
+        "replace_fault",
+        "precommit_preserved",
+        "postcommit_failure",
+        "mismatch_preserved",
+    ),
+    "marker_interruption": (
+        "normal_delete",
+        "recreate",
+        "handled_failure",
+        "interruption",
+        "no_repair",
+    ),
+    "cooperative_locking": (
+        "independent_process",
+        "same_process",
+        "stable_lock",
+        "invalid_lock",
+        "protected_cleanup",
+    ),
+    "owner_quiescent_lifecycle": (
+        "construction_failure",
+        "context_exit",
+        "finalization",
+        "quiescent_close",
+        "postclose_read",
+        "postclose_write",
+        "postclose_delete",
+        "postclose_marker",
+        "deferred_entry",
+        "transaction_exit_open",
+        "native_reuse",
+        "idempotent_close",
+    ),
+}
 
 
 def filesystem_type(root: Path) -> str:
@@ -88,6 +153,56 @@ def filesystem_type(root: Path) -> str:
     ).stdout.strip()
 
 
+def native_dependencies() -> dict[str, object]:
+    """Bind native implementation inputs, not merely Python probe hashes."""
+
+    def binary_hash(path: Path) -> str:
+        with path.open("rb") as stream:
+            return hashlib.file_digest(stream, "sha256").hexdigest()
+
+    if sys.platform == "linux":
+        packages = subprocess.run(
+            ["dpkg-query", "-W", "-f=${binary:Package} ${Version}\n", "acl", "libacl1"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        ).stdout.splitlines()
+        libraries = sorted(
+            {
+                line.split(maxsplit=5)[-1]
+                for line in Path("/proc/self/maps").read_text().splitlines()
+                if "/libacl.so" in line
+            }
+        )
+        if not libraries:
+            raise RuntimeError("loaded libacl identity was not observed")
+        return {
+            "packages": packages,
+            "loaded_libraries": {path: binary_hash(Path(path)) for path in libraries},
+        }
+    if sys.platform == "darwin":
+        build = subprocess.run(
+            ["sw_vers", "-buildVersion"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        ).stdout.strip()
+        return {
+            "libSystem_load_name": "/usr/lib/libSystem.B.dylib",
+            "os_build": build,
+            "kernel_build": platform.uname().version,
+        }
+    system = Path(os.environ["SystemRoot"]) / "System32"
+    return {
+        "system_dll_sha256": {
+            str(system / name): binary_hash(system / name)
+            for name in ("ntdll.dll", "kernel32.dll", "advapi32.dll")
+        }
+    }
+
+
 def revision() -> str:
     if value := os.environ.get("GITHUB_SHA"):
         return value
@@ -109,7 +224,7 @@ def main() -> int:
     here = Path(__file__).resolve().parent
     rows: list[dict[str, object]] = []
     report: dict[str, object] = {
-        "schema": 1,
+        "schema": 2,
         "purpose": "disposable native mechanism feasibility, not product qualification",
         "started_utc": datetime.now(timezone.utc).isoformat(),
         "source_commit": revision(),
@@ -139,7 +254,9 @@ def main() -> int:
     }
 
     def save() -> None:
-        output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        output.write_text(
+            json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
 
     def record(name: str, operation: Callable[[], dict[str, object]]) -> None:
         if any(row["name"] == name for row in rows):
@@ -157,6 +274,16 @@ def main() -> int:
             if status not in ("passed", "failed", "blocked"):
                 raise ValueError("Unknown probe status")
             json.dumps(observations)
+            if status == "passed" and name in CASES:
+                checks = observations.get("checks", {})
+                missing = [
+                    key
+                    for key in CASES[name]
+                    if not isinstance(checks, dict) or checks.get(key) is not True
+                ]
+                if missing:
+                    status = "blocked"
+                    observations["missing_required_checks"] = missing
             row.update(status=status, observations=observations)
         except Exception as error:
             row.update(
@@ -177,7 +304,9 @@ def main() -> int:
             module_name = "windows_probe" if sys.platform == "win32" else "posix_probe"
             if sys.platform not in ("linux", "darwin", "win32"):
                 raise RuntimeError("This experiment requires Linux, macOS or Windows")
-            spec = importlib.util.spec_from_file_location(module_name, here / f"{module_name}.py")
+            spec = importlib.util.spec_from_file_location(
+                module_name, here / f"{module_name}.py"
+            )
             if spec is None or spec.loader is None:
                 raise RuntimeError("Native probe module unavailable")
             module = importlib.util.module_from_spec(spec)
@@ -191,10 +320,15 @@ def main() -> int:
                 },
             )
             module.run(root, record)
+            report["environment"]["native_dependencies"] = native_dependencies()
             observed_names = {row["name"] for row in rows}
             for missing in sorted(set(CASES) - observed_names):
                 rows.append(
-                    {"name": missing, "status": "blocked", "reason": "scenario_not_executed"}
+                    {
+                        "name": missing,
+                        "status": "blocked",
+                        "reason": "scenario_not_executed",
+                    }
                 )
     except Exception as error:
         rows.append(
@@ -215,7 +349,9 @@ def main() -> int:
         else "failed_or_blocked"
     )
     save()
-    print(json.dumps({"status": report["status"], "report": str(output)}, sort_keys=True))
+    print(
+        json.dumps({"status": report["status"], "report": str(output)}, sort_keys=True)
+    )
     return 0 if report["status"] == "passed" else 1
 
 
