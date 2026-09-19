@@ -49,7 +49,6 @@ FILE_OPEN_IF = 3
 FILE_OVERWRITE = 4
 FILE_OVERWRITE_IF = 5
 FILE_DIRECTORY_FILE = 0x00000001
-FILE_NON_DIRECTORY_FILE = 0x00000040
 FILE_SYNCHRONOUS_IO_NONALERT = 0x00000020
 FILE_OPEN_REPARSE_POINT = 0x00200000
 FILE_ATTRIBUTE_NORMAL = 0x00000080
@@ -66,8 +65,9 @@ DELETE = 0x00010000
 READ_CONTROL = 0x00020000
 WRITE_DAC = 0x00040000
 SYNCHRONIZE = 0x00100000
-# List/add file/add directory/traverse/read attributes, plus metadata query and sync.
-DIRECTORY_ACCESS = 0x1 | 0x2 | 0x4 | 0x20 | 0x80 | READ_CONTROL | SYNCHRONIZE
+# Metadata/traverse only: data-access directory handles can conflict with the
+# I/O manager's rename-target open (FILE_RENAME_INFORMATION.RootDirectory).
+DIRECTORY_ACCESS = 0x20 | 0x80 | READ_CONTROL | SYNCHRONIZE
 FILE_END = 2
 FILE_TYPE_DISK = 0x0001
 FILE_RENAME_INFORMATION = 10
@@ -407,6 +407,12 @@ class _NtError(OSError):
         super().__init__(f"{action} failed with NTSTATUS {_status_hex(status)}")
 
 
+class _ReparseRefused(PermissionError):
+    def __init__(self, tag: int) -> None:
+        self.tag = tag
+        super().__init__("internal reparse point refused without following")
+
+
 def _check_status(status: int, action: str) -> None:
     if status != 0:
         raise _NtError(status, action)
@@ -453,7 +459,6 @@ def _open_relative(
     disposition: int,
     *,
     directory: bool = False,
-    open_reparse_point: bool = False,
     access: int = GENERIC_ALL | SYNCHRONIZE,
     security_descriptor: PVOID | None = None,
 ) -> HANDLE:
@@ -469,10 +474,9 @@ def _open_relative(
     )
     iosb = IO_STATUS_BLOCK()
     result = HANDLE()
-    options = FILE_SYNCHRONOUS_IO_NONALERT
-    options |= FILE_DIRECTORY_FILE if directory else FILE_NON_DIRECTORY_FILE
-    if open_reparse_point:
-        options |= FILE_OPEN_REPARSE_POINT
+    options = FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_REPARSE_POINT
+    if directory:
+        options |= FILE_DIRECTORY_FILE
     status = _api().NtCreateFile(
         c.byref(result),
         access,
@@ -487,7 +491,16 @@ def _open_relative(
         0,
     )
     _check_status(status, "NtCreateFile relative")
-    return result
+    try:
+        observed = _identity(result)
+        if observed["reparse"]:
+            raise _ReparseRefused(t.cast(int, observed["reparse_tag"]))
+        if not observed["disk_file"] or observed["directory"] != directory:
+            raise PermissionError("relative object has an unexpected native type")
+        return result
+    except BaseException:
+        _close(result)
+        raise
 
 
 def _make_dir(parent: HANDLE, name: str) -> HANDLE:
@@ -1090,6 +1103,9 @@ def _scenario_namespace_inheritance_and_layouts(root: Path) -> dict[str, object]
         _set_sddl_dacl(
             parent, f"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;{sid})(A;OICI;GR;;;WD)"
         )
+        _close(parent)
+        parent = _open_startup_directory(fixture)
+        resources.callback(_close, parent)
         policy = _directory_policy(parent)
         layouts = {}
         for key, expected_path in (
@@ -1159,6 +1175,32 @@ def _scenario_namespace_inheritance_and_layouts(root: Path) -> dict[str, object]
         }
 
 
+def _expect_reparse(operation: Callable[[], object], tag: int) -> dict[str, object]:
+    try:
+        result = operation()
+    except _ReparseRefused as error:
+        if error.tag != tag:
+            raise AssertionError("opened reparse tag differs from planted fixture")
+        return {
+            "mechanism": "FILE_OPEN_REPARSE_POINT then handle-tag refusal",
+            "tag": tag,
+        }
+    except _NtError as error:
+        if error.status not in (
+            STATUS_REPARSE_POINT_ENCOUNTERED,
+            STATUS_STOPPED_ON_SYMLINK,
+        ):
+            raise
+        return {
+            "mechanism": "OBJ_DONT_REPARSE traversal refusal",
+            "status": _status_hex(error.status),
+            "fixture_tag": tag,
+        }
+    if isinstance(result, HANDLE):
+        _close(result)
+    raise AssertionError("internal reparse entry was accepted")
+
+
 def _scenario_redirect_refusal(root: Path) -> dict[str, object]:
     fixture = root / "redirect-refusal"
     fixture.mkdir()
@@ -1173,46 +1215,83 @@ def _scenario_redirect_refusal(root: Path) -> dict[str, object]:
         sentinel, _ = _new_private_file(target, "sentinel", b"outside-unchanged")
         _close(sentinel)
         before = _snapshot(target, "sentinel")
-        statuses = {}
-        expected = (STATUS_REPARSE_POINT_ENCOUNTERED, STATUS_STOPPED_ON_SYMLINK)
+        observations = {}
         for surface in ("namespace", "credential", "temp", "marker", "lock"):
             name = f"{surface}.entry"
             link = store / name
             _junction(link, outside)
             try:
+                tag = os.lstat(link).st_reparse_tag
+                if tag != 0xA0000003:
+                    raise AssertionError(
+                        "junction fixture has an unexpected native tag"
+                    )
                 relative = name + "\\sentinel" if surface == "namespace" else name
-                statuses[surface] = _refused(
-                    lambda relative=relative: _open_private(parent, relative),
-                    expected=_NtError,
-                    codes=expected,
+                observations[surface] = _expect_reparse(
+                    lambda relative=relative: _open_private(parent, relative), tag
                 )
                 if _snapshot(target, "sentinel") != before:
-                    raise AssertionError(
-                        "internal refusal changed outside sentinel metadata/content"
-                    )
+                    raise AssertionError("reparse refusal changed outside sentinel")
             finally:
                 os.rmdir(link)
+        for name, target_path, directory in (
+            ("file-symbolic", outside / "sentinel", False),
+            ("directory-symbolic", outside, True),
+        ):
+            link = store / name
+            try:
+                os.symlink(target_path, link, target_is_directory=directory)
+            except OSError as error:
+                if error.winerror not in (50, 1314):
+                    raise
+                return {
+                    "status": "blocked",
+                    "reason": "native symbolic-link fixture unavailable",
+                    "winerror": error.winerror,
+                    "observed_refusals": observations,
+                }
+            tag = os.lstat(link).st_reparse_tag
+            if tag != 0xA000000C:
+                raise AssertionError(
+                    "symbolic-link fixture has an unexpected native tag"
+                )
+            observations[name] = _expect_reparse(
+                lambda name=name, directory=directory: _open_relative(
+                    parent, name, FILE_OPEN, directory=directory
+                ),
+                tag,
+            )
+            if directory:
+                observations["symbolic-ancestor"] = _expect_reparse(
+                    lambda: _open_private(parent, name + "\\sentinel"), tag
+                )
+            if _snapshot(target, "sentinel") != before:
+                raise AssertionError("symbolic-link refusal changed outside sentinel")
         owned, _ = _new_private_file(parent, "substitution.bin", b"owned")
         resources.callback(_close, owned)
         _rename_on_handle(owned, parent, "detached-owned.bin", replace=False)
-        _junction(store / "substitution.bin", outside)
-        statuses["substitution"] = _refused(
+        substituted = store / "substitution.bin"
+        _junction(substituted, outside)
+        observations["substitution"] = _expect_reparse(
             lambda: _cleanup_owned(parent, "substitution.bin", owned),
-            expected=_NtError,
-            codes=expected,
+            os.lstat(substituted).st_reparse_tag,
         )
         if _snapshot(target, "sentinel") != before:
             raise AssertionError("substitution refusal changed outside sentinel")
         outside_lock = _open_private(target, "sentinel")
         try:
             if not _lock(outside_lock, fail_immediately=True):
-                raise AssertionError("internal lock refusal retained an outside lock")
+                raise AssertionError("internal refusal retained an outside lock")
             _unlock(outside_lock)
         finally:
             _close(outside_lock)
         return {
-            "reparse_fixture": "native NTFS mount-point junctions, final and ancestor",
-            "statuses": statuses,
+            "reparse_kinds": [
+                "mount-point junction",
+                "file symbolic link",
+                "directory symbolic link",
+            ],
+            "observations": observations,
             "checks": {
                 name: True
                 for name in (

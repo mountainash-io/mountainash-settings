@@ -484,12 +484,22 @@ def _layout_worker(fixture_name: str) -> int:
     fixture = Path(fixture_name)
     store = fixture / "store"
     store.mkdir(mode=0o770)
+    selected_gid = next(
+        (gid for gid in os.getgroups() if gid != os.getgid()), os.getgid()
+    )
+    os.chown(store, -1, selected_gid)
     os.chmod(store, 0o2770)
     root_fd = os.open(store, os.O_RDONLY | os.O_DIRECTORY | _OPEN_BASE)
     observations: dict[str, dict[str, object]] = {}
     try:
         before = os.fstat(root_fd)
         with _temporary_umask(0o027):
+            os.mkdir("native-control", 0o777, dir_fd=root_fd)
+            reference = os.stat("native-control", dir_fd=root_fd, follow_symlinks=False)
+            if reference.st_gid != before.st_gid:
+                raise AssertionError(
+                    "native mkdir did not inherit the application group"
+                )
             for key in ("one", "domain.stem", "domain.middle.leaf"):
                 directory_fd, name, namespaces = _make_layout(root_fd, key)
                 try:
@@ -509,12 +519,11 @@ def _layout_worker(fixture_name: str) -> int:
                         cursor = cursor / segment
                         namespace_stats.append(os.stat(cursor, follow_symlinks=False))
                     for info in namespace_stats:
-                        if (
-                            info.st_gid != before.st_gid
-                            or not info.st_mode & stat.S_ISGID
-                        ):
+                        if info.st_gid != reference.st_gid or stat.S_IMODE(
+                            info.st_mode
+                        ) != stat.S_IMODE(reference.st_mode):
                             raise AssertionError(
-                                "namespace did not inherit setgid parent policy"
+                                "namespace diverged from native mkdir inheritance policy"
                             )
                     observations[key] = {
                         "relative_path": str(relative),
@@ -567,7 +576,11 @@ def _layout_worker(fixture_name: str) -> int:
     print(
         json.dumps(
             {
-                "mechanism": "child-process umask + mkdirat/openat with setgid inheritance",
+                "mechanism": "child-process umask and native mkdir permission/group inheritance",
+                "native_reference_namespace": {
+                    "mode": oct(stat.S_IMODE(reference.st_mode)),
+                    "gid": reference.st_gid,
+                },
                 "layouts": observations,
                 "application_directory_metadata_unchanged": application_metadata_unchanged,
                 "application_directory_before": {
