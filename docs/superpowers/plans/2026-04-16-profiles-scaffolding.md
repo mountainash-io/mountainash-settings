@@ -1,5 +1,9 @@
 # Profiles Promotion — Phase 1: `mountainash-settings` Scaffolding
 
+> **Disposition (2026-09-20):** HISTORICAL REPOSITORY COPY — not an independent active specification or execution plan.
+> **Current authority:** [Central record](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/superpowers/plans/2026-04-16-profiles-scaffolding.md) · [Catalogue](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/superpowers/INDEX.md#retained-repository-copies).
+> **Recorded scope:** Historical settings-only subset recipe; full acceptance remains unverified. Original metadata, findings and instructions below are retained as historical content; use the central record's current disposition and successor links.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add `profiles/` and `auth/` sub-packages to `mountainash-settings`, lifting the descriptor/registry/auth machinery from `mountainash-data`'s 2026-04-15 settings-registry refactor. No consumers yet — this phase is pure library work, verified against its own test suite.
@@ -15,7 +19,7 @@
 - `src/mountainash_data/core/settings/registry.py`
 - `tests/test_unit/core/settings/test_descriptors_invariants.py` (template for invariants helper)
 
-**Spec:** `docs/superpowers/specs/2026-04-16-profiles-promotion-design.md`
+**Original related spec:** [Historical profiles-promotion copy](../specs/2026-04-16-profiles-promotion-design.md)
 
 **Working directory for all commands:** `/home/nathanielramm/git/mountainash-io/mountainash/mountainash-settings`
 

@@ -1,5 +1,9 @@
 # Principles Document Design for mountainash-settings
 
+> **Disposition (2026-09-20):** HISTORICAL REPOSITORY COPY — not an independent active specification or execution plan.
+> **Current authority:** [Central record](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/superpowers/specs/2026-04-02-principles-document-design.md) · [Catalogue](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/superpowers/INDEX.md#retained-repository-copies).
+> **Recorded scope:** Historical documentation proposal; complete design acceptance remains unverified. Original metadata, findings and instructions below are retained as historical content; use the central record's current disposition and successor links.
+
 **Date:** 2026-04-02
 **Location:** `/home/nathanielramm/git/mountainash-io/mountainash/mountainash-central/01.principles/mountainash-settings/`
 **Scope:** Create a principles directory following the established mountainash-expresions pattern

@@ -1,5 +1,9 @@
 # Architecture Evaluation: mountainash-settings
 
+> **Disposition (2026-09-20):** HISTORICAL REPOSITORY COPY — not an independent active specification or execution plan.
+> **Current authority:** [Central record](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/superpowers/specs/2026-04-02-architecture-evaluation-design.md) · [Catalogue](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/superpowers/INDEX.md#retained-repository-copies).
+> **Recorded scope:** Dated architectural review, not an approved execution contract. Original metadata, findings and instructions below are retained as historical content; use the central record's current disposition and successor links.
+
 **Date:** 2026-04-02
 **Scope:** Validate core design decisions across four architectural layers
 **Method:** Design principles audit (correctness, predictability, simplicity)

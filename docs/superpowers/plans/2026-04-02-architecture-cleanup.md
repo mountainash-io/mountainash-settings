@@ -1,5 +1,9 @@
 # Architecture Cleanup Implementation Plan
 
+> **Disposition (2026-09-20):** HISTORICAL REPOSITORY COPY — not an independent active specification or execution plan.
+> **Current authority:** [Central record](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/superpowers/plans/2026-04-02-architecture-cleanup.md) · [Catalogue](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/superpowers/INDEX.md#retained-repository-copies).
+> **Recorded scope:** Historical cleanup recipe; related commits do not prove every acceptance criterion. Original metadata, findings and instructions below are retained as historical content; use the central record's current disposition and successor links.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix two correctness bugs (cached object mutation, secrets_dir misclassification), remove namespace, collapse the merge framework, and clean up dead code.

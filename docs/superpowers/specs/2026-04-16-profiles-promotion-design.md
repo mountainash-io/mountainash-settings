@@ -1,7 +1,11 @@
 # Profiles Promotion — Design Spec
 
+> **Disposition (2026-09-20):** HISTORICAL REPOSITORY COPY — not an independent active specification or execution plan.
+> **Current authority:** [Central record](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/superpowers/specs/2026-04-16-profiles-promotion-design.md) · [Catalogue](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/superpowers/INDEX.md#retained-repository-copies).
+> **Recorded scope:** Historical programme proposal; settings API evidence does not complete the independent consumer migrations. Original metadata, findings and instructions below are retained as historical content; use the central record's current disposition and successor links.
+
 **Date:** 2026-04-16
-**Status:** Draft — pending implementation plan
+**Original status (historical):** Draft — pending implementation plan
 
 ## Problem Statement
 

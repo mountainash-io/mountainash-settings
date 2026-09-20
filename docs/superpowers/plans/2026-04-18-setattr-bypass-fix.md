@@ -1,5 +1,9 @@
 # Setattr Bypass Fix Implementation Plan
 
+> **Disposition (2026-09-20):** HISTORICAL REPOSITORY COPY — not an independent active specification or execution plan.
+> **Current authority:** [Central record](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/superpowers/plans/2026-04-18-setattr-bypass-fix.md) · [Catalogue](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/superpowers/INDEX.md#retained-repository-copies).
+> **Recorded scope:** Historical implemented recipe according to the central receipt; do not rerun as new work. Original metadata, findings and instructions below are retained as historical content; use the central record's current disposition and successor links.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Restore canonical pydantic v2 assignment semantics on `MountainAshBaseSettings` so declared field types (enums, `SecretStr`, `AfterValidator` transforms) are honoured on every post-construction mutation.
@@ -8,7 +12,7 @@
 
 **Tech Stack:** Python 3.12 · pydantic 2.9 · pydantic-settings 2.6 · hatch · pytest · UPath
 
-**Spec:** `docs/superpowers/specs/2026-04-18-setattr-bypass-fix-design.md`
+**Original related spec:** [Historical assignment design copy](../specs/2026-04-18-setattr-bypass-fix-design.md)
 
 ---
 

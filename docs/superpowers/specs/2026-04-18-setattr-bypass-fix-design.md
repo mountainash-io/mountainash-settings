@@ -1,9 +1,13 @@
 # Setattr Bypass Fix — Restore Canonical Pydantic Assignment Semantics
 
+> **Disposition (2026-09-20):** HISTORICAL REPOSITORY COPY — not an independent active specification or execution plan.
+> **Current authority:** [Central record](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/superpowers/specs/2026-04-18-setattr-bypass-fix-design.md) · [Catalogue](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/superpowers/INDEX.md#retained-repository-copies).
+> **Recorded scope:** Implemented reference according to the central receipt; no new runtime or release proof. Original metadata, findings and instructions below are retained as historical content; use the central record's current disposition and successor links.
+
 **Date:** 2026-04-18
-**Status:** Design — awaiting user review
-**Related backlog:** `mountainash-central/01.principles/mountainash-data/f.backlog/setattr-bypass-limitation.md`
-**Related prior spec:** `docs/superpowers/specs/2026-04-16-profiles-promotion-design.md`
+**Original status (historical):** Design — awaiting user review
+**Related backlog:** [Assignment-bypass owning record](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-data/a.backlog/archive/setattr-bypass-limitation.md)
+**Related prior spec:** [Historical profiles-promotion copy](2026-04-16-profiles-promotion-design.md)
 
 ## Problem
 
