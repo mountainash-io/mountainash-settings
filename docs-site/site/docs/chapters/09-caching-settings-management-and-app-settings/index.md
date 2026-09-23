@@ -165,9 +165,9 @@ def apply_runtime_overrides(self, cached_settings: BaseSettings) -> BaseSettings
         override_kwargs = self.get_attribute_settings_kwargs()
         if override_kwargs:
             if self.secrets_provider:
-                resolver = get_secrets_resolver(self.secrets_provider)
+                backend = get_secrets_backend(self.secrets_provider)
                 override_kwargs = resolve_references_in_dict(
-                    override_kwargs, resolver
+                    override_kwargs, backend
                 )
             settings_copy.update_settings_from_dict(
                 settings_dict=override_kwargs

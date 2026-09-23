@@ -1,9 +1,12 @@
 # Design Spec: `Profile.register_adapter` — post-hoc emit-adapter registration
 
 **Date:** 2026-06-27
-**Status:** SUPERSEDED (2026-06-29) — the `register_adapter` registry was removed as built-but-unused and architecturally overkill (zero callers; consumers use a consumer-owned dispatch table instead). See `mountainash-central/01.principles/mountainash-settings/h.backlog/remove-register-adapter-registry.md` and the removal PR. The original draft is retained below for history.
+**Status:** SUPERSEDED (2026-06-29) — replaced by consumer-owned rendering. Retained for history, not an active API or implementation contract.
 **Repo:** mountainash-settings
 **Author:** Nathaniel Ramm (with Claude)
+
+**Disposition evidence (reconciled 2026-09-20):** [Removal commit `9ce2023`](https://github.com/mountainash-io/mountainash-settings/commit/9ce2023d5d9e243abedd7ff61fe7546bfd794792) is in inspected develop history, not inspected main. Source removal is recorded; release publication and renewed runtime acceptance are not claimed.
+**Related records:** [Removal decision](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/a.backlog/remove-register-adapter-registry.md) · [Historical implementation plan](../plans/2026-06-27-profile-register-adapter.md) · [Central catalogue](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/superpowers/INDEX.md#superseded-repository-artifacts).
 
 ---
 

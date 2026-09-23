@@ -1,6 +1,6 @@
 ---
 title: Secrets Resolution
-description: The secrets resolution subsystem covering the registry, provider protocol, two-pass resolution pipeline, prefix syntax, built-in providers, and frozen model rebuilding.
+description: The secrets resolution subsystem covering the registry, record-store protocols, two-pass resolution pipeline, prefix syntax, settings-owned local stores, and frozen model rebuilding.
 generated_by: claude skill chapter-content-generator
 date: 2026-06-03
 version: 0.08
@@ -10,7 +10,7 @@ version: 0.08
 
 ## Summary
 
-This chapter covers the secrets resolution subsystem that transparently resolves secret references in configuration values. You will learn about the secrets registry, the secret provider protocol for implementing pluggable backends, the two-pass resolution pipeline (kwargs pass and model tree pass), helper functions for resolving references in dicts and model trees, secret prefix syntax for identifying references, the three built-in providers (Vault, SSM, Key Vault), and how frozen models are rebuilt after resolution.
+This chapter covers the secrets resolution subsystem that transparently resolves secret references in configuration values. You will learn about the secrets registry, the record-store protocols that back it, the two-pass resolution pipeline (kwargs pass and model tree pass), helper functions for resolving references in dicts and model trees, secret prefix syntax for identifying references, the settings-owned local stores, and how frozen models are rebuilt after resolution.
 
 ---
 
@@ -19,71 +19,70 @@ This chapter covers the secrets resolution subsystem that transparently resolves
 <!-- concept:51 -->
 ## The Secrets Problem
 
-Production applications store sensitive values -- database passwords, API keys, encryption keys, OAuth client secrets -- in dedicated secrets management systems rather than in configuration files or environment variables. However, the configuration layer still needs to know _which_ secret to retrieve. mountainash-settings solves this with a reference-based approach: configuration files and kwargs contain references like `secret:database/production/password`, and the framework resolves them transparently to their actual values during construction.
+Production applications store sensitive values -- database passwords, API keys, encryption keys, OAuth client secrets -- outside configuration files. However, the configuration layer still needs to know _which_ secret to retrieve. mountainash-settings solves this with a reference-based approach: configuration files and kwargs contain references like `secret:database.production.password`, and the framework resolves them transparently to their actual values during construction.
 
-This chapter covers the resolution subsystem from the bottom up: first the registry that maps provider names to resolver functions, then the protocol that resolvers must implement, then the two-pass pipeline that resolves references in both kwargs and the model tree, and finally the three provider patterns that connect to external secrets managers.
+This chapter covers the resolution subsystem from the bottom up: first the registry that maps provider names to record stores, then the protocols those stores implement, then the two-pass pipeline that resolves references in both kwargs and the model tree, and finally the settings-owned local stores and how external secret managers fit in.
 
 ## Secrets Registry
 
-The **secrets registry** is a module-level dictionary that maps provider name strings to resolver callable objects. It provides a simple write-once registration pattern with four operations:
+The **secrets registry** is a module-level dictionary in `mountainash_settings.secrets.registry` that maps provider name strings to record stores. It provides a write-once registration pattern with four operations:
 
 ```python
-# The registry is a plain dictionary
-_REGISTRY: dict[str, SecretsResolver] = {}
+_REGISTRY: dict[str, SecretsBackend] = {}
 
-def register_secrets_resolver(provider: str, resolver: SecretsResolver) -> None:
+def register_secrets_backend(provider: str, backend: SecretsBackend) -> None:
     if provider in _REGISTRY:
-        raise ValueError(
-            f"Secrets resolver '{provider}' is already registered. "
-            f"Use replace_secrets_resolver() for explicit replacement."
-        )
-    _REGISTRY[provider] = resolver
+        raise ValueError(...)  # use replace_secrets_backend() to overwrite
+    _REGISTRY[provider] = backend
 
-def get_secrets_resolver(provider: str) -> SecretsResolver:
+def get_secrets_backend(provider: str | None) -> SecretsBackend | None:
+    if provider is None:
+        return None
     return _REGISTRY[provider]
 
-def replace_secrets_resolver(provider: str, resolver: SecretsResolver) -> None:
-    _REGISTRY[provider] = resolver
+def replace_secrets_backend(provider: str, backend: SecretsBackend) -> None:
+    _REGISTRY[provider] = backend
 
 def clear_secrets_registry() -> None:
     _REGISTRY.clear()
 ```
 
-The registry enforces a deliberate asymmetry between initial registration and replacement. Calling `register_secrets_resolver()` with an already-registered name raises a `ValueError` -- this prevents accidental overwrites that could silently redirect secret lookups to the wrong backend. When intentional replacement is needed (for example, swapping a production Vault resolver for a test stub), the caller must use `replace_secrets_resolver()` explicitly.
+Registration is deliberately asymmetric: registering an existing name raises `ValueError`, so a lookup cannot be silently redirected; intentional replacement uses `replace_secrets_backend()`.
 
 | Operation | Behavior | Use Case |
 |-----------|----------|----------|
-| `register_secrets_resolver` | Adds new; raises on duplicate | Application startup |
-| `get_secrets_resolver` | Returns callable; raises KeyError if missing | Construction-time lookup |
-| `replace_secrets_resolver` | Overwrites unconditionally | Test fixtures, hot-reload |
+| `register_secrets_backend` | Adds new; raises on duplicate | Application startup |
+| `get_secrets_backend` | Returns the store; `None` for `None`; `KeyError` if unknown | Construction-time lookup |
+| `replace_secrets_backend` | Overwrites unconditionally | Test fixtures |
 | `clear_secrets_registry` | Empties the entire registry | Test teardown |
+
+!!! note "Planned change"
+    The registry and the `secrets_provider` parameter are current API only. The M4 cutover replaces them with a directly selected store on `SettingsParameters`, without compatibility shims.
 
 <!-- concept:52 -->
 <!-- concept:53 -->
 <!-- concept:54 -->
 ## Secret Provider Protocol
 
-The **secret provider protocol** is defined by the `SecretsResolver` type alias:
+A registered store is a **record store**, not a string-returning callable. One key maps to one structured record (a JSON-native dictionary):
 
 ```python
-SecretsResolver = Callable[[str], str]
+class SecretsBackend(Protocol):          # current broad protocol, removed in M4
+    def get(self, key: str) -> dict[str, Any] | None: ...
+    def set(self, key: str, data: dict[str, Any]) -> None: ...
+    def delete(self, key: str) -> None: ...
+    def transaction(self, key: str) -> AbstractContextManager[None]: ...
 ```
 
-Any callable that accepts a string (the secret path) and returns a string (the resolved value) satisfies the protocol. This is deliberately minimal -- the framework does not impose a class hierarchy, abstract base class, or interface. A simple function works:
+The settings-owned replacement splits this into capabilities so each consumer asks only for what it needs:
 
-```python
-def my_vault_resolver(path: str) -> str:
-    """Resolve a secret from HashiCorp Vault."""
-    client = hvac.Client(url="https://vault.example.com")
-    secret = client.secrets.kv.v2.read_secret_version(path=path)
-    return secret["data"]["data"]["value"]
+| Protocol | Adds | Needed by |
+|---|---|---|
+| `SecretReader` | `get(key) -> SecretRecord \| None` | Reference resolution |
+| `SecretWriter` | `set`, `delete`, `transaction(key)` | Explicit `persist()` |
+| `ClearableSecretStore` | `is_cleared(key)` | Token lifecycles, `NamespacedSecretStore` |
 
-register_secrets_resolver("vault", my_vault_resolver)
-```
-
-The protocol imposes one important contract: the resolver must be synchronous. The resolution pipeline runs during `MountainAshBaseSettings.__init__`, which is a synchronous constructor. Asynchronous resolvers must be wrapped with `asyncio.run()` or an equivalent blocking bridge.
-
-Resolvers receive only the path portion of the reference (everything after the `secret:` prefix). The resolver is responsible for connecting to the appropriate backend, authenticating, retrieving the value, and returning it as a plain string. Error handling (network failures, missing paths, permission denials) is the resolver's responsibility -- unhandled exceptions propagate to the caller as construction failures.
+A reference names a record and, optionally, a field: `secret:live_db.postgres.password` loads record `live_db.postgres` and selects `password`; `secret:api_token` requires a single-field record. A missing record or field raises `KeyError`. Stores are synchronous because resolution runs inside the synchronous `MountainAshBaseSettings.__init__`.
 
 ## Secret Prefix Syntax
 
@@ -93,18 +92,13 @@ The **secret prefix syntax** is the string pattern that identifies a value as a 
 # In a YAML config file:
 database:
   host: db.example.com          # literal value
-  password: secret:db/prod/pw   # secret reference
-  api_key: secret:api/prod/key  # secret reference
+  password: secret:db.prod.pw   # record "db.prod", field "pw"
+  api_key: secret:api_key       # single-field record "api_key"
 ```
 
-The prefix is configurable -- the `resolve_references_in_dict()` and `resolve_references_in_model_tree()` functions accept a `prefix` parameter that defaults to `"secret:"`. This allows applications to define custom reference patterns (for example, `vault:`, `ssm:`, or `keyvault:`) if needed.
+The prefix is configurable -- the `resolve_references_in_dict()` and `resolve_references_in_model_tree()` functions accept a `prefix` parameter that defaults to `"secret:"`.
 
-The resolution logic is straightforward: for any string value, check if it starts with the prefix; if so, strip the prefix and pass the remainder to the resolver:
-
-```python
-if isinstance(value, str) and value.startswith(prefix):
-    resolved[key] = resolver(value[len(prefix):])
-```
+For any string value that starts with the prefix, the resolver strips it and splits the remainder at the last dot: the part before is the record key, the part after is the field. A reference with no dot selects the only field of a single-field record; a multi-field record is ambiguous and fails. Missing records and fields raise `KeyError`.
 
 References can appear in any value position -- top-level fields, nested dictionary values, or `SecretStr` fields. The two-pass resolution pipeline ensures all positions are covered.
 
@@ -120,7 +114,7 @@ Type: workflow
 **Library:** vis-network<br/>
 **Status:** Specified
 
-A directed graph showing how a secret reference string flows through the resolution pipeline: the string "secret:db/prod/pw" enters, the prefix "secret:" is stripped, the path "db/prod/pw" is passed to the registered resolver, the resolver returns the plain-text secret, and the resolved value replaces the reference in the data structure. Clicking on the resolver node shows a dropdown to switch between Vault, SSM, and Key Vault providers, with each showing its specific lookup mechanics. Learning objective: Trace how a secret reference is resolved from prefix detection through provider lookup to value substitution (Bloom: Understand).
+A directed graph showing how a secret reference string flows through the resolution pipeline: the string "secret:db.prod.pw" enters, the prefix "secret:" is stripped, the remainder splits at the last dot into record key "db.prod" and field "pw", the registered record store returns the record, the field is selected, and the resolved value replaces the reference in the data structure. Learning objective: Trace how a secret reference is resolved from prefix detection through record lookup to value substitution (Bloom: Understand).
 </details>
 
 ## Two Pass Resolution
@@ -136,22 +130,14 @@ The two-pass design is necessary because configuration values arrive through dif
 # Inside MountainAshBaseSettings.__init__:
 
 # Pass 1: resolve secret references in kwargs
-if local_settings_params.secrets_provider:
-    _secrets_resolver = get_secrets_resolver(
-        local_settings_params.secrets_provider
-    )
-    valid_attribute_kwargs = resolve_references_in_dict(
-        valid_attribute_kwargs, _secrets_resolver
-    )
+_backend = get_secrets_backend(local_settings_params.secrets_provider)
+valid_attribute_kwargs = resolve_references_in_dict(valid_attribute_kwargs, _backend)
 
 # ... BaseSettings.__init__ runs here ...
 
 # Pass 2: resolve secret references in model tree
-if local_settings_params.secrets_provider:
-    _secrets_resolver = _get_resolver(
-        local_settings_params.secrets_provider
-    )
-    resolve_references_in_model_tree(self, _secrets_resolver)
+_backend = _get_backend(local_settings_params.secrets_provider)
+resolve_references_in_model_tree(self, _backend)
 ```
 
 This two-pass approach means that secret references work identically regardless of where they appear -- in kwargs, in YAML files, in environment variables, or in `.env` files. The caller does not need to know which pass will handle their reference.
@@ -162,7 +148,7 @@ The **kwargs pass** runs before Pydantic's `BaseSettings.__init__` and processes
 
 The pass calls `resolve_references_in_dict()`, which recursively walks the dictionary and replaces any string value matching the secret prefix with its resolved value. Because this happens before Pydantic validation, the resolved values then flow through the normal validation pipeline -- `SecretStr` wrapping, type coercion, and field validators all apply to the resolved secret value.
 
-This ordering is important. If a field is typed as `SecretStr` and the kwarg value is `"secret:db/prod/pw"`, the kwargs pass resolves it to the actual password string, and then Pydantic wraps that string in a `SecretStr` during validation. The end result is a properly wrapped secret that is protected from accidental exposure.
+This ordering is important. If a field is typed as `SecretStr` and the kwarg value is `"secret:db.prod.pw"`, the kwargs pass resolves it to the actual password string, and then Pydantic wraps that string in a `SecretStr` during validation. The end result is a properly wrapped secret that is protected from accidental exposure.
 
 <!-- concept:48 -->
 ## Model Tree Pass Resolution
@@ -180,30 +166,17 @@ The model tree pass deliberately skips meta-fields (those starting with `SETTING
 <!-- concept:49 -->
 ## Resolve References In Dict
 
-The `resolve_references_in_dict()` function is a pure, recursive dictionary transformer. It takes a dictionary, a resolver callable, and a prefix string, and returns a new dictionary with all matching references resolved:
+The `resolve_references_in_dict()` function in `mountainash_settings/resolve.py` is a pure, recursive transformer. It takes a data dictionary, a record store and a prefix, and returns new containers with every matching reference resolved:
 
 ```python
 def resolve_references_in_dict(
     data: dict[str, Any],
-    resolver: Callable[[str], str],
+    backend: SecretsBackend,
     prefix: str = "secret:",
-) -> dict[str, Any]:
-    resolved: dict[str, Any] = {}
-    for key, value in data.items():
-        if isinstance(value, dict):
-            resolved[key] = resolve_references_in_dict(
-                value, resolver, prefix
-            )
-        elif isinstance(value, str) and value.startswith(prefix):
-            resolved[key] = resolver(value[len(prefix):])
-        else:
-            resolved[key] = value
-    return resolved
+) -> dict[str, Any]: ...
 ```
 
-The function is domain-agnostic -- it does not import or reference the secrets module specifically. Its signature accepts any callable resolver and any prefix string, making it reusable for other reference patterns beyond secrets. The module docstring explicitly notes this design choice: "future reference patterns can reuse the same mechanism."
-
-The function returns a new dictionary rather than modifying the input. This immutability is important because the input dictionary may be shared (for example, as a frozen dataclass field on `SettingsParameters`).
+It walks nested dictionaries, lists and tuples, unwraps `SecretStr` to inspect references and re-wraps resolved values, and never mutates its input. That matters because the input may be shared, for example as a frozen field on `SettingsParameters`.
 
 <!-- concept:50 -->
 ## Resolve References In Model Tree
@@ -248,70 +221,26 @@ Type: microsim
 An animated simulation of the two-pass pipeline. The left panel shows a settings class with five fields, each populated from a different source (kwarg, env var, YAML, .env, default). Values containing "secret:" prefix are highlighted in red. Pass 1 animates: kwargs references resolve (turn green). Then BaseSettings.__init__ runs (remaining fields populate). Pass 2 animates: model tree references resolve (turn green). Users can toggle which fields contain secret references and see how the two passes handle each case. A counter shows total resolver calls per pass. Learning objective: Predict which resolution pass handles a secret reference based on its configuration source (Bloom: Apply).
 </details>
 
-## Vault Provider
+## Local Record Stores
 
-The **Vault provider** pattern implements a `SecretsResolver` that connects to HashiCorp Vault. While mountainash-settings does not ship a concrete Vault implementation (the resolver is application-supplied), the framework establishes the pattern for how Vault integration works:
+Settings ships the stores that back references, in `mountainash_settings.secrets`:
 
-```python
-import hvac
-
-def vault_resolver(path: str) -> str:
-    client = hvac.Client(
-        url="https://vault.example.com",
-        token=os.environ["VAULT_TOKEN"]
-    )
-    response = client.secrets.kv.v2.read_secret_version(path=path)
-    return response["data"]["data"]["value"]
-
-register_secrets_resolver("vault", vault_resolver)
-```
-
-The Vault resolver typically reads its own connection parameters from environment variables (VAULT_ADDR, VAULT_TOKEN) since these cannot themselves be secret references (bootstrapping problem). The path format follows Vault's KV v2 convention: `engine/path/to/secret`.
-
-## SSM Provider
-
-The **SSM provider** pattern connects to AWS Systems Manager Parameter Store, which stores configuration data and secrets as named parameters in a hierarchical namespace:
+| Store | Purpose |
+|---|---|
+| `FilesystemBackend(base_dir)` | Hardened on-disk store: pinned root handle, redirect/hard-link/special-file refusal, private exclusive temporaries, marker-first deletion, per-key locks, terminal `close()` |
+| `MemorySecretStore()` | Deterministic in-process store for tests |
+| `NamespacedSecretStore(inner, prefix)` | Borrowed prefix view over a clearable store |
 
 ```python
-import boto3
+from mountainash_settings.secrets import FilesystemBackend, register_secrets_backend
 
-def ssm_resolver(path: str) -> str:
-    client = boto3.client("ssm")
-    response = client.get_parameter(
-        Name=path,
-        WithDecryption=True
-    )
-    return response["Parameter"]["Value"]
-
-register_secrets_resolver("ssm", ssm_resolver)
+store = FilesystemBackend("/path/to/provisioned/private-records")
+register_secrets_backend("local", store)
 ```
 
-SSM paths use forward-slash hierarchy (e.g., `/production/database/password`). The `WithDecryption=True` parameter ensures that `SecureString` parameters are returned in plaintext rather than as encrypted blobs.
+Records are strict JSON-native mappings; malformed existing records raise value-free `SecretStoreUnavailableError` with a stable `.reason` rather than reading as absent. See `docs/README_SECRETS.md` for the full contract.
 
-## Key Vault Provider
-
-The **Key Vault provider** pattern connects to Azure Key Vault for secrets management in Azure environments:
-
-```python
-from azure.keyvault.secrets import SecretClient
-from azure.identity import DefaultAzureCredential
-
-def keyvault_resolver(path: str) -> str:
-    vault_url = os.environ["AZURE_KEYVAULT_URL"]
-    credential = DefaultAzureCredential()
-    client = SecretClient(vault_url=vault_url, credential=credential)
-    return client.get_secret(path).value
-
-register_secrets_resolver("keyvault", keyvault_resolver)
-```
-
-All three provider patterns share the same architecture: they are plain functions that satisfy the `SecretsResolver` protocol (accept a path string, return a value string) and are registered under a name that configuration files reference via the `secrets_provider` parameter on `SettingsParameters`.
-
-| Provider | Backend | Path Format | Authentication |
-|----------|---------|-------------|----------------|
-| Vault | HashiCorp Vault | `engine/path/secret` | Token, AppRole |
-| SSM | AWS Parameter Store | `/hierarchy/path` | IAM role, credentials |
-| Key Vault | Azure Key Vault | `secret-name` | DefaultAzureCredential |
+Settings does not ship cloud secret-manager clients (Vault, AWS, Azure, GCP) or a remote writer. Values held in those systems normally reach settings through ordinary Pydantic inputs (environment variables or `secrets_dir` files provisioned by the deployment). An application that must read them through `secret:` references supplies its own object implementing `SecretReader`.
 
 <!-- concept:55 -->
 ## Frozen Model Rebuild On Resolve
@@ -323,7 +252,7 @@ if isinstance(value, BaseModel):
     raw_dict, has_refs = _extract_model_values(value, prefix)
     if has_refs:
         resolved_dict = resolve_references_in_dict(
-            raw_dict, resolver, prefix
+            raw_dict, backend, prefix
         )
         rebuilt = type(value)(**resolved_dict)
         setattr(instance, field_name, rebuilt)
@@ -351,11 +280,11 @@ A step-by-step workflow showing the rebuild process for a nested frozen model: (
 
 ## Key Takeaways
 
-- **Secrets Registry** provides write-once registration with explicit replacement for safety, mapping provider names to resolver callables.
-- **Secret Provider Protocol** is a minimal callable interface (`str -> str`) that any function or method can satisfy without inheriting from a base class.
+- **Secrets Registry** provides write-once registration with explicit replacement, mapping provider names to record stores; it is replaced by direct store selection in M4.
+- **Record-store protocols** (`SecretReader`, `SecretWriter`, `ClearableSecretStore`) return structured records; references select a record and an optional field.
 - **Two Pass Resolution** handles secrets from all sources: Pass 1 resolves kwargs before Pydantic validation; Pass 2 resolves config-file and env-var values in the live model tree.
 - **Kwargs Pass Resolution** runs before `BaseSettings.__init__`, allowing resolved values to flow through normal Pydantic validation and `SecretStr` wrapping.
 - **Model Tree Pass Resolution** walks the live instance after construction, handling plain strings, `SecretStr` values, and nested `BaseModel` instances.
 - **Secret Prefix Syntax** (`secret:path`) is configurable and domain-agnostic, enabling reuse of the resolution mechanism for non-secret reference patterns.
-- **Vault, SSM, and Key Vault Providers** follow identical patterns: plain functions registered under a name, resolving paths to values from external backends.
+- **Local Record Stores** (`FilesystemBackend`, `MemorySecretStore`, `NamespacedSecretStore`) are settings-owned; cloud managers are not shipped.
 - **Frozen Model Rebuild** extracts, resolves, and reconstructs nested models when they contain secret references, preserving immutability guarantees.
