@@ -1,6 +1,10 @@
 # Profile.register_adapter Implementation Plan
 
-> **SUPERSEDED (2026-06-29):** The `register_adapter` registry this plan built was removed as built-but-unused and architecturally overkill (zero callers). See `mountainash-central/01.principles/mountainash-settings/h.backlog/remove-register-adapter-registry.md` and the removal PR. Retained for history.
+> **SUPERSEDED (2026-06-29):** Replaced by consumer-owned rendering. Retained as a historical implementation recipe; do not execute this plan.
+>
+> **Disposition evidence (reconciled 2026-09-20):** [Removal commit `9ce2023`](https://github.com/mountainash-io/mountainash-settings/commit/9ce2023d5d9e243abedd7ff61fe7546bfd794792) is in inspected develop history, not inspected main. Source removal is recorded; release publication and renewed runtime acceptance are not claimed.
+>
+> **Related records:** [Removal decision](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/a.backlog/remove-register-adapter-registry.md) · [Historical design](../specs/2026-06-27-profile-register-adapter-design.md) · [Central catalogue](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/superpowers/INDEX.md#superseded-repository-artifacts).
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -12,7 +16,7 @@
 
 ## Global Constraints
 
-- Spec: `docs/superpowers/specs/2026-06-27-profile-register-adapter-design.md`.
+- Spec: [Historical adapter design](../specs/2026-06-27-profile-register-adapter-design.md).
 - Edit only `src/mountainash_settings/profiles/profile.py` and `src/mountainash_settings/profiles/__init__.py` (plus the new test file and a doc note). No change to `emit()` behavior or the three-tier order.
 - `Adapter` type alias already exists: `Callable[[Profile, dict[str, Any]], dict[str, Any]]` (profile.py:33).
 - `__adapters__` is `ClassVar[dict[Hashable, Adapter]] = {}` on `Profile` (profile.py:96) — a single shared default; copy-on-write before mutating.
