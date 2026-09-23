@@ -1,19 +1,29 @@
-"""Secrets backend registry and protocols."""
-from .backend import ClearableBackend, SecretsBackend
+"""Local storage capabilities and current M3-stage legacy imports."""
+from .backend import (
+    ClearableBackend,
+    ClearableSecretStore,
+    SecretReader,
+    SecretsBackend,
+    SecretWriter,
+)
+from .errors import (
+    SecretCapabilityError,
+    SecretStoreError,
+    SecretStoreUnavailableError,
+)
 from .filesystem import FilesystemBackend
+from .records import JSONValue, SecretRecord
 from .registry import (
-    register_secrets_backend,
-    get_secrets_backend,
-    replace_secrets_backend,
     clear_secrets_registry,
+    get_secrets_backend,
+    register_secrets_backend,
+    replace_secrets_backend,
 )
 
 __all__ = [
-    "ClearableBackend",
-    "FilesystemBackend",
-    "SecretsBackend",
-    "register_secrets_backend",
-    "get_secrets_backend",
+    "ClearableBackend", "ClearableSecretStore", "SecretReader", "SecretsBackend",
+    "SecretWriter", "SecretCapabilityError", "SecretStoreError",
+    "SecretStoreUnavailableError", "FilesystemBackend", "JSONValue", "SecretRecord",
+    "clear_secrets_registry", "get_secrets_backend", "register_secrets_backend",
     "replace_secrets_backend",
-    "clear_secrets_registry",
 ]

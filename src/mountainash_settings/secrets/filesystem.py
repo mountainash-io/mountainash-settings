@@ -1,7 +1,6 @@
 """FilesystemBackend — secure YAML credential storage on disk."""
 from __future__ import annotations
 
-import fcntl
 import os
 import re
 from contextlib import contextmanager
@@ -98,6 +97,8 @@ class FilesystemBackend:
 
     @contextmanager
     def transaction(self, key: str):
+        import fcntl  # deferred: POSIX-only, not required for generic imports
+
         _, _, _, lock_path = _key_to_paths(self.base_dir, key)
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         os.chmod(str(lock_path.parent), 0o700)
