@@ -22,6 +22,7 @@ from .registry import (
 )
 
 __all__ = [
+    "ClearableBackend", "ClearableSecretStore", "SecretReader", "SecretsBackend",
     "SecretWriter", "SecretCapabilityError", "SecretStoreError",
     "SecretStoreUnavailableError", "FilesystemBackend", "to_key_segment", "JSONValue", "SecretRecord",
     "clear_secrets_registry", "get_secrets_backend", "register_secrets_backend",
