@@ -12,7 +12,7 @@ __all__ = ["to_key_segment"]
 
 
 def _segments(key: str) -> list[str]:
-    if type(key) is not str:
+    if type(key) is not str:  # noqa: E721 -- exact-type, reject str subclasses
         _raise_clean(ValueError("Invalid local record key"))
     parts = key.split(".")
     if not all(_SEGMENT.fullmatch(part) for part in parts):
@@ -28,7 +28,7 @@ def _layout(key: str) -> tuple[str | None, str]:
 
 
 def to_key_segment(raw: str) -> str:
-    if type(raw) is not str:
+    if type(raw) is not str:  # noqa: E721 -- exact-type, reject str subclasses
         _raise_clean(ValueError("Invalid local record key"))
     if _SEGMENT.fullmatch(raw) and not raw.startswith("h_"):
         return raw

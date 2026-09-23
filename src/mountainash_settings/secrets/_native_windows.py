@@ -49,7 +49,7 @@ def _check_status(status: int, action: str) -> None:
         raise _NtError(status)
 
 def _as_handle(value: int) -> HANDLE:
-    if type(value) is not int or value <= 0:
+    if type(value) is not int or value <= 0:  # noqa: E721 -- exact-type, reject bool
         raise _Failure("unsafe_entry")
     return HANDLE(value)
 
@@ -78,7 +78,7 @@ class _NtName:
 def _component(name: str) -> str:
     # This validates only one NT-relative component. It intentionally does not
     # impose DOS device/reserved-name policy; facade-derived names are its input.
-    if (type(name) is not str or not name or name in (".", "..") or "\x00" in name
+    if (type(name) is not str or not name or name in (".", "..") or "\x00" in name  # noqa: E721
             or "/" in name or "\\" in name):
         raise _Failure("unsafe_entry")
     return name
@@ -826,7 +826,8 @@ def _seek_start(handle: HANDLE) -> None:
 def read_file(handle: int) -> bytes:
     raw = _as_handle(handle)
     try:
-        _private_leaf(raw); _seek_start(raw)
+        _private_leaf(raw)
+        _seek_start(raw)
         chunks: list[bytes] = []
         while True:
             buffer = c.create_string_buffer(1024 * 1024)
@@ -840,7 +841,7 @@ def read_file(handle: int) -> bytes:
         _raise(exc)
 
 def write_file(handle: int, payload: bytes) -> None:
-    if type(payload) is not bytes:
+    if type(payload) is not bytes:  # noqa: E721 -- exact-type record contract
         raise _Failure("unavailable")
     source, duplicate = _as_handle(handle), HANDLE()
     failure: Exception | None = None
@@ -906,7 +907,8 @@ def cleanup_owned(parent: int, name: str, handle: int) -> None:
 
 def lock(handle: int, *, blocking: bool = True) -> bool:
     try:
-        raw = _as_handle(handle); _private_leaf(raw)
+        raw = _as_handle(handle)
+        _private_leaf(raw)
         flags = LOCKFILE_EXCLUSIVE_LOCK | (0 if blocking else LOCKFILE_FAIL_IMMEDIATELY)
         overlapped = OVERLAPPED()
         ok = _api().LockFileEx(raw, flags, 0, 1, 0, c.byref(overlapped))

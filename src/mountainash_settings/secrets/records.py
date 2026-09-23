@@ -15,7 +15,7 @@ __all__ = ["JSONValue", "SecretRecord"]
 
 
 def _own_record(value: object) -> SecretRecord:
-    if type(value) is not dict:
+    if type(value) is not dict:  # noqa: E721 -- exact-type, reject dict subclasses
         _raise_clean(ValueError("Invalid local record"))
     result: dict[str, t.Any] = {}
     memo: dict[int, t.Any] = {id(value): result}
@@ -31,7 +31,7 @@ def _own_record(value: object) -> SecretRecord:
             active.remove(id(source))
             stack.pop()
             continue
-        if type(source) is dict and type(key) is not str:
+        if type(source) is dict and type(key) is not str:  # noqa: E721 -- exact-type
             _raise_clean(ValueError("Invalid local record"))
         kind = type(child)
         if kind is dict or kind is list:
@@ -54,7 +54,7 @@ def _own_record(value: object) -> SecretRecord:
             owned = child
         else:
             _raise_clean(ValueError("Invalid local record"))
-        if type(destination) is dict:
+        if type(destination) is dict:  # noqa: E721 -- exact-type
             destination[key] = owned
         else:
             destination.append(owned)
