@@ -95,9 +95,14 @@ def _normalise(exc: Exception, *, opening: bool = False, creating: bool = False)
             return _Failure("unsupported_filesystem")
         if exc.status in (
             STATUS_REPARSE_POINT_ENCOUNTERED, STATUS_STOPPED_ON_SYMLINK,
-            STATUS_ACCESS_DENIED, STATUS_NOT_A_DIRECTORY,
+            STATUS_NOT_A_DIRECTORY,
         ):
             return _Failure("unsafe_entry")
+        # STATUS_ACCESS_DENIED from FileRenameInformation is the legacy rename
+        # API's sharing-violation signal (destination open without
+        # FILE_SHARE_DELETE), not a redirect/security refusal -- that case is
+        # PermissionError from check_entry's own identity check, independent
+        # of this NTSTATUS. Falls through to the generic "unavailable" below.
     if isinstance(exc, (_ReparseRefused, PermissionError)):
         return _Failure("unsafe_entry")
     if isinstance(exc, OSError):
