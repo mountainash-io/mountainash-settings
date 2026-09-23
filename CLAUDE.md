@@ -22,17 +22,23 @@ mountainash-settings is a Python package for advanced configuration management w
 src/mountainash_settings/
 ├── __init__.py                    # Main package exports
 ├── __version__.py                 # Version information
+├── resolve.py                     # secret: reference resolution (dicts and model trees)
 ├── settings/
-│   ├── base/
-│   │   └── base_settings.py       # MountainAshBaseSettings core class
-│   ├── app/
-│   │   ├── app_settings.py        # Application-specific settings
-│   │   └── app_settings_templates.py  # Template configurations
-│   └── auth/                      # Authentication modules
-│       ├── database/              # Database authentication
-│       ├── encryption/            # GPG encryption support
-│       ├── secrets/               # Secret management providers
-│       └── storage/               # Storage authentication
+│   ├── base_settings.py           # MountainAshBaseSettings core class
+│   └── app/
+│       ├── app_settings.py        # Application-specific settings
+│       └── app_settings_templates.py  # Template configurations
+├── secrets/                       # Settings-owned local record storage
+│   ├── backend.py                 # SecretReader/SecretWriter/ClearableSecretStore (+ legacy SecretsBackend)
+│   ├── records.py                 # Strict JSON-native SecretRecord validation
+│   ├── keys.py                    # Key grammar and to_key_segment
+│   ├── errors.py                  # Value-free storage errors with .reason
+│   ├── filesystem.py              # Hardened FilesystemBackend
+│   ├── memory.py                  # MemorySecretStore
+│   ├── namespaced.py              # NamespacedSecretStore view
+│   ├── registry.py                # Provider registry (removed in M4)
+│   └── _native*.py                # Private POSIX/Windows native operations
+├── profiles/                      # Profile / ProfileSpec and auth specs
 ├── settings_cache/                # Settings caching system with get_settings function
 ├── settings_parameters/           # Parameter handling, validation, and smart merging
 ```
