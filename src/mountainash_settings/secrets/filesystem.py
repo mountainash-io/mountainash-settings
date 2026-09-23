@@ -1,111 +1,298 @@
-"""FilesystemBackend — secure YAML credential storage on disk."""
+"""Handle-bound local YAML records under application-owned directory policy."""
 from __future__ import annotations
 
-import os
-import re
-from contextlib import contextmanager
+import secrets
+import threading
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
-from typing import Any
+from types import TracebackType
+from typing import Any, TypeVar
 
 import yaml
 
+from ._native import NativeOps, select_ops
+from .errors import SecretStoreUnavailableError, _Failure, _raise_clean
+from .keys import _layout
+from .records import SecretRecord, _own_record
+
+T = TypeVar("T")
 __all__ = ["FilesystemBackend"]
 
-_VALID_SEGMENT = re.compile(r"^[a-z0-9_]+$")
+
+def _encode(data: object) -> bytes:
+    owned = _own_record(data)
+    try:
+        return yaml.safe_dump(owned, sort_keys=False).encode("utf-8")
+    except (yaml.YAMLError, UnicodeError, ValueError, RecursionError):
+        _raise_clean(ValueError("Invalid local record"))
 
 
-def _validate_segment(name: str) -> None:
-    if not _VALID_SEGMENT.match(name):
-        raise ValueError(f"Invalid key segment: {name!r} — must match [a-z0-9_]+")
-
-
-def _key_to_paths(base_dir: Path, key: str) -> tuple[Path, Path, Path, Path]:
-    """Convert a dot-separated key to (yaml_path, tmp_path, tombstone_path, lock_path).
-
-    Key mapping:
-    - "simple"                -> base_dir/simple.yaml
-    - "domain.leaf"           -> base_dir/domain/leaf.yaml
-    - "domain.provider.user"  -> base_dir/domain/provider-user.yaml
-    """
-    parts = key.split(".")
-    for part in parts:
-        _validate_segment(part)
-
-    if len(parts) == 1:
-        directory = base_dir
-        stem = parts[0]
-    elif len(parts) == 2:
-        directory = base_dir / parts[0]
-        stem = parts[1]
-    else:
-        directory = base_dir / parts[0]
-        stem = "-".join(parts[1:])
-
-    yaml_path = directory / f"{stem}.yaml"
-    tmp_path = directory / f".{stem}.tmp"
-    tombstone_path = directory / f".{stem}.cleared"
-    lock_path = directory / f".{stem}.lock"
-    return yaml_path, tmp_path, tombstone_path, lock_path
+def _decode(payload: bytes) -> SecretRecord:
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeError:
+        raise _Failure("decode_error") from None
+    try:
+        value = yaml.safe_load(text)
+    except (yaml.YAMLError, ValueError, TypeError, OverflowError, RecursionError):
+        raise _Failure("malformed_yaml") from None
+    try:
+        return _own_record(value)
+    except ValueError:
+        raise _Failure("invalid_record_shape") from None
 
 
 class FilesystemBackend:
-    """Stores credentials as YAML files with secure permissions."""
+    """Application-owned local store; callers quiesce before terminal close."""
 
     def __init__(self, base_dir: str | Path) -> None:
-        self.base_dir = Path(base_dir)
+        self._gate = threading.Lock()
+        self._active = 0
+        self._root: int | None = None
+        self._ops: NativeOps | None = None
+        self._invoke(self._anchor, base_dir)
 
-    def get(self, key: str) -> dict[str, Any] | None:
-        yaml_path, _, _, _ = _key_to_paths(self.base_dir, key)
-        if not yaml_path.exists():
-            return None
-        if yaml_path.is_symlink():
-            raise PermissionError(f"Credential file is a symlink: {yaml_path}")
-        mode = yaml_path.stat().st_mode
-        if mode & 0o077:
-            raise PermissionError(f"Credential file has unsafe permissions: {yaml_path}")
-        with yaml_path.open("r") as fh:
-            return yaml.safe_load(fh)
-
-    def set(self, key: str, data: dict[str, Any]) -> None:
-        yaml_path, tmp_path, tombstone_path, _ = _key_to_paths(self.base_dir, key)
-        yaml_path.parent.mkdir(parents=True, exist_ok=True)
-        os.chmod(str(yaml_path.parent), 0o700)
+    def _anchor(self, base_dir: str | Path) -> None:
+        self._ops = select_ops()
         try:
-            fd = os.open(str(tmp_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            with os.fdopen(fd, "w") as fh:
-                yaml.safe_dump(data, fh)
-            os.replace(str(tmp_path), str(yaml_path))
-        except Exception:
-            if tmp_path.exists():
-                tmp_path.unlink()
-            raise
-        if tombstone_path.exists():
-            tombstone_path.unlink()
+            path = Path(base_dir)
+            self._root = self._ops.open_root(path)
+        except (TypeError, ValueError):
+            raise _Failure("unavailable") from None
 
-    def delete(self, key: str) -> None:
-        yaml_path, _, tombstone_path, _ = _key_to_paths(self.base_dir, key)
-        if yaml_path.exists():
-            yaml_path.unlink()
-        tombstone_path.parent.mkdir(parents=True, exist_ok=True)
-        os.chmod(str(tombstone_path.parent), 0o700)
-        fd = os.open(str(tombstone_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        os.close(fd)
-
-    def is_cleared(self, key: str) -> bool:
-        _, _, tombstone_path, _ = _key_to_paths(self.base_dir, key)
-        return tombstone_path.exists()
+    def _invoke(self, function: Callable[..., T], *args: Any) -> T:
+        try:
+            return function(*args)
+        except ValueError:
+            error: Exception = ValueError("Invalid local record input")
+        except Exception as exc:
+            reason = (
+                exc.reason if isinstance(exc, _Failure)
+                else self._ops.reason(exc) if self._ops is not None
+                else "unavailable"
+            )
+            error = SecretStoreUnavailableError(
+                "Local storage operation failed", reason=reason,
+            )
+        _raise_clean(error)
 
     @contextmanager
-    def transaction(self, key: str):
-        import fcntl  # deferred: POSIX-only, not required for generic imports
-
-        _, _, _, lock_path = _key_to_paths(self.base_dir, key)
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        os.chmod(str(lock_path.parent), 0o700)
-        fd = os.open(str(lock_path), os.O_WRONLY | os.O_CREAT, 0o600)
+    def _admit(self) -> Iterator[tuple[int, NativeOps]]:
+        with self._gate:
+            if self._root is None or self._ops is None:
+                raise _Failure("store_closed")
+            root, ops = self._root, self._ops
+            self._active += 1
         try:
-            fcntl.flock(fd, fcntl.LOCK_EX)
+            yield root, ops
+        finally:
+            with self._gate:
+                self._active -= 1
+
+    @contextmanager
+    def _directory(
+        self, root: int, ops: NativeOps,
+        layout: tuple[str | None, str], create: bool,
+    ) -> Iterator[tuple[int | None, str]]:
+        namespace, stem = layout
+        if namespace is None:
+            yield root, stem
+            return
+        directory: int | None = None
+        try:
+            directory = ops.open_namespace(root, namespace, create=create)
+        except FileNotFoundError:
+            if create:
+                raise
+        try:
+            yield directory, stem
+        finally:
+            if directory is not None:
+                ops.close(directory)
+
+    @staticmethod
+    def _entry(
+        resources: ExitStack, ops: NativeOps, parent: int, name: str,
+        *, writable: bool = False, create: bool = False,
+    ) -> tuple[int | None, bool]:
+        created = False
+        try:
+            handle = ops.open_file(parent, name, writable=writable)
+        except FileNotFoundError:
+            if not create:
+                return None, False
+            try:
+                handle = ops.create_file(parent, name)
+                created = True
+            except FileExistsError:
+                # Only a fixed marker/lock may have a concurrently created winner.
+                handle = ops.open_file(parent, name, writable=writable)
+        resources.callback(ops.close, handle)
+        return handle, created
+
+    def get(self, key: str) -> SecretRecord | None:
+        return self._invoke(self._get, key)
+
+    def _get(self, key: str) -> SecretRecord | None:
+        with self._admit() as (root, ops):
+            with self._directory(root, ops, _layout(key), False) as (parent, stem):
+                if parent is None:
+                    return None
+                with ExitStack() as resources:
+                    handle, _ = self._entry(resources, ops, parent, f"{stem}.yaml")
+                    return None if handle is None else _decode(ops.read_file(handle))
+
+    def set(self, key: str, data: SecretRecord) -> None:
+        self._invoke(self._set, key, data)
+
+    def _set(self, key: str, data: SecretRecord) -> None:
+        with self._admit() as (root, ops):
+            layout = _layout(key)
+            payload = _encode(data)  # No namespace/temp/storage mutation yet.
+            with self._directory(root, ops, layout, True) as (parent, stem):
+                assert parent is not None
+                with (
+                    ExitStack() as resources,
+                    ExitStack() as old_resources,
+                    ExitStack() as marker_resources,
+                ):
+                    target, marker = f"{stem}.yaml", f".{stem}.cleared"
+                    old, _ = self._entry(old_resources, ops, parent, target, writable=True)
+                    cleared, _ = self._entry(
+                        marker_resources, ops, parent, marker, writable=True,
+                    )
+                    temporary = f".{stem}.{secrets.token_hex(16)}.tmp"
+                    try:
+                        handle = ops.create_file(parent, temporary)
+                    except FileExistsError:
+                        # Inspect only through the same no-follow private-entry open.
+                        # Refuse unsafe occupants; never read, reuse, remove or retry one.
+                        with ExitStack() as collision_resources:
+                            self._entry(collision_resources, ops, parent, temporary)
+                        raise _Failure("unavailable") from None
+                    resources.callback(ops.close, handle)
+                    committed = False
+                    try:
+                        ops.write_file(handle, payload)
+                        if old is not None:
+                            ops.check_entry(parent, target, old)
+                        if cleared is not None:
+                            ops.check_entry(parent, marker, cleared)
+                        # Legacy Windows rename cannot replace an open destination.
+                        # Pop ownership before close; the writer interval protects the name.
+                        old_resources.close()
+                        ops.replace_file(parent, temporary, handle, target)
+                        committed = True
+                        if cleared is not None:
+                            try:
+                                try:
+                                    ops.cleanup_owned(parent, marker, cleared)
+                                finally:
+                                    # Windows deletion completes on handle release.
+                                    # ExitStack detaches before calling close: no retry.
+                                    marker_resources.close()
+                            except Exception:
+                                raise _Failure("write_committed_cleanup_failed") from None
+                    finally:
+                        if not committed:
+                            ops.cleanup_owned(parent, temporary, handle)
+
+    def delete(self, key: str) -> None:
+        self._invoke(self._delete, key)
+
+    def _delete(self, key: str) -> None:
+        with self._admit() as (root, ops):
+            with self._directory(root, ops, _layout(key), True) as (parent, stem):
+                assert parent is not None
+                with ExitStack() as resources:
+                    target, marker = f"{stem}.yaml", f".{stem}.cleared"
+                    old, _ = self._entry(resources, ops, parent, target, writable=True)
+                    cleared, created = self._entry(
+                        resources, ops, parent, marker, writable=True, create=True,
+                    )
+                    assert cleared is not None
+                    try:
+                        if old is not None:
+                            ops.cleanup_owned(parent, target, old)
+                    except Exception:
+                        if created:
+                            ops.cleanup_owned(parent, marker, cleared)
+                        raise
+
+    def is_cleared(self, key: str) -> bool:
+        return self._invoke(self._is_cleared, key)
+
+    def _is_cleared(self, key: str) -> bool:
+        with self._admit() as (root, ops):
+            with self._directory(root, ops, _layout(key), False) as (parent, stem):
+                if parent is None:
+                    return False
+                with ExitStack() as resources:
+                    handle, _ = self._entry(resources, ops, parent, f".{stem}.cleared")
+                    return handle is not None
+
+    def _begin_transaction(self, key: str, resources: ExitStack) -> None:
+        try:
+            root, ops = resources.enter_context(self._admit())
+            parent, stem = resources.enter_context(
+                self._directory(root, ops, _layout(key), True)
+            )
+            assert parent is not None
+            handle, _ = self._entry(
+                resources, ops, parent, f".{stem}.lock", writable=True, create=True,
+            )
+            assert handle is not None
+            ops.check_entry(parent, f".{stem}.lock", handle)
+            if not ops.lock(handle):
+                raise _Failure("unavailable")
+            resources.callback(ops.unlock, handle)
+        except BaseException:
+            resources.close()
+            raise
+
+    @contextmanager
+    def transaction(self, key: str) -> Iterator[None]:
+        # This generator captures only self/key until __enter__ advances it.
+        resources = ExitStack()
+        self._invoke(self._begin_transaction, key, resources)
+        try:
             yield
         finally:
-            fcntl.flock(fd, fcntl.LOCK_UN)
-            os.close(fd)
+            self._invoke(resources.close)
+
+    def close(self) -> None:
+        self._invoke(self._close)
+
+    def _close(self) -> None:
+        with self._gate:
+            if self._root is None:
+                return
+            if self._active:
+                # Misuse refusal, not a drain/cancel service or alternate close policy.
+                raise _Failure("unavailable")
+            root, self._root = self._root, None
+            ops = self._ops
+        assert ops is not None
+        ops.close(root)  # Detached before release; never retry a failed close.
+
+    def __enter__(self) -> FilesystemBackend:
+        self._invoke(self._check_open)
+        return self
+
+    def _check_open(self) -> None:
+        with self._gate:
+            if self._root is None:
+                raise _Failure("store_closed")
+
+    def __exit__(
+        self, exc_type: type[BaseException] | None, exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass  # Explicit close reports errors; finalization is best effort.
