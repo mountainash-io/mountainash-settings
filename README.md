@@ -112,20 +112,55 @@ merged = SettingsParameters.merge(
 settings = get_settings(settings_parameters=merged)
 ```
 
-### Pluggable secrets resolution
+### Local record storage
 
-Register a resolver callable for any secrets backend, then reference secrets with a `secret:` prefix in your YAML or kwargs:
+The settings-owned storage surface lives in `mountainash_settings.secrets`.
+Ordinary environment/configuration/Pydantic secret inputs do not require a local store.
 
 ```python
-from mountainash_settings import register_secrets_resolver
+from pathlib import Path
+from mountainash_settings.secrets import FilesystemBackend, NamespacedSecretStore
 
-register_secrets_resolver("vault", lambda path: fetch_from_vault(path))
-
-settings = AppSettings(
-    config_files=["config/production.yaml"],  # may contain secret:db/prod/url
-    secrets_provider="vault",
-)
+# Application/deployment provisions this directory and its access policy.
+root = Path("/path/to/provisioned/private-records")
+with FilesystemBackend(root) as store:
+    records = NamespacedSecretStore(store, "application")
+    with records.transaction("account"):
+        records.set("account", {"token": "dummy-token"})
+        assert records.get("account") == {"token": "dummy-token"}
 ```
+
+Local records are exact JSON-native mappings: dictionaries with string keys,
+lists, strings, integers, finite floats, booleans and null; `{}` is valid.
+Values such as bytes, dates, custom objects, non-finite floats and cycles are
+rejected before mutation. Invalid existing YAML/UTF-8/record shapes raise
+`SecretStoreUnavailableError`, not absence. Catch its stable `.reason`, not its
+message. Invalid caller keys/payloads raise value-free `ValueError`.
+
+The application owns store lifetime and must stop new work and finish every
+operation/entered transaction before `close()`. Close is terminal and idempotent;
+borrowed namespace views do not own the store. Wrap compound writes in an explicit
+transaction, or otherwise ensure exclusive writer ownership. No implicit locking
+of `get/set/delete`, reentrant filesystem transaction, distributed lock,
+crash durability, automatic repair or secure deletion is promised.
+
+After interrupted marker-first deletion, a valid record and clear marker can both
+remain: `get()` returns the record and `is_cleared()` is true. A successful set
+followed by marker-cleanup failure raises reason `write_committed_cleanup_failed`;
+the new record is committed. Do not blindly retry or assume an exception means
+nothing changed. OAuth marker precedence belongs to the separately migrated
+authentication lifecycle, not this raw record API.
+
+The native mechanisms use Linux `libacl.so.1`, macOS libSystem ACL operations,
+or Windows kernel32/advapi32/ntdll APIs through standard-library facilities.
+No native binaries or new Python binding are vendored. Receipts record the actual
+OS library/package builds; native prerequisites and their licensing are reviewed
+against the approved native-dependency record. Generic imports do not load the
+irrelevant platform's libraries.
+
+This M3 candidate is not a package-release or consumer-cutover claim. Existing
+settings registry/provider integration remains until coordinated M4 migration;
+do not infer that `secret_store=` integration or OAuth migration is already delivered.
 
 ### Declarative connection profiles
 

@@ -1,0 +1,36 @@
+name: Settings Local Store Candidate
+on:
+  pull_request:
+    branches: [develop]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  installed-native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Provide Linux ACL fixture tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes acl
+      - name: Qualify installed wheel and rebuilt sdist
+        run: python -I tools/qualify_local_store.py --output "${{ runner.temp }}/native-store-proof/proof.json"
+      - name: Retain exact artifacts and receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: settings-local-store-${{ runner.os }}
+          path: ${{ runner.temp }}/native-store-proof/
+          if-no-files-found: error
+          retention-days: 30
