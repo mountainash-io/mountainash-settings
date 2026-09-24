@@ -78,8 +78,8 @@ Use `UPath`'s `/` operator to build cross-platform path templates — no platfor
 ### Smart caching
 
 `get_settings()` reuses captured sources for the same structural parameters:
-`config_files`, `settings_class`, `env_prefix`, `secrets_dir`, and
-`secrets_provider`. Each call validates a complete invocation and returns an
+`config_files`, `settings_class`, `env_prefix`, `secrets_dir`, and the bound
+`secret_store`'s object identity. Each call validates a complete invocation and returns an
 independently owned settings object:
 
 ```python

@@ -362,6 +362,9 @@ def _detach_cached_result(instance: BaseSettings) -> None:
         if framework_identity
         else {}
     )
+    source_private = dict(object.__getattribute__(instance, "__pydantic_private__") or {})
+    # The bound secret store travels by identity, never copied or reconstructed.
+    retained_secret_store = source_private.pop("_settings_secret_store", None)
     memo: dict[int, Any] = {}
     active: set[int] = set()
     try:
@@ -369,15 +372,14 @@ def _detach_cached_result(instance: BaseSettings) -> None:
         detached_extra = _copy_reconstruction(
             object.__getattribute__(instance, "__pydantic_extra__"), memo, active,
         )
-        detached_private = _copy_reconstruction(
-            object.__getattribute__(instance, "__pydantic_private__"), memo, active,
-        )
+        detached_private = _copy_reconstruction(source_private, memo, active)
         detached_fields_set = _copy_reconstruction(
             object.__getattribute__(instance, "__pydantic_fields_set__"), memo, active,
         )
     except (_UnownedReconstruction, RecursionError):
         raise ValueError("Cached settings result cannot be safely owned") from None
     detached_dict.update(retained_metadata)
+    detached_private["_settings_secret_store"] = retained_secret_store
     object.__setattr__(instance, "__dict__", detached_dict)
     object.__setattr__(instance, "__pydantic_extra__", detached_extra)
     object.__setattr__(instance, "__pydantic_private__", detached_private)
@@ -438,8 +440,8 @@ class MountainAshBaseSettings(BaseSettings):
     SETTINGS_SOURCE_JSON_FILES: Optional[Union[Any, str, List[Any|str]]] =      Field(default=None)
     SETTINGS_SOURCE_KWARG_NAMES: tuple[str, ...] = Field(default=())
     _settings_reconstruction_kwargs: Optional[dict[str, Any]] = PrivateAttr(default=None)
+    _settings_secret_store: Optional[Any] = PrivateAttr(default=None)
     SETTINGS_SOURCE_SECRETS_DIR: Optional[str] = Field(default=None)
-    SETTINGS_SOURCE_SECRETS_PROVIDER: Optional[str] =                              Field(default=None)
 
     def __new__(cls, *args: Any, **kwargs: Any) -> "MountainAshBaseSettings":
         """Bind the frame to this outer allocation before custom init can nest."""
@@ -491,7 +493,7 @@ class MountainAshBaseSettings(BaseSettings):
         object.__setattr__(self, "SETTINGS_SOURCE_TOML_FILES", config_files.toml_files)
         object.__setattr__(self, "SETTINGS_SOURCE_JSON_FILES", config_files.json_files)
         object.__setattr__(self, "SETTINGS_SOURCE_SECRETS_DIR", parameters.secrets_dir)
-        object.__setattr__(self, "SETTINGS_SOURCE_SECRETS_PROVIDER", parameters.secrets_provider)
+        self._settings_secret_store = parameters.secret_store
         fields = type(self).model_fields
         expected = _snapshot_reconstruction({
             name: value for name, value in object.__getattribute__(self, "__dict__").items()
@@ -561,11 +563,8 @@ class MountainAshBaseSettings(BaseSettings):
 
 
         # Resolve prefixed references (e.g. secret:) in kwargs before pydantic validation
-        if local_settings_params.secrets_provider:
-            from mountainash_settings.secrets.registry import get_secrets_backend
-            from mountainash_settings.resolve import resolve_references_in_dict
-            _backend = get_secrets_backend(local_settings_params.secrets_provider)
-            valid_attribute_kwargs = resolve_references_in_dict(valid_attribute_kwargs, _backend)
+        from mountainash_settings.resolve import resolve_references_in_dict
+        valid_attribute_kwargs = resolve_references_in_dict(valid_attribute_kwargs, local_settings_params.secret_store)
 
         # Handle non env config files via model_config
         self.model_config["yaml_file"] = obj_config_files.yaml_files or None
@@ -613,14 +612,11 @@ class MountainAshBaseSettings(BaseSettings):
         object.__setattr__(self, "SETTINGS_SOURCE_TOML_FILES", obj_config_files.toml_files)
         object.__setattr__(self, "SETTINGS_SOURCE_JSON_FILES", obj_config_files.json_files)
         object.__setattr__(self, "SETTINGS_SOURCE_SECRETS_DIR", local_settings_params.secrets_dir)
-        object.__setattr__(self, "SETTINGS_SOURCE_SECRETS_PROVIDER", local_settings_params.secrets_provider)
+        self._settings_secret_store = local_settings_params.secret_store
 
         # Resolve prefixed references (e.g. secret:) in fields loaded from config files
-        if local_settings_params.secrets_provider:
-            from mountainash_settings.secrets.registry import get_secrets_backend as _get_backend
-            from mountainash_settings.resolve import resolve_references_in_model_tree
-            _backend = _get_backend(local_settings_params.secrets_provider)
-            resolve_references_in_model_tree(self, _backend)
+        from mountainash_settings.resolve import resolve_references_in_model_tree
+        resolve_references_in_model_tree(self, local_settings_params.secret_store)
 
         # Initialise templated variables
         self.post_init()
@@ -885,7 +881,6 @@ class MountainAshBaseSettings(BaseSettings):
             )
         existing_settings_class =   self.SETTINGS_CLASS or None
         existing_env_prefix =       self.SETTINGS_SOURCE_ENV_PREFIX or None
-        existing_secrets_provider =  self.SETTINGS_SOURCE_SECRETS_PROVIDER or None
 
         params: SettingsParameters = SettingsParameters.create(
             settings_class=     existing_settings_class,
@@ -893,7 +888,7 @@ class MountainAshBaseSettings(BaseSettings):
             kwargs=             existing_kwargs,
             env_prefix=         existing_env_prefix,
             secrets_dir=        self.SETTINGS_SOURCE_SECRETS_DIR,
-            secrets_provider=   existing_secrets_provider)
+            secret_store=       self._settings_secret_store)
 
         return params
 
@@ -911,34 +906,29 @@ class MountainAshBaseSettings(BaseSettings):
         return class_name
 
     def persist(self, data: Dict[str, Any], *, key: Optional[str] = None) -> None:
-        """Write data to the registered secrets backend and update in-memory fields.
+        """Replace one local record through the selected writer, then update fields.
 
         Args:
             data: Dict of field names to values to persist.
             key: Backend key. If None, derived via persist_key().
 
         Raises:
-            ValueError: If no secrets_provider is configured.
+            SecretCapabilityError: No store is selected, or it is not a SecretWriter.
+            ValueError: ``data`` is not a strict JSON-native record.
         """
-        provider = self.SETTINGS_SOURCE_SECRETS_PROVIDER
-        if not provider:
-            raise ValueError(
-                "Cannot persist: no secrets_provider configured on this settings instance. "
-                "Pass secrets_provider= when constructing the settings."
-            )
-        from mountainash_settings.secrets.registry import get_secrets_backend
-        backend = get_secrets_backend(provider)
+        from mountainash_settings.secrets.backend import SecretWriter
+        from mountainash_settings.secrets.errors import SecretCapabilityError, _raise_clean
+        from mountainash_settings.secrets.records import _own_record
+
+        store = self._settings_secret_store
+        if store is None or not isinstance(store, SecretWriter):
+            _raise_clean(SecretCapabilityError("Selected secret store cannot persist"))
         if key is None:
             key = self.persist_key()
-        payload = _snapshot_reconstruction(data)
-        input_names = tuple(dict.fromkeys((*self.SETTINGS_SOURCE_KWARG_NAMES, *data)))
-        backend.set(key, payload if payload is not None else data)
-        self.update_settings_from_dict(data)
-        if payload is None:
-            # A backend may mutate even unsupported input. Never advertise
-            # its post-write replacement as an owned original recipe.
-            self._settings_reconstruction_kwargs = None
-            object.__setattr__(self, "SETTINGS_SOURCE_KWARG_NAMES", input_names)
+        record = _own_record(data)
+        update = _own_record(data)
+        store.set(key, record)
+        self.update_settings_from_dict(update)
 
     # def __getattribute__(self, name):
     #     """

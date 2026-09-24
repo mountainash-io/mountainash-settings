@@ -291,10 +291,11 @@ After construction completes, the instance carries value-free source facts that 
 - `SETTINGS_SOURCE_JSON_FILES` — which JSON files were loaded
 - `SETTINGS_SOURCE_KWARG_NAMES` — accepted attribute-input names, in deterministic order
 - `SETTINGS_SOURCE_SECRETS_DIR` — the secrets directory path
-- `SETTINGS_SOURCE_SECRETS_PROVIDER` — the registered secrets provider name
 
 `SETTINGS_SOURCE_KWARGS` no longer exists and has no replacement raw-value
-field. Source facts may appear in normal diagnostics because they contain no
+field. The bound `secret_store` is never a public `SETTINGS_SOURCE_*` field —
+it lives on a private attribute so it never appears in `model_dump()`, `repr()`
+or provenance diagnostics. Source facts may appear in normal diagnostics because they contain no
 constructor value tree. Domain fields remain intentional model data: use
 `SecretStr` for Pydantic's normal masking, and do not treat `model_dump()` as
 an arbitrary-secret redactor. Code that deliberately needs reconstruction can

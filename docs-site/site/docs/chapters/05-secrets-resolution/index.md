@@ -1,6 +1,6 @@
 ---
 title: Secrets Resolution
-description: The secrets resolution subsystem covering the registry, record-store protocols, two-pass resolution pipeline, prefix syntax, settings-owned local stores, and frozen model rebuilding.
+description: The secrets resolution subsystem covering the secret_store binding, record-store protocols, two-pass resolution pipeline, prefix syntax, settings-owned local stores, and frozen model rebuilding.
 generated_by: claude skill chapter-content-generator
 date: 2026-06-03
 version: 0.08
@@ -10,7 +10,7 @@ version: 0.08
 
 ## Summary
 
-This chapter covers the secrets resolution subsystem that transparently resolves secret references in configuration values. You will learn about the secrets registry, the record-store protocols that back it, the two-pass resolution pipeline (kwargs pass and model tree pass), helper functions for resolving references in dicts and model trees, secret prefix syntax for identifying references, the settings-owned local stores, and how frozen models are rebuilt after resolution.
+This chapter covers the secrets resolution subsystem that transparently resolves secret references in configuration values. You will learn about the directly selected `secret_store` binding, the record-store protocols that back it, the two-pass resolution pipeline (kwargs pass and model tree pass), helper functions for resolving references in dicts and model trees, secret prefix syntax for identifying references, the settings-owned local stores, and how frozen models are rebuilt after resolution.
 
 ---
 
@@ -21,60 +21,32 @@ This chapter covers the secrets resolution subsystem that transparently resolves
 
 Production applications store sensitive values -- database passwords, API keys, encryption keys, OAuth client secrets -- outside configuration files. However, the configuration layer still needs to know _which_ secret to retrieve. mountainash-settings solves this with a reference-based approach: configuration files and kwargs contain references like `secret:database.production.password`, and the framework resolves them transparently to their actual values during construction.
 
-This chapter covers the resolution subsystem from the bottom up: first the registry that maps provider names to record stores, then the protocols those stores implement, then the two-pass pipeline that resolves references in both kwargs and the model tree, and finally the settings-owned local stores and how external secret managers fit in.
+This chapter covers the resolution subsystem from the bottom up: first the directly selected `secret_store` binding, then the protocols those stores implement, then the two-pass pipeline that resolves references in both kwargs and the model tree, and finally the settings-owned local stores and how external secret managers fit in.
 
-## Secrets Registry
+## Secret Store Binding
 
-The **secrets registry** is a module-level dictionary in `mountainash_settings.secrets.registry` that maps provider name strings to record stores. It provides a write-once registration pattern with four operations:
+A `secret_store` is a directly selected object — a `SecretReader`, or a `SecretWriter` when the settings instance also calls `persist()` — never looked up by a name string. It travels on `SettingsParameters.secret_store` and, for direct construction, as the `secret_store=` keyword:
 
 ```python
-_REGISTRY: dict[str, SecretsBackend] = {}
+from mountainash_settings import SettingsParameters, get_settings
+from mountainash_settings.secrets import FilesystemBackend
 
-def register_secrets_backend(provider: str, backend: SecretsBackend) -> None:
-    if provider in _REGISTRY:
-        raise ValueError(...)  # use replace_secrets_backend() to overwrite
-    _REGISTRY[provider] = backend
-
-def get_secrets_backend(provider: str | None) -> SecretsBackend | None:
-    if provider is None:
-        return None
-    return _REGISTRY[provider]
-
-def replace_secrets_backend(provider: str, backend: SecretsBackend) -> None:
-    _REGISTRY[provider] = backend
-
-def clear_secrets_registry() -> None:
-    _REGISTRY.clear()
+store = FilesystemBackend("/path/to/provisioned/private-records")
+params = SettingsParameters.create(
+    settings_class=AppSettings,
+    config_files=["config.yaml"],
+    secret_store=store,
+)
+settings = get_settings(settings_parameters=params)
 ```
 
-Registration is deliberately asymmetric: registering an existing name raises `ValueError`, so a lookup cannot be silently redirected; intentional replacement uses `replace_secrets_backend()`.
+The binding participates in cache identity by **object identity**, never content: hashing and equality use `id(store)`, never the store's own `__hash__`/`__eq__`, and the store is never included in `repr()`, `to_dict()`, `model_dump()` or provenance diagnostics. Two `SettingsParameters` with identical `config_files`/`settings_class`/`env_prefix`/`secrets_dir` but *different* store objects never share a cached context, even if the stores would compare equal by content. Merging two parameter sets keeps the last non-`None` store (tested with `is None`, never truthiness); `None` never detaches an already-bound store.
 
-| Operation | Behavior | Use Case |
-|-----------|----------|----------|
-| `register_secrets_backend` | Adds new; raises on duplicate | Application startup |
-| `get_secrets_backend` | Returns the store; `None` for `None`; `KeyError` if unknown | Construction-time lookup |
-| `replace_secrets_backend` | Overwrites unconditionally | Test fixtures |
-| `clear_secrets_registry` | Empties the entire registry | Test teardown |
+A `secret:` reference with no bound store raises a value-free `SecretCapabilityError` immediately — there is no silent literal pass-through and no process-global fallback.
 
-!!! note "Planned change"
-    The registry and the `secrets_provider` parameter are current API only. The M4 cutover replaces them with a directly selected store on `SettingsParameters`, without compatibility shims.
-
-<!-- concept:52 -->
-<!-- concept:53 -->
-<!-- concept:54 -->
 ## Secret Provider Protocol
 
-A registered store is a **record store**, not a string-returning callable. One key maps to one structured record (a JSON-native dictionary):
-
-```python
-class SecretsBackend(Protocol):          # current broad protocol, removed in M4
-    def get(self, key: str) -> dict[str, Any] | None: ...
-    def set(self, key: str, data: dict[str, Any]) -> None: ...
-    def delete(self, key: str) -> None: ...
-    def transaction(self, key: str) -> AbstractContextManager[None]: ...
-```
-
-The settings-owned replacement splits this into capabilities so each consumer asks only for what it needs:
+A bound store is a **record store**, not a string-returning callable. One key maps to one structured record (a JSON-native dictionary). The library splits the contract into capabilities so each consumer asks only for what it needs:
 
 | Protocol | Adds | Needed by |
 |---|---|---|
@@ -130,14 +102,12 @@ The two-pass design is necessary because configuration values arrive through dif
 # Inside MountainAshBaseSettings.__init__:
 
 # Pass 1: resolve secret references in kwargs
-_backend = get_secrets_backend(local_settings_params.secrets_provider)
-valid_attribute_kwargs = resolve_references_in_dict(valid_attribute_kwargs, _backend)
+valid_attribute_kwargs = resolve_references_in_dict(valid_attribute_kwargs, local_settings_params.secret_store)
 
 # ... BaseSettings.__init__ runs here ...
 
 # Pass 2: resolve secret references in model tree
-_backend = _get_backend(local_settings_params.secrets_provider)
-resolve_references_in_model_tree(self, _backend)
+resolve_references_in_model_tree(self, local_settings_params.secret_store)
 ```
 
 This two-pass approach means that secret references work identically regardless of where they appear -- in kwargs, in YAML files, in environment variables, or in `.env` files. The caller does not need to know which pass will handle their reference.
@@ -171,7 +141,7 @@ The `resolve_references_in_dict()` function in `mountainash_settings/resolve.py`
 ```python
 def resolve_references_in_dict(
     data: dict[str, Any],
-    backend: SecretsBackend,
+    store: SecretReader | None,
     prefix: str = "secret:",
 ) -> dict[str, Any]: ...
 ```
@@ -232,10 +202,11 @@ Settings ships the stores that back references, in `mountainash_settings.secrets
 | `NamespacedSecretStore(inner, prefix)` | Borrowed prefix view over a clearable store |
 
 ```python
-from mountainash_settings.secrets import FilesystemBackend, register_secrets_backend
+from mountainash_settings import SettingsParameters
+from mountainash_settings.secrets import FilesystemBackend
 
 store = FilesystemBackend("/path/to/provisioned/private-records")
-register_secrets_backend("local", store)
+params = SettingsParameters.create(settings_class=AppSettings, secret_store=store)
 ```
 
 Records are strict JSON-native mappings; malformed existing records raise value-free `SecretStoreUnavailableError` with a stable `.reason` rather than reading as absent. See `docs/README_SECRETS.md` for the full contract.
@@ -280,7 +251,7 @@ A step-by-step workflow showing the rebuild process for a nested frozen model: (
 
 ## Key Takeaways
 
-- **Secrets Registry** provides write-once registration with explicit replacement, mapping provider names to record stores; it is replaced by direct store selection in M4.
+- **Secret Store Binding** selects a record store directly by object, never by name; cache identity uses the store's object identity, never its content.
 - **Record-store protocols** (`SecretReader`, `SecretWriter`, `ClearableSecretStore`) return structured records; references select a record and an optional field.
 - **Two Pass Resolution** handles secrets from all sources: Pass 1 resolves kwargs before Pydantic validation; Pass 2 resolves config-file and env-var values in the live model tree.
 - **Kwargs Pass Resolution** runs before `BaseSettings.__init__`, allowing resolved values to flow through normal Pydantic validation and `SecretStr` wrapping.

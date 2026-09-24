@@ -9,6 +9,7 @@ def _raise_clean(error: Exception) -> NoReturn:
     finally:
         error.__cause__ = None
         error.__context__ = None
+        error.__suppress_context__ = True
 
 
 class SecretStoreError(Exception):

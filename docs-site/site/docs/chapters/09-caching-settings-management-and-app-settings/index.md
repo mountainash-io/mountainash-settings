@@ -59,7 +59,7 @@ settings = get_settings(
 
 `SettingsParameters` merge normalizes the requested selectors and invocation
 fields. Its five structural selectors are `config_files`, `settings_class`,
-`env_prefix`, `secrets_dir`, and `secrets_provider`. Runtime kwargs and
+`env_prefix`, `secrets_dir`, and the bound `secret_store`'s object identity. Runtime kwargs and
 `reinitialise` are not structural identity.
 
 The first retrieval captures selected sources in normal precedence and

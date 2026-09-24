@@ -34,7 +34,7 @@ class SettingsParameters:
     env_prefix:       Optional[str] = None
     secrets_dir:      Optional[str] = None
     kwargs:           Optional[Dict[str, Any]] = None
-    secrets_provider: Optional[str] = None
+    secret_store:     Optional["SecretReader"] = None
 ```
 
 The frozen nature is significant. Because instances are immutable, they can safely be used as dictionary keys and cache lookup parameters. The `@dataclass(frozen=True)` decorator generates `__hash__` and `__eq__` methods by default, but `SettingsParameters` overrides both to implement its custom caching strategy. Its `kwargs` field is omitted from the generated representation, so ordinary diagnostics do not print runtime values; explicit access and serialization remain intentional, trusted operations.
@@ -56,7 +56,7 @@ Type: diagram
 **Library:** vis-network<br/>
 **Status:** Specified
 
-A partition diagram showing the six SettingsParameters fields divided into two groups: structural (config_files, settings_class, env_prefix, secrets_dir, secrets_provider) and runtime (kwargs). Within kwargs, a secondary partition shows the three kwarg categories: pydantic_modelconfig_kwargs, pydantic_settings_kwargs, and attribute_settings_kwargs. Clicking on each field shows its type annotation and role. A toggle button switches between "cache identity view" (highlighting structural) and "override view" (highlighting runtime). Learning objective: Classify SettingsParameters fields by their role in caching vs runtime behavior (Bloom: Analyze).
+A partition diagram showing the six SettingsParameters fields divided into two groups: structural (config_files, settings_class, env_prefix, secrets_dir, secret_store) and runtime (kwargs). Within kwargs, a secondary partition shows the three kwarg categories: pydantic_modelconfig_kwargs, pydantic_settings_kwargs, and attribute_settings_kwargs. Clicking on each field shows its type annotation and role. A toggle button switches between "cache identity view" (highlighting structural) and "override view" (highlighting runtime). Learning objective: Classify SettingsParameters fields by their role in caching vs runtime behavior (Bloom: Analyze).
 </details>
 
 <!-- concept:24 -->
@@ -73,9 +73,9 @@ The structural fields are:
 | `settings_class` | `Optional[Type[BaseSettings]]` | The class to instantiate |
 | `env_prefix` | `Optional[str]` | Environment variable prefix scope |
 | `secrets_dir` | `Optional[str]` | Directory for pydantic-settings file-based secrets |
-| `secrets_provider` | `Optional[str]` | Registered secrets resolver name |
+| `secret_store` | `Optional[SecretReader]` | Directly bound secret reader/writer, tested by object identity |
 
-These five fields answer the question: "What configuration am I loading?" Two sets of parameters that load the same files, for the same class, with the same prefix and secrets setup represent the same logical configuration, even if one requests `debug=True` as a runtime override and the other does not.
+These five fields answer the question: "What configuration am I loading?" Two sets of parameters that load the same files, for the same class, with the same prefix and the same bound `secret_store` object represent the same logical configuration, even if one requests `debug=True` as a runtime override and the other does not.
 
 ## Runtime Fields
 
@@ -116,7 +116,7 @@ def __hash__(self):
         self.settings_class,
         self.env_prefix,
         self.secrets_dir,
-        self.secrets_provider,
+        id(self.secret_store) if self.secret_store is not None else None,
         # Deliberately exclude: self.kwargs
     ])
     return hash(hashable_attrs)
@@ -137,7 +137,7 @@ def create(cls,
            settings_class: Optional[Type[BaseSettings]] = None,
            env_prefix: Optional[str] = None,
            secrets_dir: Optional[str] = None,
-           secrets_provider: Optional[str] = None,
+           secret_store: Optional["SecretReader"] = None,
            **kwargs: Any
            ) -> 'SettingsParameters':
 
@@ -152,7 +152,7 @@ def create(cls,
         settings_class=settings_class,
         env_prefix=env_prefix,
         secrets_dir=secrets_dir,
-        secrets_provider=secrets_provider,
+        secret_store=secret_store,
         kwargs=resolved_kwargs
     )
 ```
@@ -198,7 +198,7 @@ Type: workflow
 **Library:** vis-network<br/>
 **Status:** Specified
 
-A directed graph showing two SettingsParameters inputs flowing into a central "merge()" router node. From the router, five arrows lead to strategy nodes: "File List Union" (for config_files), "Validate Match" (for settings_class), "Scalar Last Wins" (for env_prefix, secrets_dir, secrets_provider), and "Dict Deep Merge" (for kwargs). Each strategy node is clickable to show a before/after example. A toggle switches between prioritise_base=False and prioritise_base=True to show how precedence changes. Learning objective: Select the appropriate merge strategy for each field type when combining SettingsParameters (Bloom: Apply).
+A directed graph showing two SettingsParameters inputs flowing into a central "merge()" router node. From the router, five arrows lead to strategy nodes: "File List Union" (for config_files), "Validate Match" (for settings_class), "Scalar Last Wins" (for env_prefix, secrets_dir, secret_store), and "Dict Deep Merge" (for kwargs). Each strategy node is clickable to show a before/after example. A toggle switches between prioritise_base=False and prioritise_base=True to show how precedence changes. Learning objective: Select the appropriate merge strategy for each field type when combining SettingsParameters (Bloom: Apply).
 </details>
 
 <!-- concept:29 -->
@@ -223,7 +223,7 @@ The `prioritise_base=True` variant changes this behavior: instead of unioning, i
 <!-- concept:30 -->
 ## Scalar Last Wins Strategy
 
-For scalar fields (`env_prefix`, `secrets_dir`, `secrets_provider`), the merge framework uses a **last-wins strategy**: the `other` value takes precedence if it is non-None, otherwise the `base` value is retained.
+For scalar fields (`env_prefix`, `secrets_dir`) and for `secret_store` (tested with `is None`, never truthiness), the merge framework uses a **last-wins strategy**: the `other` value takes precedence if it is non-`None`, otherwise the `base` value is retained.
 
 ```python
 # Scalar Last Wins example:
@@ -292,7 +292,7 @@ Type: workflow
 **Library:** vis-network<br/>
 **Status:** Specified
 
-A decision tree showing how the merge method selects a strategy for each field. The root node asks "Which field?" and branches to five leaf strategies: config_files -> File List Union, settings_class -> Validate Match, env_prefix/secrets_dir/secrets_provider -> Scalar Last Wins, kwargs -> Dict Merge. Each leaf shows the rationale. A "prioritise_base" toggle at the top flips the precedence direction for applicable strategies. Clicking a leaf shows before/after examples with real values. Learning objective: Select and justify the appropriate merge strategy for each SettingsParameters field type (Bloom: Evaluate).
+A decision tree showing how the merge method selects a strategy for each field. The root node asks "Which field?" and branches to five leaf strategies: config_files -> File List Union, settings_class -> Validate Match, env_prefix/secrets_dir/secret_store -> Scalar Last Wins, kwargs -> Dict Merge. Each leaf shows the rationale. A "prioritise_base" toggle at the top flips the precedence direction for applicable strategies. Clicking a leaf shows before/after examples with real values. Learning objective: Select and justify the appropriate merge strategy for each SettingsParameters field type (Bloom: Evaluate).
 </details>
 
 ## Putting It Together: Structural Contexts and Runtime Materialization
@@ -351,10 +351,10 @@ The planned simulation represents settings requests carrying structural and runt
 ## Key Takeaways
 
 - **SettingsParameters** is a frozen dataclass that captures structural selectors and caller runtime inputs for retrieval.
-- **Structural fields** (config_files, settings_class, env_prefix, secrets_dir, secrets_provider) select the private source context.
+- **Structural fields** (config_files, settings_class, env_prefix, secrets_dir, secret_store's object identity) select the private source context.
 - **Runtime fields** (`kwargs`) are invocation-local complete-validation inputs; they do not enter the retained baseline.
 - **Custom Hash and Eq** deliberately exclude runtime fields so equal structural selectors share pinned source inputs, not a returned settings instance.
 - **Parameter Create Factory** normalizes flexible input types into a canonical frozen form suitable for hashing and caching.
 - **File List Union Strategy** combines config file lists from both parameter sets, deduplicating but never dropping explicitly requested files.
-- **Scalar Last Wins Strategy** gives precedence to the later (more specific) parameter set for env_prefix, secrets_dir, and secrets_provider.
+- **Scalar Last Wins Strategy** gives precedence to the later (more specific) parameter set for env_prefix, secrets_dir, and secret_store.
 - **Dict Deep Merge Strategy** merges kwargs dictionaries with later values overriding earlier ones for shared keys, preserving non-conflicting keys from both.

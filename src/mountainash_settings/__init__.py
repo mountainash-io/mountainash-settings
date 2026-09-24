@@ -20,13 +20,13 @@ from .profiles import (
     spec_invariants_for,
 )
 from .secrets import (
-    ClearableBackend,
+    ClearableSecretStore,
     FilesystemBackend,
-    SecretsBackend,
-    register_secrets_backend,
-    get_secrets_backend,
-    replace_secrets_backend,
-    clear_secrets_registry,
+    SecretReader,
+    SecretWriter,
+    SecretCapabilityError,
+    SecretStoreError,
+    SecretStoreUnavailableError,
 )
 
 __all__ = [
@@ -53,13 +53,13 @@ __all__ = [
     "spec_invariants_for",
 
     # Secrets
-    "ClearableBackend",
+    "ClearableSecretStore",
     "FilesystemBackend",
-    "SecretsBackend",
-    "register_secrets_backend",
-    "get_secrets_backend",
-    "replace_secrets_backend",
-    "clear_secrets_registry",
+    "SecretReader",
+    "SecretWriter",
+    "SecretCapabilityError",
+    "SecretStoreError",
+    "SecretStoreUnavailableError",
 ]
 
 

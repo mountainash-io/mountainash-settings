@@ -6,7 +6,7 @@ import stat
 
 import pytest
 
-from mountainash_settings.secrets.backend import ClearableBackend, SecretsBackend
+from mountainash_settings.secrets.backend import SecretWriter, ClearableSecretStore
 from mountainash_settings.secrets.filesystem import FilesystemBackend
 
 
@@ -18,11 +18,11 @@ def backend(tmp_path):
 
 @pytest.mark.unit
 class TestFilesystemBackendProtocol:
-    def test_satisfies_secrets_backend(self, backend):
-        assert isinstance(backend, SecretsBackend)
+    def test_satisfies_secret_writer(self, backend):
+        assert isinstance(backend, SecretWriter)
 
-    def test_satisfies_clearable_backend(self, backend):
-        assert isinstance(backend, ClearableBackend)
+    def test_satisfies_clearable_secret_store(self, backend):
+        assert isinstance(backend, ClearableSecretStore)
 
 
 @pytest.mark.unit

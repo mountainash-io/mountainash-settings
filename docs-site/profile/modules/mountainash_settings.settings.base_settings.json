@@ -31,7 +31,6 @@
     "mountainash_settings.settings_parameters.settings_parameters",
     "mountainash_settings.settings_parameters.filehandler",
     "mountainash_settings.settings_parameters.kwargshandler",
-    "mountainash_settings.secrets.registry",
     "mountainash_settings.resolve"
   ],
   "dependents": [
@@ -52,7 +51,7 @@
   "documentation_hooks": [
     "Template syntax: {FIELD_NAME} in string fields, resolved at post_init",
     "config_files accepts UPath, str, list, or tuple — dispatched to YAML/TOML/JSON/env by extension",
-    "secrets_provider wires secret: prefixes in kwargs and config-file-loaded fields",
+    "secret_store wires secret: prefixes in kwargs and config-file-loaded fields",
     "extract_settings_parameters() is trusted source-form reconstruction, not a generic diagnostic export"
   ],
   "examples": [

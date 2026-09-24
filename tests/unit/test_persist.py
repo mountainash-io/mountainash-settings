@@ -8,10 +8,7 @@ import pytest
 from pydantic import AliasChoices, AliasPath, BaseModel, Field, SecretStr
 
 from mountainash_settings import MountainAshBaseSettings
-from mountainash_settings.secrets.registry import (
-    clear_secrets_registry,
-    register_secrets_backend,
-)
+from mountainash_settings.secrets import SecretCapabilityError
 
 
 class _InMemoryBackend:
@@ -43,13 +40,6 @@ class _TestSettings(MountainAshBaseSettings):
     REFRESH: str = Field(default=None)
 
 
-@pytest.fixture(autouse=True)
-def clean():
-    clear_secrets_registry()
-    yield
-    clear_secrets_registry()
-
-
 @pytest.mark.unit
 class TestPersistKey:
     def test_key_from_class_name_only(self):
@@ -67,11 +57,10 @@ class TestPersistKey:
 class TestPersist:
     def test_persist_writes_to_backend(self):
         backend = _InMemoryBackend()
-        register_secrets_backend("memory", backend)
         instance = _TestSettings(
             TOKEN="old",
             env_prefix="APP_",
-            secrets_provider="memory",
+            secret_store=backend,
         )
         instance.persist({"TOKEN": "new_token", "REFRESH": "new_refresh"})
         stored = backend.get("app._testsettings")
@@ -80,29 +69,53 @@ class TestPersist:
 
     def test_persist_updates_in_memory(self):
         backend = _InMemoryBackend()
-        register_secrets_backend("memory", backend)
         instance = _TestSettings(
             TOKEN="old",
             env_prefix="APP_",
-            secrets_provider="memory",
+            secret_store=backend,
         )
         instance.persist({"TOKEN": "updated"})
         assert instance.TOKEN == "updated"
 
     def test_persist_with_explicit_key(self):
         backend = _InMemoryBackend()
-        register_secrets_backend("memory", backend)
         instance = _TestSettings(
             TOKEN="old",
-            secrets_provider="memory",
+            secret_store=backend,
         )
         instance.persist({"TOKEN": "val"}, key="custom.key")
         assert backend.get("custom.key") == {"TOKEN": "val"}
 
-    def test_persist_raises_without_secrets_provider(self):
+    def test_persist_without_store_raises_capability_error(self):
         instance = _TestSettings(TOKEN="old")
-        with pytest.raises(ValueError, match="secrets_provider"):
+        with pytest.raises(SecretCapabilityError):
             instance.persist({"TOKEN": "new"})
+        assert instance.TOKEN == "old"
+
+    def test_persist_with_reader_only_raises_and_writes_nothing(self):
+        class _ReadOnly:
+            def get(self, key):
+                return None
+        instance = _TestSettings(TOKEN="old", secret_store=_ReadOnly())
+        with pytest.raises(SecretCapabilityError):
+            instance.persist({"TOKEN": "new"})
+        assert instance.TOKEN == "old"
+
+    def test_writer_failure_leaves_fields_unchanged(self):
+        class _FailingWriter(_InMemoryBackend):
+            def set(self, key, data):
+                raise RuntimeError("storage down")
+        instance = _TestSettings(TOKEN="old", secret_store=_FailingWriter())
+        with pytest.raises(RuntimeError):
+            instance.persist({"TOKEN": "new"})
+        assert instance.TOKEN == "old"
+
+    def test_non_json_record_rejected_before_write(self):
+        backend = _InMemoryBackend()
+        instance = _TestSettings(TOKEN="old", secret_store=backend)
+        with pytest.raises(ValueError):
+            instance.persist({"TOKEN": {1, 2}})
+        assert backend.get("_testsettings") is None and instance.TOKEN == "old"
 
 
 class _ProvenanceSettings(MountainAshBaseSettings):
@@ -127,10 +140,9 @@ def test_provenance_diagnostics_do_not_duplicate_secret_values():
 def test_partial_update_and_persist_reconstruct_untouched_reference():
     backend = _InMemoryBackend()
     backend.set("login", {"token": "backend-private-marker"})
-    register_secrets_backend("memory", backend)
     instance = _ProvenanceSettings(
         HOST="original", TOKEN=SecretStr("secret:login.token"),
-        VALUES={"old": [1]}, secrets_provider="memory",
+        VALUES={"old": [1]}, secret_store=backend,
     )
     instance.update_settings_from_dict({"HOST": "updated"})
     instance.persist({"VALUES": {"new": [2]}}, key="saved")
@@ -185,8 +197,7 @@ def test_unsupported_input_only_prevents_extraction():
 @pytest.mark.unit
 def test_failed_persist_keeps_prior_recipe_without_rolling_back_live_fields():
     backend = _InMemoryBackend()
-    register_secrets_backend("memory", backend)
-    instance = _ProvenanceSettings(HOST="original", secrets_provider="memory")
+    instance = _ProvenanceSettings(HOST="original", secret_store=backend)
     with pytest.raises(AttributeError):
         instance.persist({"HOST": "partial", "UNKNOWN": "invalid"}, key="partial")
     assert instance.HOST == "partial"
@@ -216,9 +227,8 @@ def test_nested_model_source_form_is_owned_before_resolution():
 
     backend = _InMemoryBackend()
     backend.set("login", {"token": "resolved"})
-    register_secrets_backend("memory", backend)
     supplied = Nested(token="secret:login.token", items=[1])
-    instance = _ProvenanceSettings(OPAQUE=supplied, secrets_provider="memory")
+    instance = _ProvenanceSettings(OPAQUE=supplied, secret_store=backend)
     first = instance.extract_settings_parameters()
     assert first.kwargs["OPAQUE"].token.get_secret_value() == "secret:login.token"
     first.kwargs["OPAQUE"].items.append(2)
@@ -232,10 +242,9 @@ def test_cached_runtime_reference_extraction_preserves_original_source_form():
 
     backend = _InMemoryBackend()
     backend.set("login", {"token": "first"})
-    register_secrets_backend("memory", backend)
     params = SettingsParameters.create(
         settings_class=_ProvenanceSettings,
-        secrets_provider="memory",
+        secret_store=backend,
         TOKEN="secret:login.token",
     )
 
@@ -421,8 +430,7 @@ def test_backend_normalization_does_not_replace_supplied_persistence_recipe():
             super().set(key, data)
 
     backend = NormalizingBackend()
-    register_secrets_backend("normalizing", backend)
-    instance = _ProvenanceSettings(secrets_provider="normalizing")
+    instance = _ProvenanceSettings(secret_store=backend)
     supplied = {"HOST": "caller"}
     instance.persist(supplied, key="record")
     assert backend.get("record") == {"HOST": "backend-normalized"}

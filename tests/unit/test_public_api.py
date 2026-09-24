@@ -24,19 +24,14 @@ def test_profiles_surface_imports():
 
 @pytest.mark.unit
 def test_secrets_surface_imports():
-    from mountainash_settings import (
-        ClearableBackend,
-        FilesystemBackend,
-        SecretsBackend,
-        register_secrets_backend,
-        get_secrets_backend,
-        replace_secrets_backend,
-        clear_secrets_registry,
-    )
-    assert callable(register_secrets_backend)
-    assert callable(get_secrets_backend)
-    assert callable(replace_secrets_backend)
-    assert callable(clear_secrets_registry)
-    assert ClearableBackend is not None
+    from mountainash_settings import FilesystemBackend, SecretReader, SecretWriter, ClearableSecretStore
+    import mountainash_settings as pkg
     assert FilesystemBackend is not None
-    assert SecretsBackend is not None
+    assert SecretReader is not None
+    assert SecretWriter is not None
+    assert ClearableSecretStore is not None
+    for removed in (
+        "register_secrets_backend", "get_secrets_backend", "replace_secrets_backend",
+        "clear_secrets_registry", "SecretsBackend", "ClearableBackend",
+    ):
+        assert not hasattr(pkg, removed)

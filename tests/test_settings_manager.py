@@ -427,62 +427,48 @@ class TestSourceCaptureContracts:
     def test_explicit_runtime_reference_is_fresh_while_baseline_reference_stays_retained(
         self, tmp_path
     ):
-        from mountainash_settings.secrets import clear_secrets_registry, register_secrets_backend
-
         config = tmp_path / "settings.yaml"
         config.write_text("PASSWORD: secret:service.password\n")
         backend = _CountingBackend("baseline")
-        clear_secrets_registry()
-        register_secrets_backend("counting", backend)
-        try:
-            manager = SettingsManager()
-            baseline_params = SettingsParameters.create(
-                settings_class=_SecretSettings,
-                secrets_provider="counting",
-                config_files=[config],
-            )
-            baseline = manager.get_or_create_settings(baseline_params)
-            assert baseline.PASSWORD == "baseline"
+        manager = SettingsManager()
+        baseline_params = SettingsParameters.create(
+            settings_class=_SecretSettings,
+            secret_store=backend,
+            config_files=[config],
+        )
+        baseline = manager.get_or_create_settings(baseline_params)
+        assert baseline.PASSWORD == "baseline"
 
-            backend.value = "runtime-one"
-            assert manager.get_or_create_settings(baseline.extract_settings_parameters()).PASSWORD == "baseline"
-            runtime_params = SettingsParameters.create(
-                settings_class=_SecretSettings,
-                secrets_provider="counting",
-                config_files=[config],
-                PASSWORD="secret:service.password",
-            )
-            assert manager.get_or_create_settings(runtime_params).PASSWORD == "runtime-one"
+        backend.value = "runtime-one"
+        assert manager.get_or_create_settings(baseline.extract_settings_parameters()).PASSWORD == "baseline"
+        runtime_params = SettingsParameters.create(
+            settings_class=_SecretSettings,
+            secret_store=backend,
+            config_files=[config],
+            PASSWORD="secret:service.password",
+        )
+        assert manager.get_or_create_settings(runtime_params).PASSWORD == "runtime-one"
 
-            backend.value = "runtime-two"
-            assert manager.get_or_create_settings(runtime_params).PASSWORD == "runtime-two"
-            assert manager.get_or_create_settings(baseline_params).PASSWORD == "baseline"
-            assert backend.calls == 3
-        finally:
-            clear_secrets_registry()
+        backend.value = "runtime-two"
+        assert manager.get_or_create_settings(runtime_params).PASSWORD == "runtime-two"
+        assert manager.get_or_create_settings(baseline_params).PASSWORD == "baseline"
+        assert backend.calls == 3
 
     def test_capture_project_source_is_selected_once_and_projects_terminal_values(self, monkeypatch):
-        from mountainash_settings.secrets import clear_secrets_registry, register_secrets_backend
-
         _CapturedProjectSource.captures = 0
         monkeypatch.setattr(_CapturedProjectSource, "source_value", "captured")
         backend = _CountingBackend("should-not-resolve")
-        clear_secrets_registry()
-        register_secrets_backend("projecting", backend)
-        try:
-            manager = SettingsManager()
-            selectors = {"settings_class": _CaptureProjectSettings, "secrets_provider": "projecting"}
+        manager = SettingsManager()
+        selectors = {"settings_class": _CaptureProjectSettings, "secret_store": backend}
 
-            first = manager.get_or_create_settings(SettingsParameters.create(**selectors, REQUEST="first"))
-            monkeypatch.setattr(_CapturedProjectSource, "source_value", "changed")
-            second = manager.get_or_create_settings(SettingsParameters.create(**selectors, REQUEST="second"))
-            assert first.VALUE == first.MIRROR == "captured:first"
-            assert second.VALUE == second.MIRROR == "captured:second"
-            assert first.LITERAL == second.LITERAL == "secret:terminal.value"
-            assert _CapturedProjectSource.captures == 1
-            assert backend.calls == 0
-        finally:
-            clear_secrets_registry()
+        first = manager.get_or_create_settings(SettingsParameters.create(**selectors, REQUEST="first"))
+        monkeypatch.setattr(_CapturedProjectSource, "source_value", "changed")
+        second = manager.get_or_create_settings(SettingsParameters.create(**selectors, REQUEST="second"))
+        assert first.VALUE == first.MIRROR == "captured:first"
+        assert second.VALUE == second.MIRROR == "captured:second"
+        assert first.LITERAL == second.LITERAL == "secret:terminal.value"
+        assert _CapturedProjectSource.captures == 1
+        assert backend.calls == 0
 
     def test_legacy_source_hook_requires_explicit_cached_capture_adaptation(self):
         manager = SettingsManager()
@@ -682,23 +668,16 @@ class TestReviewedCacheBoundaries:
         assert not manager.is_initialised(params)
 
     def test_shared_root_static_secret_is_resolved_and_pinned(self, tmp_path):
-        from mountainash_settings.secrets import clear_secrets_registry, register_secrets_backend
-
         path = tmp_path / "static-default.yaml"
         path.write_text("credentials:\n  name: caller\n")
         backend = _CountingBackend("baseline")
-        clear_secrets_registry()
-        register_secrets_backend("static-default", backend)
-        try:
-            manager = SettingsManager()
-            params = SettingsParameters.create(
-                settings_class=_StaticAliasSecretSettings, config_files=[path], secrets_provider="static-default",
-            )
-            first = manager.get_or_create_settings(params)
-            backend.value = "changed"
-            second = manager.get_or_create_settings(params)
-            assert first.NAME == second.NAME == "caller"
-            assert first.PASSWORD.get_secret_value() == second.PASSWORD.get_secret_value() == "baseline"
-            assert backend.calls == 1
-        finally:
-            clear_secrets_registry()
+        manager = SettingsManager()
+        params = SettingsParameters.create(
+            settings_class=_StaticAliasSecretSettings, config_files=[path], secret_store=backend,
+        )
+        first = manager.get_or_create_settings(params)
+        backend.value = "changed"
+        second = manager.get_or_create_settings(params)
+        assert first.NAME == second.NAME == "caller"
+        assert first.PASSWORD.get_secret_value() == second.PASSWORD.get_secret_value() == "baseline"
+        assert backend.calls == 1

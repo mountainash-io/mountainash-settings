@@ -22,7 +22,7 @@ This guide covers the topics listed in the quickstart's "What's next" section:
 | `settings_class` | Must be equal — raises `ValueError` if both set to different classes | Same |
 | `env_prefix` | `other` wins | `base` wins |
 | `secrets_dir` | `other` wins | `base` wins |
-| `secrets_provider` | `other` wins | `base` wins |
+| `secret_store` | `other` wins if non-`None` (never truthiness) | `base` wins if non-`None` |
 | `kwargs` | Dict merge — `other` overwrites duplicate keys | `base` value kept for duplicate keys |
 
 `config_files` keeps the first occurrence of each path. The merge does not sort paths.
@@ -86,22 +86,24 @@ settings = get_settings(settings_parameters=merged)
 Pass `prioritise_base=True` when the base values must not be overridden by the second set — useful when a base set encodes security or compliance constraints:
 
 ```python
-# Compliance base: secrets_provider must not be overridden
+# Compliance base: secret_store must not be overridden
+compliance_store = FilesystemBackend("/path/to/compliance/records")
 compliance_base = SettingsParameters.create(
     settings_class=AppSettings,
     config_files=["config/compliance.yaml"],
-    secrets_provider="vault",
+    secret_store=compliance_store,
 )
 
-# Caller-supplied params — secrets_provider is ignored when base wins
+# Caller-supplied params — secret_store is ignored when base wins
+caller_store = FilesystemBackend("/path/to/local/records")
 caller_params = SettingsParameters.create(
     settings_class=AppSettings,
-    secrets_provider="local",   # would normally win
-    TENANT_ID="acme",           # new key — merged in regardless
+    secret_store=caller_store,   # would normally win
+    TENANT_ID="acme",            # new key — merged in regardless
 )
 
 locked = SettingsParameters.merge(compliance_base, caller_params, prioritise_base=True)
-# locked.secrets_provider == "vault"  (base wins)
+# locked.secret_store is compliance_store  (base wins, by object identity)
 # locked.kwargs["TENANT_ID"] == "acme"  (new key, always merged)
 ```
 
@@ -183,8 +185,8 @@ def get_service(name: str, **runtime_overrides):
 ## Cache contexts and runtime materialization
 
 `get_settings()` retains one private source context for each structural selector
-set: `config_files`, `settings_class`, `env_prefix`, `secrets_dir`, and
-`secrets_provider`. It pins the selected source inputs and baseline resolved
+set: `config_files`, `settings_class`, `env_prefix`, `secrets_dir`, and the
+bound `secret_store`'s object identity. It pins the selected source inputs and baseline resolved
 references for that context. It does **not** retain a settings result or the
 runtime kwargs from the first caller.
 
