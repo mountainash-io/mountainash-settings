@@ -8,7 +8,7 @@ from upath import UPath
 
 from mountainash_settings import SettingsManager, MountainAshBaseSettings, SettingsParameters
 from mountainash_settings import get_settings
-from mountainash_settings.secrets import register_secrets_backend, clear_secrets_registry
+from mountainash_settings.secrets import SecretCapabilityError
 
 
 @pytest.fixture
@@ -308,11 +308,8 @@ class _TestBackend:
 
 @pytest.fixture
 def secrets_registry():
-    """Register a test backend and clean up after."""
-    clear_secrets_registry()
-    register_secrets_backend("test", _TestBackend())
-    yield
-    clear_secrets_registry()
+    """Provide a bindable test store for secret_store=."""
+    return _TestBackend()
 
 
 class _SecretsTestSettings(MountainAshBaseSettings):
@@ -330,7 +327,7 @@ class TestSecretsResolution:
         settings = _SecretsTestSettings(
             settings_parameters=SettingsParameters.create(
                 settings_class=_SecretsTestSettings,
-                secrets_provider="test",
+                secret_store=secrets_registry,
                 PASSWORD="secret:db.password",
             )
         )
@@ -340,7 +337,7 @@ class TestSecretsResolution:
         settings = _SecretsTestSettings(
             settings_parameters=SettingsParameters.create(
                 settings_class=_SecretsTestSettings,
-                secrets_provider="test",
+                secret_store=secrets_registry,
                 config_files=["tests/config/secrets_test.yaml"],
                 env_prefix="SECRETSTEST_",
             )
@@ -348,16 +345,16 @@ class TestSecretsResolution:
         assert settings.PASSWORD == "resolved_db/password"
         assert settings.USERNAME == "admin"
 
-    def test_no_provider_leaves_secret_prefix_as_literal(self):
-        settings = _SecretsTestSettings(PASSWORD="secret:db.password")
-        assert settings.PASSWORD == "secret:db.password"
+    def test_no_store_raises_capability_error(self):
+        with pytest.raises(SecretCapabilityError):
+            _SecretsTestSettings(PASSWORD="secret:db.password")
 
     def test_cache_hit_runtime_override_resolves_secret(
         self, secrets_registry, settings_manager
     ):
         params_base = SettingsParameters.create(
             settings_class=_SecretsTestSettings,
-            secrets_provider="test",
+            secret_store=secrets_registry,
             config_files=["tests/config/secrets_test.yaml"],
         )
 
@@ -381,7 +378,7 @@ class TestSecretsResolution:
         settings = _ContainerSecretsSettings(
             settings_parameters=SettingsParameters.create(
                 settings_class=_ContainerSecretsSettings,
-                secrets_provider="test",
+                secret_store=secrets_registry,
                 config_files=[config],
             )
         )
@@ -391,7 +388,7 @@ class TestSecretsResolution:
     def test_cache_hit_container_override_resolves(self, secrets_registry, settings_manager):
         params = SettingsParameters.create(
             settings_class=_ContainerSecretsSettings,
-            secrets_provider="test",
+            secret_store=secrets_registry,
         )
         get_settings(settings_parameters=params)
 
@@ -419,7 +416,7 @@ class TestSecretsResolution:
         settings = _NestedAuthSettings(
             settings_parameters=SettingsParameters.create(
                 settings_class=_NestedAuthSettings,
-                secrets_provider="test",
+                secret_store=secrets_registry,
                 config_files=["tests/config/nested_secrets_test.yaml"],
                 env_prefix="NESTEDSECTEST_",
             )
@@ -445,7 +442,7 @@ class TestSecretsResolution:
         settings = _NestedAuthSettings(
             settings_parameters=SettingsParameters.create(
                 settings_class=_NestedAuthSettings,
-                secrets_provider="test",
+                secret_store=secrets_registry,
                 auth={"kind": "password", "username": "admin", "password": "secret:db.password"},
             )
         )
