@@ -6,7 +6,8 @@ import typing as t
 from pydantic import AliasChoices, AliasPath, BaseModel, SecretStr
 from pydantic.fields import FieldInfo
 
-from mountainash_settings.secrets.backend import SecretsBackend
+from mountainash_settings.secrets.backend import SecretReader
+from mountainash_settings.secrets.errors import SecretCapabilityError, _raise_clean
 
 
 class _ValidationPathConflict(Exception):
@@ -18,14 +19,16 @@ _SETTINGS_SOURCE_PREFIX = "SETTINGS_SOURCE_"
 _SETTINGS_META_FIELDS = {"SETTINGS_CLASS", "SETTINGS_CLASS_NAME"}
 
 
-def _resolve_value(ref: str, backend: SecretsBackend) -> str:
+def _resolve_value(ref: str, store: "SecretReader | None") -> str:
     """Resolve a secret reference like 'container.field' or 'simple_key'.
 
-    For dotted refs: splits on the last dot, calls backend.get(key), plucks field.
-    For simple refs: calls backend.get(ref), returns the single value.
+    For dotted refs: splits on the last dot, calls store.get(key), plucks field.
+    For simple refs: calls store.get(ref), returns the single value.
     """
+    if store is None:
+        _raise_clean(SecretCapabilityError("No secret store selected"))
     if "." not in ref:
-        result = backend.get(ref)
+        result = store.get(ref)
         if result is None:
             raise KeyError(f"Secret not found: {ref!r}")
         if len(result) == 1:
@@ -35,7 +38,7 @@ def _resolve_value(ref: str, backend: SecretsBackend) -> str:
             f"Use a dotted reference like '{ref}.field_name'."
         )
     key, _, field = ref.rpartition(".")
-    result = backend.get(key)
+    result = store.get(key)
     if result is None:
         raise KeyError(f"Secret not found for key: {key!r}")
     if field not in result:
@@ -312,18 +315,18 @@ def _raise_sanitized_resolution_error(
 
 def _resolve_reference_value(
     value: t.Any,
-    backend: SecretsBackend,
+    store: "SecretReader | None",
     prefix: str,
 ) -> tuple[t.Any, bool]:
     if isinstance(value, SecretStr):
         raw = value.get_secret_value()
         if raw.startswith(prefix):
-            return SecretStr(_resolve_value(raw[len(prefix):], backend)), True
+            return SecretStr(_resolve_value(raw[len(prefix):], store)), True
         return value, False
 
     if isinstance(value, str):
         if value.startswith(prefix):
-            return _resolve_value(value[len(prefix):], backend), True
+            return _resolve_value(value[len(prefix):], store), True
         return value, False
 
     if isinstance(value, BaseModel):
@@ -332,7 +335,7 @@ def _resolve_reference_value(
         model_fields = list(type(value).model_fields.items())
         for field_name, _ in model_fields:
             resolved, field_changed = _resolve_reference_value(
-                getattr(value, field_name), backend, prefix
+                getattr(value, field_name), store, prefix
             )
             resolved_fields.append((field_name, resolved, field_changed))
             changed = changed or field_changed
@@ -374,7 +377,7 @@ def _resolve_reference_value(
         resolved_dict: dict[t.Any, t.Any] = {}
         changed = False
         for key, item in value.items():
-            resolved, item_changed = _resolve_reference_value(item, backend, prefix)
+            resolved, item_changed = _resolve_reference_value(item, store, prefix)
             resolved_dict[key] = resolved
             changed = changed or item_changed
         return resolved_dict, changed
@@ -383,7 +386,7 @@ def _resolve_reference_value(
         resolved_list: list[t.Any] = []
         changed = False
         for item in value:
-            resolved, item_changed = _resolve_reference_value(item, backend, prefix)
+            resolved, item_changed = _resolve_reference_value(item, store, prefix)
             resolved_list.append(resolved)
             changed = changed or item_changed
         return resolved_list, changed
@@ -392,7 +395,7 @@ def _resolve_reference_value(
         resolved_items: list[t.Any] = []
         changed = False
         for item in value:
-            resolved, item_changed = _resolve_reference_value(item, backend, prefix)
+            resolved, item_changed = _resolve_reference_value(item, store, prefix)
             resolved_items.append(resolved)
             changed = changed or item_changed
         return tuple(resolved_items), changed
@@ -402,23 +405,23 @@ def _resolve_reference_value(
 
 def resolve_references_in_dict(
     data: dict[str, t.Any],
-    backend: SecretsBackend,
+    store: "SecretReader | None",
     prefix: str = "secret:",
 ) -> dict[str, t.Any]:
-    resolved, _ = _resolve_reference_value(data, backend, prefix)
+    resolved, _ = _resolve_reference_value(data, store, prefix)
     return t.cast(dict[str, t.Any], resolved)
 
 
 def resolve_references_in_model_tree(
     instance: BaseModel,
-    backend: SecretsBackend,
+    store: "SecretReader | None",
     prefix: str = "secret:",
 ) -> None:
     for field_name in type(instance).model_fields:
         if field_name.startswith(_SETTINGS_SOURCE_PREFIX) or field_name in _SETTINGS_META_FIELDS:
             continue
         resolved, changed = _resolve_reference_value(
-            getattr(instance, field_name), backend, prefix
+            getattr(instance, field_name), store, prefix
         )
         if changed:
             assignment_failed = False
