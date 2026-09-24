@@ -18,14 +18,14 @@ This chapter covers the core MountainAshBaseSettings class that forms the heart 
 
 The `MountainAshBaseSettings` class is the single most important type in the framework. Every settings class you define -- whether for database connections, API clients, application configuration, or connection profiles -- inherits from this class. It extends Pydantic's `BaseSettings` with five capabilities that standard `BaseSettings` does not provide: multi-format file loading, template expansion, secrets resolution, a structured caching layer, and a unified parameter interface.
 
-Before construction even reaches Pydantic's `BaseSettings.__init__`, `MountainAshBaseSettings` performs extensive pre-processing: it creates a `SettingsParameters` object, separates config files by type, validates their existence, resolves secret references in kwargs, and configures the model's file sources. After construction completes, it records metadata for traceability and runs a post-init lifecycle hook.
+Before construction reaches Pydantic's `BaseSettings.__init__`, `MountainAshBaseSettings` creates and merges a `SettingsParameters` object, separates and validates config files, privately captures accepted attribute inputs in source form, resolves secret references for live validation, and configures the model's file sources. After construction completes, it records value-free source facts for diagnostics and runs a post-init lifecycle hook.
 
 <!-- concept:13 -->
 <!-- concept:14 -->
 <!-- concept:19 -->
 ## MountainAshBaseSettings Class
 
-The class inherits directly from `pydantic_settings.BaseSettings` and declares a set of meta-fields prefixed with `SETTINGS_SOURCE_` that record the provenance of every configuration value. These meta-fields enable debugging and traceability -- you can inspect any settings instance to determine exactly which files, environment prefix, and kwargs were used to construct it.
+The class declares `SETTINGS_SOURCE_` meta-fields that record value-free provenance such as files, environment prefix, provider, and accepted input names. These fields support diagnostics without publishing a second tree of constructor values.
 
 The constructor signature accepts three positional-style parameters beyond the standard `**kwargs`:
 
@@ -51,7 +51,7 @@ settings = MyAppSettings(
 )
 ```
 
-The class also provides a `get_settings()` class method that integrates with the caching layer, and an `extract_settings_parameters()` instance method that reconstructs the `SettingsParameters` used to build the instance -- enabling round-trip parameter extraction for replication or debugging.
+The class also provides a `get_settings()` class method that integrates with the caching layer, and an `extract_settings_parameters()` instance method that returns a fresh, source-form reconstruction handle for trusted code. It is not a general diagnostics export and performs no source or backend reads.
 
 #### Diagram: MountainAshBaseSettings Construction Pipeline
 
@@ -63,7 +63,7 @@ Type: workflow
 **Library:** vis-network<br/>
 **Status:** Specified
 
-A directed graph showing the construction pipeline: input (config_files, settings_parameters, kwargs) flows through SettingsParameters.create(), merge(), FileHandler.separate_config_files(), validate_config_files_exist(), resolve_references_in_dict(), super().__init__(), object.__setattr__ (meta-fields), resolve_references_in_model_tree(), and finally post_init(). Each node is clickable to show what happens at that stage. Edges are labeled with the data flowing between stages. Learning objective: Trace the complete construction pipeline of a MountainAshBaseSettings instance (Bloom: Analyze).
+A directed graph showing the construction pipeline: input (config_files, settings_parameters, kwargs) flows through `SettingsParameters.create()`, `merge()`, `FileHandler.separate_config_files()`, `validate_config_files_exist()`, private source-form capture, `resolve_references_in_dict()`, `super().__init__()`, value-free metadata publication, `resolve_references_in_model_tree()`, and finally `post_init()`. Each node is clickable to show what happens at that stage. Edges are labeled with the data flowing between stages. Learning objective: Trace the complete construction pipeline of a `MountainAshBaseSettings` instance (Bloom: Analyze).
 </details>
 
 ## Settings Model Config
@@ -99,15 +99,17 @@ The base implementation of `post_init()` in `MountainAshBaseSettings` is intenti
 
 The lifecycle ordering is critical:
 
-1. `SettingsParameters` are created and merged
-2. Config files are separated and validated
-3. Secret references in kwargs are resolved (first pass)
-4. `BaseSettings.__init__` runs (loads env vars, files, applies kwargs)
-5. Meta-fields are recorded via `object.__setattr__`
-6. Secret references in the model tree are resolved (second pass)
-7. `post_init()` runs -- templates expand here
+1. `SettingsParameters` are created and merged.
+2. Config files are separated and validated.
+3. Accepted attribute inputs are captured privately in source form.
+4. Secret references in the validation kwargs are resolved (first pass).
+5. `BaseSettings.__init__` runs (loads env vars, files, applies kwargs).
+6. Value-free source facts and accepted input names are published; the reconstruction recipe remains private.
+7. Secret references in the model tree are resolved (second pass).
+8. `post_init()` runs — templates expand here.
 
-This ordering guarantees that when `post_init()` executes, all field values from all sources are available for template interpolation. A template like `"{RUNDATE}T{RUNTIME}"` can safely reference both fields because they were populated in step 4.
+This ordering keeps a backend reference out of public provenance while preserving it for controlled reconstruction. When `post_init()` executes, all live field values from all sources are available for template interpolation. A template like `"{RUNDATE}T{RUNTIME}"` can safely reference both fields because they were populated in step 5.
+
 
 <!-- concept:16 -->
 ## Source Customization
@@ -173,12 +175,12 @@ The **object setattr bypass** is a deliberate exception to the validate_assignme
 
 ```python
 # These assignments bypass validation intentionally:
-object.__setattr__(self, "SETTINGS_SOURCE_KWARGS", valid_attribute_kwargs)
+object.__setattr__(self, "SETTINGS_SOURCE_KWARG_NAMES", accepted_input_names)
 object.__setattr__(self, "SETTINGS_CLASS", local_settings_params.settings_class)
 object.__setattr__(self, "SETTINGS_CLASS_NAME", ...)
 ```
 
-The bypass exists for two reasons. First, meta-fields contain internal bookkeeping data (class references, file lists) that is not user-facing configuration and should not pass through field validators designed for domain values. Second, the bypass also skips `__pydantic_fields_set__` tracking, which means meta-fields do not appear in `model_dump(exclude_unset=True)` -- they are infrastructure, not model state.
+The bypass exists for two reasons. First, meta-fields contain framework bookkeeping (class references, file lists, and accepted input names) that is not user-facing configuration and should not pass through field validators designed for domain values. Second, the bypass skips `__pydantic_fields_set__` tracking, keeping this bookkeeping separate from domain-field assignment. The source-form reconstruction recipe is private and is never assigned to a public meta-field.
 
 !!! warning "When to use object.__setattr__"
     The bypass pattern should only be used for framework-internal bookkeeping fields. User-facing configuration fields must always go through normal assignment to maintain the validate_assignment invariant. Misusing the bypass on domain fields would silently break type safety.
@@ -278,20 +280,25 @@ A directed graph showing how a list of mixed config files flows through the proc
 
 ## Meta-Field Traceability
 
-After construction completes, the instance carries a full record of how it was built. These meta-fields are invaluable for debugging configuration issues in production:
+After construction completes, the instance carries value-free source facts that help diagnose configuration setup:
 
-- `SETTINGS_CLASS` -- the Python class used for construction
-- `SETTINGS_CLASS_NAME` -- the class name as a string
-- `SETTINGS_SOURCE_ENV_FILES` -- which `.env` files were loaded
-- `SETTINGS_SOURCE_ENV_PREFIX` -- the environment variable prefix applied
-- `SETTINGS_SOURCE_YAML_FILES` -- which YAML files were loaded
-- `SETTINGS_SOURCE_TOML_FILES` -- which TOML files were loaded
-- `SETTINGS_SOURCE_JSON_FILES` -- which JSON files were loaded
-- `SETTINGS_SOURCE_KWARGS` -- the attribute kwargs that were applied
-- `SETTINGS_SOURCE_SECRETS_DIR` -- the secrets directory path
-- `SETTINGS_SOURCE_SECRETS_PROVIDER` -- the registered secrets provider name
+- `SETTINGS_CLASS` — the Python class used for construction
+- `SETTINGS_CLASS_NAME` — the class name as a string
+- `SETTINGS_SOURCE_ENV_FILES` — which `.env` files were loaded
+- `SETTINGS_SOURCE_ENV_PREFIX` — the environment variable prefix applied
+- `SETTINGS_SOURCE_YAML_FILES` — which YAML files were loaded
+- `SETTINGS_SOURCE_TOML_FILES` — which TOML files were loaded
+- `SETTINGS_SOURCE_JSON_FILES` — which JSON files were loaded
+- `SETTINGS_SOURCE_KWARG_NAMES` — accepted attribute-input names, in deterministic order
+- `SETTINGS_SOURCE_SECRETS_DIR` — the secrets directory path
+- `SETTINGS_SOURCE_SECRETS_PROVIDER` — the registered secrets provider name
 
-Because these fields are set via `object.__setattr__`, they do not appear in `model_fields_set` and are excluded from `model_dump(exclude_unset=True)`. This means serializing a settings instance for API responses or logs produces only the domain fields, while the meta-fields remain accessible for infrastructure tooling.
+`SETTINGS_SOURCE_KWARGS` no longer exists and has no replacement raw-value
+field. Source facts may appear in normal diagnostics because they contain no
+constructor value tree. Domain fields remain intentional model data: use
+`SecretStr` for Pydantic's normal masking, and do not treat `model_dump()` as
+an arbitrary-secret redactor. Code that deliberately needs reconstruction can
+call `extract_settings_parameters()` in a trusted context.
 
 #### Diagram: MountainAshBaseSettings Class Structure
 

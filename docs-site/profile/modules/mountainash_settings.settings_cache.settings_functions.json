@@ -1,7 +1,7 @@
 {
   "id": "mountainash_settings.settings_cache.settings_functions",
   "path": "src/mountainash_settings/settings_cache/settings_functions.py",
-  "summary": "Public entry-point functions for retrieving cached settings instances. get_settings() is the primary interface — it normalises inputs into a SettingsParameters, retrieves or creates a cached instance via _get_settings() (LRU-cached), then applies runtime overrides. get_settings_manager() returns the SettingsManager singleton.",
+  "summary": "Public retrieval normalizes SettingsParameters, selects the singleton manager's private structural context, and returns a fresh owned complete-invocation materialization. Runtime values do not enter retained baseline state.",
   "role": "public-api",
   "visibility": "public",
   "stability": "stable",
@@ -15,8 +15,7 @@
   "key_classes": [],
   "key_functions": [
     "get_settings",
-    "get_settings_manager",
-    "_get_settings"
+    "get_settings_manager"
   ],
   "dependencies": [
     "mountainash_settings.settings_parameters.settings_parameters",
@@ -28,12 +27,12 @@
   ],
   "extension_points": [],
   "lifecycle_notes": [
-    "_get_settings() is @lru_cache(maxsize=None) — unbounded cache keyed on SettingsParameters structural hash",
-    "get_settings_manager() is also @lru_cache — returns a process-wide singleton SettingsManager",
-    "Runtime kwargs are applied after cache retrieval via apply_runtime_overrides(), never polluting the cached instance"
+    "get_settings_manager() is cached only as a process-wide SettingsManager factory",
+    "get_settings() routes structural selectors and runtime fields through one context materialization path",
+    "reinitialise is keyword-only operation control rather than source reload, refresh, or structural identity"
   ],
   "documentation_hooks": [
-    "Two-level caching: lru_cache on _get_settings() for structural identity; SettingsManager dict as secondary store",
+    "One private structural context captures ordered source state per five-selector identity",
     "get_settings() accepts either a pre-built SettingsParameters or individual keyword arguments"
   ],
   "examples": [
@@ -44,7 +43,7 @@
     "tests/test_settings_manager.py"
   ],
   "risks": [
-    "lru_cache is process-global and never cleared — in long-running processes, settings changes (e.g. env var mutation) will not be picked up after first load"
+    "Captured source inputs remain pinned until separately approved lifecycle refresh work"
   ],
   "open_questions": [],
   "evidence": [

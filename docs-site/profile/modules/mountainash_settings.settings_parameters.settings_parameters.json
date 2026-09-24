@@ -1,7 +1,7 @@
 {
   "id": "mountainash_settings.settings_parameters.settings_parameters",
   "path": "src/mountainash_settings/settings_parameters/settings_parameters.py",
-  "summary": "SettingsParameters is a frozen dataclass capturing all inputs needed to create a settings instance: config files, settings class, env prefix, secrets dir, secrets provider, and runtime kwargs. Its custom __hash__/__eq__ exclude kwargs, enabling LRU-cache reuse when only runtime overrides differ. merge() combines two instances with configurable precedence.",
+  "summary": "SettingsParameters is a frozen dataclass capturing five structural selectors and invocation-local runtime kwargs. Its custom __hash__/__eq__ exclude kwargs so equal selectors reuse pinned source state, while each retrieval materializes a fresh owned result. Ordinary repr omits kwargs while explicit access and serialization remain trusted operations. merge() combines two instances with configurable precedence.",
   "role": "public-api",
   "visibility": "public",
   "stability": "stable",
@@ -13,7 +13,6 @@
     "SettingsParameters.create",
     "SettingsParameters.merge",
     "SettingsParameters.get_settings",
-    "SettingsParameters.apply_runtime_overrides",
     "SettingsParameters.get_attribute_settings_kwargs",
     "SettingsParameters.get_pydantic_settings_kwargs",
     "SettingsParameters.get_pydantic_modelconfig_kwargs",
@@ -25,7 +24,7 @@
   "key_functions": [
     "SettingsParameters.create",
     "SettingsParameters.merge",
-    "SettingsParameters.apply_runtime_overrides"
+    "SettingsParameters.get_settings"
   ],
   "dependencies": [
     "mountainash_settings.settings_parameters.filehandler",
@@ -40,10 +39,11 @@
   "lifecycle_notes": [
     "frozen=True — SettingsParameters instances are immutable after creation",
     "Structural parameters (config_files, settings_class, env_prefix, secrets_dir, secrets_provider) determine hash identity; kwargs are excluded",
+    "kwargs is repr=False; that diagnostic boundary does not make explicit serialization or direct access safe for untrusted output",
     "merge() combines config_files by union+dedup; scalars by last-wins (or first if prioritise_base=True); kwargs by dict merge"
   ],
   "documentation_hooks": [
-    "Caching split: structural params → LRU cache key; runtime kwargs → applied post-cache via apply_runtime_overrides()",
+    "Caching split: structural selectors identify a private source context; runtime inputs validate per invocation",
     "merge() raises ValueError if both SettingsParameters specify different settings_class values"
   ],
   "examples": [

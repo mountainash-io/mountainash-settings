@@ -1,16 +1,12 @@
 from __future__ import annotations
 
+from enum import Enum
+
 import pytest
 from pydantic import AliasChoices, BaseModel, Field
-from pydantic_settings import (
-    DotEnvSettingsSource,
-    EnvSettingsSource,
-    InitSettingsSource,
-    SecretsSettingsSource,
-    SettingsConfigDict,
-)
+from pydantic_settings import SettingsConfigDict
 
-from mountainash_settings import MountainAshBaseSettings, SettingsParameters
+from mountainash_settings import MountainAshBaseSettings, SettingsManager, SettingsParameters
 
 
 class _DotenvSettings(MountainAshBaseSettings):
@@ -33,6 +29,18 @@ class _NestedValues(BaseModel):
 class _NestedDotenvSettings(MountainAshBaseSettings):
     model_config = SettingsConfigDict(env_nested_delimiter="__")
     NESTED: _NestedValues
+
+
+class _ParsingMode(Enum):
+    DEV = "development"
+    PROD = "production"
+
+
+class _ParsingSettings(MountainAshBaseSettings):
+    CASE: str = "default"
+    EMPTY: str = "fallback"
+    NULL: str | None = "present"
+    MODE: _ParsingMode = _ParsingMode.DEV
 
 
 def _load(settings_class, env_file, *, env_prefix="PREFIX_"):
@@ -79,33 +87,59 @@ def test_nested_delimiter_merges_prefixed_and_fallback_values(tmp_path):
     )
 
 
-@pytest.mark.parametrize("filtering", [None, "only_existing", "match_prefix"])
-def test_fallback_copies_filtering_and_shared_state(tmp_path, filtering):
-    env_file = tmp_path / "filtering.env"
-    env_file.write_text('VALUE="fallback"\n')
+def test_cached_sources_preserve_mountainash_environment_parsing(monkeypatch):
+    monkeypatch.delenv("MAS002_CASE", raising=False)
+    monkeypatch.setenv("mas002_case", "lowercase")
+    monkeypatch.setenv("MAS002_EMPTY", "")
+    monkeypatch.setenv("MAS002_NULL", "None")
+    monkeypatch.setenv("MAS002_MODE", "PROD")
+    settings = SettingsManager().get_or_create_settings(
+        SettingsParameters.create(settings_class=_ParsingSettings, env_prefix="MAS002_"),
+    )
+    assert (settings.CASE, settings.EMPTY, settings.NULL, settings.MODE) == (
+        "default", "fallback", None, _ParsingMode.PROD,
+    )
 
+
+def test_cached_dotenv_filtering_ignores_unrelated_values(tmp_path):
     class _FilteringSettings(_DotenvSettings):
-        pass
+        model_config = SettingsConfigDict(extra="forbid", dotenv_filtering="only_existing")
 
-    init = InitSettingsSource(_FilteringSettings, {})
-    env = EnvSettingsSource(_FilteringSettings, env_prefix="PREFIX_")
-    dotenv = DotEnvSettingsSource(
-        _FilteringSettings,
-        env_file=env_file,
-        env_prefix="PREFIX_",
-        dotenv_filtering=filtering,
+    env_file = tmp_path / "filtering.env"
+    env_file.write_text("VALUE=fallback\nUNRELATED=ignored\n")
+    settings = SettingsManager().get_or_create_settings(
+        SettingsParameters.create(
+            settings_class=_FilteringSettings, config_files=[env_file], env_prefix="PREFIX_",
+        ),
     )
-    secrets = SecretsSettingsSource(_FilteringSettings)
+    assert settings.VALUE == "fallback"
 
-    sources = _FilteringSettings.settings_customise_sources(
-        _FilteringSettings,
-        init,
-        env,
-        dotenv,
-        secrets,
-    )
-    fallback = sources[3]
 
-    assert isinstance(fallback, DotEnvSettingsSource)
-    assert fallback.dotenv_filtering == filtering
-    assert fallback._init_state is dotenv._init_state
+def test_cached_enum_with_mutable_value_is_rejected():
+    class MutableMode(Enum):
+        SELECTED = ["enum-private-canary"]
+
+    class EnumSettings(MountainAshBaseSettings):
+        MODE: MutableMode = MutableMode.SELECTED
+
+    assert EnumSettings().MODE is MutableMode.SELECTED
+    with pytest.raises(ValueError) as error:
+        SettingsManager().get_or_create_settings(SettingsParameters.create(settings_class=EnumSettings))
+    assert "enum-private-canary" not in str(error.value)
+
+
+def test_cached_enum_with_mutable_slots_is_rejected():
+    class SlottedMode(Enum):
+        __slots__ = ("payload",)
+        SELECTED = "selected"
+
+        def __init__(self, value):
+            self.payload = ["enum-slot-private-canary"]
+
+    class EnumSettings(MountainAshBaseSettings):
+        MODE: SlottedMode = SlottedMode.SELECTED
+
+    assert EnumSettings().MODE is SlottedMode.SELECTED
+    with pytest.raises(ValueError) as error:
+        SettingsManager().get_or_create_settings(SettingsParameters.create(settings_class=EnumSettings))
+    assert "enum-slot-private-canary" not in str(error.value)

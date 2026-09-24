@@ -40,13 +40,21 @@ Subclass `MountainAshBaseSettings` to declare your application's configuration a
 
 Use `{FIELD_NAME}` syntax in default values to build fields that derive their value from other settings. Combined with the UPath operator, this makes cross-platform path construction straightforward and declarative. Connection strings build themselves from host, port, and database fields. Log file paths compose from application name and run date. The derivation is always visible in the class definition.
 
-### Cached Settings Instances
+### Cached Settings Retrieval
 
-Call `get_settings()` to retrieve a cached, ready-to-use settings instance. Structural parameters (files, env prefix) determine the cache key, while runtime parameters (per-call overrides) are applied on top of the cached base. This keeps startup fast and memory efficient. `SettingsParameters.create()` and `merge()` combine multiple configuration sources with predictable priority: file lists are unioned, scalar values follow last-wins, and dictionaries are deep-merged.
+`get_settings()` identifies a private source context from the five structural
+selectors and materializes a fresh, independently owned result for every
+caller. Selected source inputs and their prevalidation-resolved baseline
+references are pinned per context; runtime fields and explicit runtime secret
+references are invocation-local. Defaults and default factories remain
+Pydantic behavior evaluated per materialization. This does not claim the
+later Profile origin/template integration (MAS-SEC-005), direct-constructor
+source isolation (MAS-SEC-004), common errors (MAS-SEC-006), or lifecycle
+refresh work.
 
 ### Secrets Resolution
 
-Register a secrets provider (Vault, SSM, KeyVault, or your own) and reference secrets in config files or kwargs with the `secret:path/to/value` prefix. The framework resolves secrets transparently during settings construction in a two-pass pipeline -- first on raw kwargs before `__init__`, then on loaded config fields after construction. Your application code works with plain typed values while credentials stay masked in logs and repr output via SecretStr.
+Register a secrets provider (Vault, SSM, KeyVault, or your own) and reference secrets in config files or kwargs with the `secret:path/to/value` prefix. The framework captures accepted kwargs privately in source form before resolving a working validation copy, then resolves loaded config fields after construction. Your application code works with plain typed values while credentials stay masked in logs and repr output via SecretStr; source-form extraction is a separate trusted reconstruction capability.
 
 ### Connection Profiles
 
@@ -58,7 +66,14 @@ Choose from built-in auth modes including password, token, OAuth2, IAM, service 
 
 ## Architecture
 
-The settings framework is built on a two-level caching architecture. An `lru_cache` on `_get_settings()` provides fast, process-global memoisation keyed by structural parameters (files, env prefix). A secondary `SettingsManager` dictionary store handles named lookups. Runtime overrides return a `model_copy()`, ensuring the cached base instance is never mutated. All attribute assignment triggers Pydantic validation including SecretStr wrapping, enum coercion, and AfterValidator hooks.
+Cached retrieval uses one private structural-context owner, not `_get_settings`
+or a public result dictionary. It captures source state once and validates each
+complete invocation before returning an owned object graph. Cacheable custom
+sources must opt into capture/project; legacy source hooks must explicitly
+adapt through `settings_capture_sources`, while unsupported cached hooks and
+plain `BaseSettings` custom constructors fail before reads. Ordinary direct
+construction remains unchanged. `reinitialise` is cached-retrieval operation
+control, not source reload or refresh.
 
 Connection profiles use dynamic Pydantic field installation at class creation time. `__pydantic_init_subclass__` fires and installs fields from the profile descriptor into `model_fields` and `__annotations__`, followed by a `model_rebuild(force=True)` to finalise the updated schema. The auth discriminated union is assembled dynamically from the descriptor's auth_modes list. Config files are dispatched by extension into categorised groups, and the appropriate source priority tuple layers values predictably.
 
@@ -72,8 +87,14 @@ Contributions welcome. The project uses hatch for environment management with pr
 
 ## Maintaining
 
-The two-level caching architecture requires care around concurrency. `model_config` mutation before `super().__init__()` operates at the class level, so concurrent first-construction of different file sets on the same class should be serialised. The `SettingsManager` dictionary is similarly designed for single-threaded first-creation.
+Cached contexts coordinate first source capture without retaining first-call
+runtime values or returned settings instances. A later same-context request
+uses the captured source baseline even if the external file is gone; a fresh
+result still validates defaults, runtime fields, and post-init state for that
+request. `CacheableSettingsSource.capture()` may perform the one external
+capture; `project(snapshot, current_state, sources_data)` must be pure and
+return terminal values. Do not treat its results as new source references.
 
-Dynamic field installation via `model_rebuild()` should be verified after Pydantic version upgrades, as it depends on internal Pydantic class-creation machinery. The `validate_assignment=True` invariant means all attribute assignment triggers full validation; internal metadata fields use `object.__setattr__` to bypass revalidation and avoid polluting `model_fields_set`.
-
-Secrets resolution runs in two passes during `__init__`: first on raw kwargs via `resolve_references_in_dict` before `super().__init__()`, then on loaded config fields via `resolve_references_in_model_tree` after construction. Nested BaseModel fields are rebuilt as fresh instances to respect the `frozen=True` constraint. When debugging secrets issues, trace through both passes to identify where resolution is failing.
+The profile-specific template/origin lifecycle, direct source framing,
+common error API, and refresh/rotation behavior remain the separately ordered
+MAS-SEC-005, MAS-SEC-004, MAS-SEC-006, and lifecycle work.

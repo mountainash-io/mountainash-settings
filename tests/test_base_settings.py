@@ -7,15 +7,18 @@ from pytest_check import check
 from upath import UPath
 
 from mountainash_settings import SettingsManager, MountainAshBaseSettings, SettingsParameters
-from mountainash_settings import get_settings_manager, get_settings
+from mountainash_settings import get_settings
 from mountainash_settings.secrets import register_secrets_backend, clear_secrets_registry
 
 
 @pytest.fixture
-def settings_manager() -> SettingsManager:
-    settings_manager: SettingsManager = get_settings_manager()
-    # settings_manager: SettingsManager = SettingsManager()
-    return settings_manager
+def settings_manager(monkeypatch) -> SettingsManager:
+    manager = SettingsManager()
+    monkeypatch.setattr(
+        "mountainash_settings.settings_cache.settings_functions.get_settings_manager",
+        lambda: manager,
+    )
+    return manager
 
 ##############
 # Test Settings Class
@@ -61,10 +64,6 @@ def get_test_settings(settings_parameters: SettingsParameters,
 # TESTS #
 
 
-def test_init_sets_kwargs():
-    kwargs: dict[str, Any] = {"TEST_VAL_1": "value1", "TEST_VAL_2": "value2"}
-    settings = TestSettings(**kwargs)
-    assert settings.SETTINGS_SOURCE_KWARGS == kwargs
 
 
 def test_init_sets_env_file():
@@ -353,30 +352,24 @@ class TestSecretsResolution:
         settings = _SecretsTestSettings(PASSWORD="secret:db.password")
         assert settings.PASSWORD == "secret:db.password"
 
-    def test_cache_hit_runtime_override_resolves_secret(self, secrets_registry):
-        from mountainash_settings.settings_cache.settings_functions import _get_settings
-
+    def test_cache_hit_runtime_override_resolves_secret(
+        self, secrets_registry, settings_manager
+    ):
         params_base = SettingsParameters.create(
             settings_class=_SecretsTestSettings,
             secrets_provider="test",
             config_files=["tests/config/secrets_test.yaml"],
         )
 
-        # First call — constructs and caches
         settings1 = get_settings(settings_parameters=params_base)
         assert settings1.PASSWORD == "resolved_db/password"
 
-        # Second call — cache hit with runtime override containing a secret ref
         settings2 = get_settings(
             settings_parameters=params_base,
             PASSWORD="secret:other.password",
         )
         assert settings2.PASSWORD == "resolved_other/password"
-        # Original cached instance untouched
         assert settings1.PASSWORD == "resolved_db/password"
-
-        # Cleanup: clear the lru_cache entry we just created
-        _get_settings.cache_clear()
 
     def test_config_file_container_secrets_resolve(self, secrets_registry, tmp_path):
         config = tmp_path / "containers.toml"
@@ -395,9 +388,7 @@ class TestSecretsResolution:
         assert settings.CONNECTION == {"password": "resolved_db/password"}
         assert settings.ENDPOINTS == ["resolved_api/token"]
 
-    def test_cache_hit_container_override_resolves(self, secrets_registry):
-        from mountainash_settings.settings_cache.settings_functions import _get_settings
-
+    def test_cache_hit_container_override_resolves(self, secrets_registry, settings_manager):
         params = SettingsParameters.create(
             settings_class=_ContainerSecretsSettings,
             secrets_provider="test",
@@ -410,7 +401,6 @@ class TestSecretsResolution:
         )
 
         assert overridden.CONNECTION == {"password": "resolved_other/password"}
-        _get_settings.cache_clear()
 
     def test_nested_frozen_model_secret_resolved_from_yaml(self, secrets_registry):
         from pydantic import BaseModel, ConfigDict, SecretStr

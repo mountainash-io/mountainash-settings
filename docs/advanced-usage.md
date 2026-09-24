@@ -105,23 +105,52 @@ locked = SettingsParameters.merge(compliance_base, caller_params, prioritise_bas
 # locked.kwargs["TENANT_ID"] == "acme"  (new key, always merged)
 ```
 
-### Extracting parameters from a live instance
+### Controlled reconstruction from a live instance
 
-A settings instance records the parameters it was created with. Use `extract_settings_parameters()` to reconstruct a `SettingsParameters` that can be merged, extended, or passed elsewhere:
+`extract_settings_parameters()` is a controlled reconstruction capability, not a
+general diagnostics dump. It returns the structural selectors together with a
+fresh, independently owned tree of the accepted constructor and successful
+update inputs in their original source form. For example, a
+`secret:record.field` input remains a reference in the extracted kwargs rather
+than a copied backend result. Extraction itself does not reread files,
+environment variables, or secret backends.
+
+Use `SETTINGS_SOURCE_KWARG_NAMES` when diagnostic code needs to know which
+attribute inputs were accepted. It exposes names only. The removed
+`SETTINGS_SOURCE_KWARGS` field has no compatibility alias: migrate diagnostic
+uses to the names tuple, and use extraction only where reconstruction inputs
+are intentionally needed.
 
 ```python
 settings = AppSettings(config_files=["config/production.yaml"], TENANT_ID="acme")
 
-# Reconstruct — reflects config files, env prefix, env files, kwargs
+# Trusted reconstruction — params.kwargs contains the source-form values.
 params = settings.extract_settings_parameters()
+assert settings.SETTINGS_SOURCE_KWARG_NAMES == ("TENANT_ID",)
 
-# Extend it
+# Extend the reconstruction input deliberately.
 extended = SettingsParameters.merge(
     params,
     SettingsParameters.create(settings_class=AppSettings, LOG_LEVEL="WARNING"),
 )
 new_settings = get_settings(settings_parameters=extended)
 ```
+
+Successful `update_settings_from_dict()` and `persist()` calls preserve
+untouched accepted inputs and replace only the supplied logical fields in the
+reconstruction recipe. A dict-valued field is replaced as a field, not
+recursively merged. Existing partial-assignment behavior is unchanged: a
+failed update does not roll back assignments that already succeeded, and it
+does not publish failed or resolved input provenance. A persistence failure
+after its backend write is not an atomic transaction.
+
+The ordinary `repr()` of `SettingsParameters` omits `kwargs`, but that is a
+safe-default diagnostic boundary, not a serialization guarantee. Explicit
+`params.kwargs`, `to_dict()`, `dataclasses.asdict()`, pickle, debugger
+inspection, and other intentional serialization or inspection can expose
+caller-supplied values. Keep those operations in trusted code paths.
+
+If an otherwise valid supplied value cannot be faithfully represented in, and independently owned by, the reconstruction recipe, construction and updates retain their normal behavior, but extraction raises a value-free `TypeError`. This includes an update whose accepted alias/path would make faithful reconstruction change an independently supplied sibling. It does not return a partial recipe, alter another field to invent a representation, or use a shared input tree.
 
 ### Service registry pattern
 
@@ -150,6 +179,105 @@ def get_service(name: str, **runtime_overrides):
         )
     return get_settings(settings_parameters=base)
 ```
+
+## Cache contexts and runtime materialization
+
+`get_settings()` retains one private source context for each structural selector
+set: `config_files`, `settings_class`, `env_prefix`, `secrets_dir`, and
+`secrets_provider`. It pins the selected source inputs and baseline resolved
+references for that context. It does **not** retain a settings result or the
+runtime kwargs from the first caller.
+
+Every cached retrieval materializes a fresh, independently owned settings
+object. Runtime fields are validated together with the pinned source inputs;
+a caller's mutable field, extra value, private attribute, or non-field state
+cannot become another caller's state. Missing source fields are left absent
+from the retained candidate, so Pydantic evaluates defaults and default
+factories for each materialization with the class's normal validation policy.
+
+Cached results support ordinary containers, Pydantic models, secret wrappers,
+and local paths through the same ownership policy as reconstruction. Standard
+enum members are shared schema identities only when their values are exact
+immutable scalars (or tuples/frozensets of them) and they have no custom member
+state or slots. Opaque resources, cycles, and mutable enum state are rejected
+without falling back to another source read.
+
+Generic cached `post_init` hooks must assign declared fields through normal
+validated assignment. In-place or `object.__setattr__` changes that bypass
+that assignment origin are rejected. Only successful source-only calls with
+`reinitialise=False` may establish raw derived carry; rejected assignments and
+runtime calls never become that carry. Current explicit runtime fields win.
+Default-factory outputs remain per-invocation; their secret-reference
+interpretation is a separate compatibility backlog, not certified here.
+
+References read from a selected source are resolved before final validation
+and retained as the context's baseline value tree. An explicit runtime
+`secret:` reference is instead resolved once for that invocation, even when
+its text matches the baseline reference. Runtime values never replace the
+baseline. Projected source values are terminal values: the cache does not
+interpret a projector result that merely looks like a `secret:` reference.
+
+`reinitialise` is a keyword-only cached-retrieval operation control:
+
+```python
+settings = get_settings(
+    settings_class=AppSettings,
+    config_files="config/production.yaml",
+    HOST="alternate.example",
+    reinitialise=True,
+)
+```
+
+It is neither a source reload nor a cache refresh and is not part of
+structural identity. The later Profile origin/template integration is
+MAS-SEC-005 work; this control does not claim that integration here. Source
+control/direct-constructor framing remains MAS-SEC-004, shared cached error
+handling remains MAS-SEC-006, and provider/context refresh belongs to the
+separate lifecycle work.
+
+### Cacheable custom sources
+
+Cached retrieval supports custom external sources only through the explicit
+`CacheableSettingsSource` contract exported from the package root:
+
+`CacheableSettingsSource` still has the ordinary
+`PydanticBaseSettingsSource` requirements. Implement its normal source methods
+as appropriate for direct construction in addition to `capture()` and
+`project()`.
+
+```python
+from mountainash_settings import CacheableSettingsSource
+
+class InventorySource(CacheableSettingsSource):
+    def capture(self) -> dict:
+        """Read external state once and return an independently ownable snapshot."""
+
+    @staticmethod
+    def project(snapshot, current_state, sources_data) -> dict:
+        """Return pure terminal candidate values; perform no external I/O."""
+```
+
+The settings class selects participating cache sources with the cache-only
+hook `settings_capture_sources(sources)`. Its argument and result are ordered
+source tuples, so a class can retain the configured built-ins and replace or
+add only sources that implement capture/project:
+
+```python
+@classmethod
+def settings_capture_sources(cls, sources):
+    return sources
+```
+
+This hook is separate from the direct-construction
+`settings_customise_sources` hook. A class that overrides the legacy hook
+must explicitly adapt it for cached retrieval; otherwise cached retrieval
+fails before source reads. Ordinary direct construction retains its existing
+semantics. Standard plain `BaseSettings` classes whose constructor is the
+inherited `BaseSettings.__init__` remain supported by cached retrieval.
+Plain subclasses with a custom constructor are rejected by cached retrieval
+before reads; direct construction remains available, and
+`MountainAshBaseSettings` supplies the supported cached custom-constructor
+path.
 
 ## Container secret references
 
@@ -449,7 +577,7 @@ def get_service_settings(name: str, **overrides) -> MountainAshBaseSettings:
     return get_settings(settings_parameters=base)
 ```
 
-Callers register their settings classes once; `get_service_settings()` resolves and caches them without needing to know the concrete type.
+Callers register their settings classes once; `get_service_settings()` selects pinned source state and materializes the concrete type without callers needing to name it.
 
 ### Multi-tenant configuration
 
@@ -463,24 +591,30 @@ def build_tenant_params(tenant_id: str) -> SettingsParameters:
         env_prefix=f"{tenant_id.upper()}_",
     )
 
-# Called once per tenant — subsequent calls hit the LRU cache
-settings_acme  = get_settings(settings_parameters=build_tenant_params("acme"))
+# Called once per tenant to capture that tenant's source context; later calls
+# reuse the pinned source baseline and materialize fresh owned results.
+settings_acme = get_settings(settings_parameters=build_tenant_params("acme"))
 settings_globex = get_settings(settings_parameters=build_tenant_params("globex"))
 ```
 
 ### Caching guarantees
 
-- `get_settings()` returns the **same instance** for the same structural parameters (config files, settings class, env prefix, secrets dir, secrets provider). The cache is `lru_cache(maxsize=None)` — unbounded, process-global.
-- **Runtime kwargs do not affect the cache key.** Two calls with the same structure but different kwargs share a cached base; each gets a `model_copy()` with its own overrides applied.
-- The cache is **never cleared** during normal operation. In long-running processes, settings loaded at startup will not pick up subsequent changes to environment variables or config files. If you need cache invalidation, restart the process or use a new `SettingsParameters` object with a different structural identity.
+- `get_settings()` selects one private source context for the five structural
+  selectors (config files, settings class, env prefix, secrets dir, and
+  secrets provider). It returns a fresh independently owned result for every
+  retrieval.
+- **Runtime kwargs do not affect structural identity.** They are
+  invocation-local complete-validation inputs and never become retained
+  baseline state.
+- Selected source inputs remain pinned for a context. Normal retrieval does
+  not clear, refresh, or reread them; a new structural context may capture its
+  own source state. Context/provider refresh is separate lifecycle work.
 
 ```python
-# These two calls share the same cached base instance:
+# These calls share pinned source state, not a returned settings instance:
 s1 = get_settings(settings_class=AppSettings, config_files=["cfg.yaml"], LOG_LEVEL="DEBUG")
 s2 = get_settings(settings_class=AppSettings, config_files=["cfg.yaml"], LOG_LEVEL="WARNING")
 
-# s1 and s2 are different objects (model_copy), but the underlying loaded
-# config was only read from disk once.
 assert s1.LOG_LEVEL == "DEBUG"
 assert s2.LOG_LEVEL == "WARNING"
 ```
