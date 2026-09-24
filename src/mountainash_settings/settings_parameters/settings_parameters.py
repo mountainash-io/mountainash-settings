@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from typing import Optional, Any, Tuple, Type, List, Dict
+from typing import Optional, Any, Tuple, Type, List, Dict, TYPE_CHECKING
 from dataclasses import dataclass, field
+
+if TYPE_CHECKING:
+    from ..secrets.backend import SecretReader
 
 from pydantic_settings import BaseSettings
 from upath import UPath
@@ -47,7 +50,7 @@ class SettingsParameters():
     env_prefix:     Optional[str] = None
     secrets_dir:    Optional[str] = None
     kwargs:         Optional[Dict[str,Any]] = field(default=None, repr=False)
-    secrets_provider: Optional[str] = None
+    secret_store:   Optional["SecretReader"] = field(default=None, repr=False, compare=False, hash=False)
 
     # _reserved_mountainash_kwargs = ["_dummy"]
 
@@ -121,7 +124,7 @@ class SettingsParameters():
             self.settings_class,
             self.env_prefix,
             self.secrets_dir,
-            self.secrets_provider,
+            id(self.secret_store) if self.secret_store is not None else None,
             # Deliberately exclude: self.kwargs
         ])
 
@@ -154,7 +157,7 @@ class SettingsParameters():
             self.settings_class == other.settings_class and
             self.env_prefix == other.env_prefix and
             self.secrets_dir == other.secrets_dir and
-            self.secrets_provider == other.secrets_provider
+            self.secret_store is other.secret_store
             # Deliberately exclude: kwargs comparison
         )
 
@@ -178,7 +181,7 @@ class SettingsParameters():
                settings_class: Optional[Type[BaseSettings]] = None,
                env_prefix: Optional[str] = None,
                secrets_dir: Optional[str] = None,
-               secrets_provider: Optional[str] = None,
+               secret_store: Optional["SecretReader"] = None,
                **kwargs: Any
                ) -> 'SettingsParameters':
 
@@ -192,7 +195,7 @@ class SettingsParameters():
             settings_class=settings_class,
             env_prefix=env_prefix,
             secrets_dir=secrets_dir,
-            secrets_provider=secrets_provider,
+            secret_store=secret_store,
             kwargs=resolved_kwargs
         )
 
@@ -265,11 +268,11 @@ class SettingsParameters():
             merged_env_prefix = other.env_prefix or base.env_prefix
             merged_secrets_dir = other.secrets_dir or base.secrets_dir
 
-        # Secrets provider: simple priority (same as scalars)
+        # Secret store: last non-None wins (never truthiness — a falsey store stays bound)
         if prioritise_base:
-            merged_secrets_provider = base.secrets_provider or other.secrets_provider
+            merged_secret_store = base.secret_store if base.secret_store is not None else other.secret_store
         else:
-            merged_secrets_provider = other.secrets_provider or base.secrets_provider
+            merged_secret_store = other.secret_store if other.secret_store is not None else base.secret_store
 
         # Kwargs: merge dicts
         if base.kwargs is None and other.kwargs is None:
@@ -285,7 +288,7 @@ class SettingsParameters():
             config_files=merged_config_files,
             env_prefix=merged_env_prefix,
             secrets_dir=merged_secrets_dir,
-            secrets_provider=merged_secrets_provider,
+            secret_store=merged_secret_store,
             **(merged_kwargs or {})
         )
 
@@ -298,7 +301,6 @@ class SettingsParameters():
             'settings_class': self.settings_class,
             'env_prefix': self.env_prefix,
             'secrets_dir': self.secrets_dir,
-            'secrets_provider': self.secrets_provider,
         }
 
 
@@ -371,7 +373,7 @@ class SettingsParameters():
             "settings_class",
             "env_prefix",
             "secrets_dir",
-            "secrets_provider",
+            "secret_store",
             "reinitialise",
         }
         disallowed = {

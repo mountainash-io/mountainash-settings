@@ -213,91 +213,74 @@ class TestSettingsParameters:
         assert result == {}
 
 
-class TestSecretsProvider:
+class _Reader:
+    def __init__(self, records=None):
+        self.records = records or {}
+    def get(self, key):
+        return self.records.get(key)
 
-    def test_default_is_none(self):
-        params = SettingsParameters()
-        assert params.secrets_provider is None
+class _FalseyReader(_Reader):
+    def __bool__(self):
+        return False
 
-    def test_create_accepts_secrets_provider(self):
-        params = SettingsParameters.create(
-            settings_class=MockSettings,
-            secrets_provider="local",
-        )
-        assert params.secrets_provider == "local"
+class _HostileReader(_Reader):
+    def __eq__(self, other):
+        raise AssertionError("store __eq__ called")
+    def __hash__(self):
+        raise AssertionError("store __hash__ called")
+    def __repr__(self):
+        raise AssertionError("store __repr__ called")
 
-    def test_secrets_provider_in_hash(self):
-        params_a = SettingsParameters.create(
-            settings_class=MockSettings,
-            secrets_provider="local",
-        )
-        params_b = SettingsParameters.create(
-            settings_class=MockSettings,
-            secrets_provider="vault",
-        )
-        assert hash(params_a) != hash(params_b)
 
-    def test_secrets_provider_none_matches_no_provider(self):
-        params_a = SettingsParameters.create(settings_class=MockSettings)
-        params_b = SettingsParameters.create(
-            settings_class=MockSettings,
-            secrets_provider=None,
-        )
-        assert hash(params_a) == hash(params_b)
+class TestSecretStore:
 
-    def test_secrets_provider_in_eq(self):
-        params_a = SettingsParameters.create(
-            settings_class=MockSettings,
-            secrets_provider="local",
-        )
-        params_b = SettingsParameters.create(
-            settings_class=MockSettings,
-            secrets_provider="vault",
-        )
-        assert params_a != params_b
+    def test_secret_store_defaults_to_none(self):
+        assert SettingsParameters().secret_store is None
 
-    def test_to_dict_includes_secrets_provider(self):
-        params = SettingsParameters.create(
-            settings_class=MockSettings,
-            secrets_provider="local",
-        )
-        d = params.to_dict()
-        assert d["secrets_provider"] == "local"
+    def test_distinct_stores_are_distinct_identities(self):
+        a = SettingsParameters.create(settings_class=MockSettings, secret_store=_Reader())
+        b = SettingsParameters.create(settings_class=MockSettings, secret_store=_Reader())
+        assert a != b
 
-    def test_to_dict_secrets_provider_none(self):
-        params = SettingsParameters()
-        d = params.to_dict()
-        assert d["secrets_provider"] is None
+    def test_same_store_object_is_equal(self):
+        store = _Reader()
+        a = SettingsParameters.create(settings_class=MockSettings, secret_store=store)
+        b = SettingsParameters.create(settings_class=MockSettings, secret_store=store)
+        assert a == b and hash(a) == hash(b)
 
-    def test_merge_last_wins(self):
-        base = SettingsParameters.create(
-            settings_class=MockSettings,
-            secrets_provider="local",
-        )
-        other = SettingsParameters.create(
-            settings_class=MockSettings,
-            secrets_provider="vault",
-        )
-        merged = SettingsParameters.merge(base, other)
-        assert merged.secrets_provider == "vault"
+    def test_hostile_store_methods_never_called(self):
+        store = _HostileReader()
+        a = SettingsParameters.create(settings_class=MockSettings, secret_store=store)
+        b = SettingsParameters.create(settings_class=MockSettings, secret_store=store)
+        hash(a); assert a == b; repr(a)
+        assert SettingsParameters.merge(a, b).secret_store is store
 
-    def test_merge_prioritise_base(self):
-        base = SettingsParameters.create(
-            settings_class=MockSettings,
-            secrets_provider="local",
-        )
-        other = SettingsParameters.create(
-            settings_class=MockSettings,
-            secrets_provider="vault",
-        )
-        merged = SettingsParameters.merge(base, other, prioritise_base=True)
-        assert merged.secrets_provider == "local"
+    def test_store_absent_from_to_dict_and_repr(self):
+        params = SettingsParameters.create(settings_class=MockSettings, secret_store=_Reader())
+        assert "secret_store" not in params.to_dict()
+        assert "_Reader" not in repr(params)
 
-    def test_merge_base_none_takes_other(self):
-        base = SettingsParameters.create(settings_class=MockSettings)
-        other = SettingsParameters.create(
-            settings_class=MockSettings,
-            secrets_provider="vault",
-        )
-        merged = SettingsParameters.merge(base, other)
-        assert merged.secrets_provider == "vault"
+    def test_merge_last_non_none_wins(self):
+        first, second = _Reader(), _Reader()
+        base = SettingsParameters.create(settings_class=MockSettings, secret_store=first)
+        other = SettingsParameters.create(settings_class=MockSettings, secret_store=second)
+        assert SettingsParameters.merge(base, other).secret_store is second
+        assert SettingsParameters.merge(base, other, prioritise_base=True).secret_store is first
+
+    def test_merge_none_does_not_detach(self):
+        store = _Reader()
+        base = SettingsParameters.create(settings_class=MockSettings, secret_store=store)
+        other = SettingsParameters.create(settings_class=MockSettings)
+        assert SettingsParameters.merge(base, other).secret_store is store
+
+    def test_merge_falsey_store_is_still_bound(self):
+        store = _FalseyReader()
+        base = SettingsParameters.create(settings_class=MockSettings, secret_store=_Reader())
+        other = SettingsParameters.create(settings_class=MockSettings, secret_store=store)
+        assert SettingsParameters.merge(base, other).secret_store is store
+
+    def test_dataclasses_replace_preserves_identity(self):
+        import dataclasses
+        store = _Reader()
+        params = SettingsParameters.create(settings_class=MockSettings, secret_store=store)
+        assert dataclasses.replace(params, env_prefix="X_").secret_store is store
