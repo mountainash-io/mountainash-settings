@@ -30,7 +30,7 @@ from pydantic_settings.sources import (
 from pydantic_settings.sources.utils import InitState
 
 from ..resolve import resolve_references_in_dict
-from ..secrets.backend import SecretsBackend
+from ..secrets.backend import SecretReader
 from ..settings_parameters import SettingsFileHandler, SettingsParameters
 from .sources import CacheableSettingsSource
 
@@ -43,7 +43,7 @@ class _StructuralKey:
     settings_class: Type[BaseSettings]
     env_prefix: str | None
     secrets_dir: str | None
-    secrets_provider: str | None
+    secret_store: "SecretReader | None" = field(repr=False)
 
     @classmethod
     def from_parameters(cls, parameters: SettingsParameters) -> "_StructuralKey":
@@ -55,11 +55,12 @@ class _StructuralKey:
             parameters.settings_class,
             parameters.env_prefix,
             parameters.secrets_dir,
-            parameters.secrets_provider,
+            parameters.secret_store,
         )
 
     def __hash__(self) -> int:
-        return hash((self.config_files, id(self.settings_class), self.env_prefix, self.secrets_dir, self.secrets_provider))
+        store = None if self.secret_store is None else id(self.secret_store)
+        return hash((self.config_files, id(self.settings_class), self.env_prefix, self.secrets_dir, store))
 
     def __eq__(self, other: object) -> bool:
         return (
@@ -68,7 +69,7 @@ class _StructuralKey:
             and self.settings_class is other.settings_class
             and self.env_prefix == other.env_prefix
             and self.secrets_dir == other.secrets_dir
-            and self.secrets_provider == other.secrets_provider
+            and self.secret_store is other.secret_store
         )
 
     def parameters(self) -> SettingsParameters:
@@ -77,9 +78,8 @@ class _StructuralKey:
             settings_class=self.settings_class,
             env_prefix=self.env_prefix,
             secrets_dir=self.secrets_dir,
-            secrets_provider=self.secrets_provider,
+            secret_store=self.secret_store,
         )
-
 
 @dataclass
 class _CacheFrame:
@@ -334,20 +334,12 @@ def _capture_sources(key: _StructuralKey) -> tuple[tuple[_SourceSnapshot, ...], 
 def _resolve_capture(
     key: _StructuralKey, snapshots: tuple[_SourceSnapshot, ...],
 ) -> tuple[_SourceSnapshot, ...]:
-    if key.secrets_provider is None:
-        return tuple(
-            (source_type, name, _owned(snapshot), custom)
-            for source_type, name, snapshot, custom in snapshots
-        )
-    from ..secrets.registry import get_secrets_backend
-
-    backend = cast(SecretsBackend, get_secrets_backend(key.secrets_provider))
     return tuple(
         (
             source_type,
             name,
             _owned(snapshot) if source_type is DefaultSettingsSource else _owned(
-                resolve_references_in_dict(_copy_for_call(snapshot), backend)
+                resolve_references_in_dict(_copy_for_call(snapshot), key.secret_store)
             ),
             custom,
         )
@@ -357,19 +349,15 @@ def _resolve_capture(
 
 def _capture_static_defaults(key: _StructuralKey) -> dict[str, Any]:
     """Resolve declared non-factory references once for this context."""
-    if key.secrets_provider is None:
-        return {}
     from pydantic_core import PydanticUndefined
 
     from ..resolve import _resolve_reference_value
-    from ..secrets.registry import get_secrets_backend
 
-    backend = cast(SecretsBackend, get_secrets_backend(key.secrets_provider))
     defaults: dict[str, Any] = {}
     for name, field_info in key.settings_class.model_fields.items():
         if field_info.default is PydanticUndefined:
             continue
-        resolved, changed = _resolve_reference_value(field_info.default, backend, "secret:")
+        resolved, changed = _resolve_reference_value(field_info.default, key.secret_store, "secret:")
         if changed:
             defaults[name] = resolved
     return _owned(defaults)
@@ -475,12 +463,8 @@ class _SettingsContext:
         )
 
         runtime = _owned(effective_runtime) if effective_runtime else {}
-        if runtime and self.key.secrets_provider is not None:
-            from ..secrets.registry import get_secrets_backend
-            runtime = resolve_references_in_dict(
-                runtime,
-                cast(SecretsBackend, get_secrets_backend(self.key.secrets_provider)),
-            )
+        if runtime:
+            runtime = resolve_references_in_dict(runtime, self.key.secret_store)
         candidate = self._project_sources(runtime)
         with self._publication_lock:
             retained_carry = self._source_carry
