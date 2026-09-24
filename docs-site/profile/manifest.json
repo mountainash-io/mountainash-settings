@@ -66,7 +66,6 @@
       "mountainash_settings.auth.kerberos": "modules/mountainash_settings.auth.kerberos.json",
       "mountainash_settings.auth.certificate": "modules/mountainash_settings.auth.certificate.json",
       "mountainash_settings.auth.service_account": "modules/mountainash_settings.auth.service_account.json",
-      "mountainash_settings.secrets.registry": "modules/mountainash_settings.secrets.registry.json",
       "mountainash_settings.resolve": "modules/mountainash_settings.resolve.json"
     },
     "facets": {

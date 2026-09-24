@@ -1,9 +1,8 @@
 # MountainAsh Settings — Secrets and Local Records
 
 `mountainash_settings.secrets` is the settings-owned home for secret-reference
-resolution and hardened local record storage. It replaces the separate
-`mountainash-secrets` package as the owner of local storage; consumers migrate in a
-later coordinated cutover (M4).
+resolution and hardened local record storage. It replaced the separate
+`mountainash-secrets` package as the owner of local storage.
 
 This module does **not** provide cloud secret-manager clients (AWS, Azure, GCP,
 Vault), a remote secret writer, caching, versioning or encryption. Ordinary
@@ -18,7 +17,6 @@ Pydantic Settings inputs — environment variables, configuration files and
 - [Errors](#errors)
 - [Lifetime and concurrency](#lifetime-and-concurrency)
 - [Platform support](#platform-support)
-- [Current and future API](#current-and-future-api)
 
 ## Secret references
 
@@ -34,34 +32,30 @@ api_token: secret:api_token                    # single-field record
 A dotted reference splits at the last dot into record key and field. A simple
 reference requires the record to hold exactly one field.
 
-Current wiring registers a store under a provider name and selects it with
-`secrets_provider`:
+A `secret_store` is selected directly — a `SecretReader` (or `SecretWriter` for
+`persist()`) passed as an object, never registered under a name:
 
 ```python
 from mountainash_settings import SettingsParameters, get_settings
-from mountainash_settings.secrets import FilesystemBackend, register_secrets_backend
+from mountainash_settings.secrets import FilesystemBackend
 
 store = FilesystemBackend("/path/to/provisioned/private-records")
-register_secrets_backend("local", store)
-
 params = SettingsParameters.create(
     settings_class=AppSettings,
     config_files=["config.yaml"],
-    secrets_provider="local",
+    secret_store=store,
 )
 settings = get_settings(settings_parameters=params)
+settings.persist({"TOKEN": "new"})  # requires a SecretWriter
 ```
 
-| Registry function | Behaviour |
-|---|---|
-| `register_secrets_backend(name, store)` | Adds a store; raises `ValueError` if `name` is taken |
-| `get_secrets_backend(name)` | Returns the store; `None` for `None`, `KeyError` if unknown |
-| `replace_secrets_backend(name, store)` | Overwrites unconditionally |
-| `clear_secrets_registry()` | Empties the registry (test teardown) |
-
-The registry, `secrets_provider` and the broad `SecretsBackend`/`ClearableBackend`
-protocols are scheduled for removal in M4, replaced by a directly selected store.
-See [Current and future API](#current-and-future-api).
+A `secret:` reference with no bound store raises a value-free
+`SecretCapabilityError`; it is never left as literal unresolved text. Two
+`SettingsParameters` with the same `config_files`/`settings_class`/`env_prefix`/
+`secrets_dir` but a *different* `secret_store` object never share a cached
+context — cache identity includes the store's object identity, not its
+content. Passing the same store object reuses the cached context; `None`
+never detaches an already-bound store during a merge (last non-`None` wins).
 
 ## Local record storage
 
@@ -164,14 +158,3 @@ merge, Linux and macOS installed-candidate proofs passed; Windows had one known
 diagnostic defect (a post-commit marker-close failure reports `unavailable`
 instead of `write_committed_cleanup_failed`) held as a strict `xfail`.
 
-## Current and future API
-
-| Area | Now (M3, on `develop`) | Planned (M4) |
-|---|---|---|
-| Store selection | `register_secrets_backend` + `secrets_provider` | Directly selected `secret_store` on `SettingsParameters` |
-| Record protocols | `SecretReader`/`SecretWriter`/`ClearableSecretStore` alongside legacy `SecretsBackend`/`ClearableBackend` | Legacy protocols and registry removed, no shims |
-| Consumers | May still import `mountainash-secrets` | Migrated to `mountainash_settings.secrets`; dependency removed |
-
-`secret_store=` is not available yet. New code should type against
-`SecretReader`/`SecretWriter`/`ClearableSecretStore` and construct stores
-directly.

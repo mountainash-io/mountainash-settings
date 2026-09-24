@@ -51,8 +51,7 @@
     "mountainash_settings.settings_cache.settings_functions",
     "mountainash_settings.profiles.descriptor",
     "mountainash_settings.profiles.profile",
-    "mountainash_settings.auth.base",
-    "mountainash_settings.secrets.registry"
+    "mountainash_settings.auth.base"
   ],
   "hidden_or_internal_modules": [
     "mountainash_settings.settings_parameters.filehandler",

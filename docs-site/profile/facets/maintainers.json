@@ -36,7 +36,6 @@
       "name": "Secrets resolution pipeline",
       "description": "Resolution runs in two passes during __init__: accepted kwargs are first captured privately in source form and a working copy is resolved via resolve_references_in_dict before super().__init__; loaded config fields are then resolved via resolve_references_in_model_tree after construction. Nested BaseModel fields are rebuilt as fresh instances to respect the frozen=True constraint.",
       "module_ids": [
-        "mountainash_settings.secrets.registry",
         "mountainash_settings.resolve",
         "mountainash_settings.settings.base_settings"
       ]
@@ -65,7 +64,6 @@
     "mountainash_settings.settings_cache.settings_functions",
     "mountainash_settings.settings_cache.settings_manager",
     "mountainash_settings.profiles.profile",
-    "mountainash_settings.secrets.registry",
     "mountainash_settings.resolve"
   ],
   "hidden_or_internal_modules": [],

@@ -173,34 +173,34 @@ settings_b = get_settings(settings_class=AppSettings, PORT=8002)
 
 ## 5. Resolve secrets automatically
 
-Register a secrets resolver before constructing settings that reference external secrets:
+Select a `secret_store` — a `SecretReader` object — when constructing settings that
+reference external secrets:
 
 ```python
-from mountainash_settings import register_secrets_resolver
+from mountainash_settings.secrets import FilesystemBackend
 
-def my_vault_resolver(secret_path: str) -> str:
-    # Call your secrets backend here (AWS SSM, HashiCorp Vault, etc.)
-    return fetch_from_vault(secret_path)
-
-register_secrets_resolver("vault", my_vault_resolver)
+store = FilesystemBackend("/path/to/provisioned/private-records")
 ```
 
 Then reference secrets with the `secret:` prefix in your YAML config or as kwargs:
 
 ```yaml
 # config/production.yaml
-DATABASE_URL: "secret:db/production/url"
+DATABASE_URL: "secret:db.production.url"
 ```
 
 ```python
 settings = AppSettings(
     config_files=["config/production.yaml"],
-    secrets_provider="vault",
+    secret_store=store,
 )
-# settings.DATABASE_URL is now the resolved value from Vault
+# settings.DATABASE_URL is now the resolved value from the store
 ```
 
-The prefix is stripped before your resolver is called. It receives `"db/production/url"`, not `"secret:db/production/url"`.
+A `secret:` reference with no bound `secret_store` raises a value-free
+`SecretCapabilityError` — it is never left as literal unresolved text.
+
+The prefix is stripped before the store is queried. It receives `"db.production.url"`, not `"secret:db.production.url"`.
 
 References resolve inside declared string (`str`) and `SecretStr` fields, nested Pydantic models, dictionaries, lists, and tuple values.
 Tuple values resolve when they come from init values or runtime overrides.

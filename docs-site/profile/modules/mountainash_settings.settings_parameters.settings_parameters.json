@@ -38,7 +38,7 @@
   "extension_points": [],
   "lifecycle_notes": [
     "frozen=True — SettingsParameters instances are immutable after creation",
-    "Structural parameters (config_files, settings_class, env_prefix, secrets_dir, secrets_provider) determine hash identity; kwargs are excluded",
+    "Structural parameters (config_files, settings_class, env_prefix, secrets_dir, secret_store's object identity) determine hash identity; kwargs are excluded",
     "kwargs is repr=False; that diagnostic boundary does not make explicit serialization or direct access safe for untrusted output",
     "merge() combines config_files by union+dedup; scalars by last-wins (or first if prioritise_base=True); kwargs by dict merge"
   ],

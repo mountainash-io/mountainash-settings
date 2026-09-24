@@ -37,7 +37,7 @@
   ],
   "open_questions": [],
   "evidence": [
-    {"kind": "import", "path": "src/mountainash_settings/settings/base_settings.py", "detail": "Imported and called in __init__ when secrets_provider is set"},
+    {"kind": "import", "path": "src/mountainash_settings/settings/base_settings.py", "detail": "Imported and called unconditionally in __init__ with local_settings_params.secret_store"},
     {"kind": "test", "path": "tests/unit/test_resolve.py", "detail": "Resolution logic tests"}
   ],
   "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
