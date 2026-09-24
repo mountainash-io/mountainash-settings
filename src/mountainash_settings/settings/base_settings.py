@@ -906,34 +906,29 @@ class MountainAshBaseSettings(BaseSettings):
         return class_name
 
     def persist(self, data: Dict[str, Any], *, key: Optional[str] = None) -> None:
-        """Write data to the registered secrets backend and update in-memory fields.
+        """Replace one local record through the selected writer, then update fields.
 
         Args:
             data: Dict of field names to values to persist.
             key: Backend key. If None, derived via persist_key().
 
         Raises:
-            ValueError: If no secrets_provider is configured.
+            SecretCapabilityError: No store is selected, or it is not a SecretWriter.
+            ValueError: ``data`` is not a strict JSON-native record.
         """
-        provider = self.SETTINGS_SOURCE_SECRETS_PROVIDER
-        if not provider:
-            raise ValueError(
-                "Cannot persist: no secrets_provider configured on this settings instance. "
-                "Pass secrets_provider= when constructing the settings."
-            )
-        from mountainash_settings.secrets.registry import get_secrets_backend
-        backend = get_secrets_backend(provider)
+        from mountainash_settings.secrets.backend import SecretWriter
+        from mountainash_settings.secrets.errors import SecretCapabilityError, _raise_clean
+        from mountainash_settings.secrets.records import _own_record
+
+        store = self._settings_secret_store
+        if store is None or not isinstance(store, SecretWriter):
+            _raise_clean(SecretCapabilityError("Selected secret store cannot persist"))
         if key is None:
             key = self.persist_key()
-        payload = _snapshot_reconstruction(data)
-        input_names = tuple(dict.fromkeys((*self.SETTINGS_SOURCE_KWARG_NAMES, *data)))
-        backend.set(key, payload if payload is not None else data)
-        self.update_settings_from_dict(data)
-        if payload is None:
-            # A backend may mutate even unsupported input. Never advertise
-            # its post-write replacement as an owned original recipe.
-            self._settings_reconstruction_kwargs = None
-            object.__setattr__(self, "SETTINGS_SOURCE_KWARG_NAMES", input_names)
+        record = _own_record(data)
+        update = _own_record(data)
+        store.set(key, record)
+        self.update_settings_from_dict(update)
 
     # def __getattribute__(self, name):
     #     """

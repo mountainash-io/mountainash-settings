@@ -317,6 +317,7 @@ def _resolve_reference_value(
     value: t.Any,
     store: "SecretReader | None",
     prefix: str,
+    _active: set[int] | None = None,
 ) -> tuple[t.Any, bool]:
     if isinstance(value, SecretStr):
         raw = value.get_secret_value()
@@ -335,7 +336,7 @@ def _resolve_reference_value(
         model_fields = list(type(value).model_fields.items())
         for field_name, _ in model_fields:
             resolved, field_changed = _resolve_reference_value(
-                getattr(value, field_name), store, prefix
+                getattr(value, field_name), store, prefix, _active
             )
             resolved_fields.append((field_name, resolved, field_changed))
             changed = changed or field_changed
@@ -373,32 +374,36 @@ def _resolve_reference_value(
             _raise_sanitized_resolution_error(type(value), changed_field_names)
         return rebuilt, True
 
-    if isinstance(value, dict):
-        resolved_dict: dict[t.Any, t.Any] = {}
-        changed = False
-        for key, item in value.items():
-            resolved, item_changed = _resolve_reference_value(item, store, prefix)
-            resolved_dict[key] = resolved
-            changed = changed or item_changed
-        return resolved_dict, changed
+    if isinstance(value, (dict, list, tuple)):
+        active = _active if _active is not None else set()
+        identity = id(value)
+        if identity in active:
+            # Cyclic container: cannot contain a fresh reference on this path.
+            return value, False
+        active.add(identity)
+        try:
+            if isinstance(value, dict):
+                changed = False
+                resolved_items: list[tuple[t.Any, t.Any]] = []
+                for key, item in value.items():
+                    resolved, item_changed = _resolve_reference_value(item, store, prefix, active)
+                    resolved_items.append((key, resolved))
+                    changed = changed or item_changed
+                if not changed:
+                    return value, False
+                return {key: resolved for key, resolved in resolved_items}, True
 
-    if isinstance(value, list):
-        resolved_list: list[t.Any] = []
-        changed = False
-        for item in value:
-            resolved, item_changed = _resolve_reference_value(item, store, prefix)
-            resolved_list.append(resolved)
-            changed = changed or item_changed
-        return resolved_list, changed
-
-    if isinstance(value, tuple):
-        resolved_items: list[t.Any] = []
-        changed = False
-        for item in value:
-            resolved, item_changed = _resolve_reference_value(item, store, prefix)
-            resolved_items.append(resolved)
-            changed = changed or item_changed
-        return tuple(resolved_items), changed
+            resolved_list: list[t.Any] = []
+            changed = False
+            for item in value:
+                resolved, item_changed = _resolve_reference_value(item, store, prefix, active)
+                resolved_list.append(resolved)
+                changed = changed or item_changed
+            if not changed:
+                return value, False
+            return (tuple(resolved_list) if isinstance(value, tuple) else resolved_list), True
+        finally:
+            active.discard(identity)
 
     return value, False
 
