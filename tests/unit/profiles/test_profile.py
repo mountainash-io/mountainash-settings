@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import warnings
+from enum import Enum
 
 import pytest
 from pydantic import SecretStr, ValidationError
 
+from mountainash_settings import SettingsManager, SettingsParameters
 from mountainash_settings.profiles import (
     ParameterSpec,
     ProfileSpec,
@@ -154,6 +156,440 @@ class TestProfile:
 
         p = P(HOST="a.b", URL="https://override.example/")
         assert p.URL == "https://override.example/"
+
+
+@pytest.mark.unit
+class TestValidatedTemplateDerivation:
+    """MAS-SEC-005 (M6): a template-derived value must obey the same
+    declared Pydantic assignment contract as an equivalent explicit value --
+    coercion, validators, and SecretStr wrapping all apply. Today's
+    ``Profile.post_init`` assigns the formatted string via
+    ``object.__setattr__``, bypassing validation entirely, so these are red
+    until Task 2's rewrite lands (see the M6 plan's decision checkpoint,
+    2026-09-25)."""
+
+    def test_invalid_derived_value_is_rejected_like_an_explicit_one(self):
+        def _even(v: int) -> int:
+            if v % 2:
+                raise ValueError("must be even")
+            return v
+
+        spec = ProfileSpec(
+            name="derived-validator", provider_type="derived-validator",
+            parameters=[
+                ParameterSpec(name="BASE", type=int, tier="core", default=3),
+                ParameterSpec(
+                    name="DOUBLED", type=int, tier="core", default=0,
+                    validator=_even, template="{BASE}",
+                ),
+            ],
+        )
+
+        class P(Profile):
+            __spec__ = spec
+
+        # An equivalent explicit assignment is already rejected today.
+        with pytest.raises(ValidationError, match="must be even"):
+            P(DOUBLED=3)
+
+        # The template-derived value must be rejected the same way, not
+        # silently stored raw and unvalidated.
+        with pytest.raises(ValidationError, match="must be even"):
+            P(BASE=3)
+
+    def test_derived_value_is_coerced_and_transformed_like_an_explicit_one(self):
+        spec = ProfileSpec(
+            name="derived-transform", provider_type="derived-transform",
+            parameters=[
+                ParameterSpec(name="COUNT", type=int, tier="core", default=2),
+                ParameterSpec(
+                    name="DOUBLED", type=int, tier="core", default=0,
+                    driver_key="doubled", template="{COUNT}",
+                    transform=lambda v: v * 2,
+                ),
+            ],
+        )
+
+        class P(Profile):
+            __spec__ = spec
+
+        p = P(COUNT=4)
+        assert p.DOUBLED == 4
+        assert isinstance(p.DOUBLED, int)
+        assert p.emit() == {"doubled": 8}
+
+    def test_derived_bool_and_enum_are_coerced_like_explicit_values(self):
+        class Mode(str, Enum):
+            DEV = "development"
+            PROD = "production"
+
+        spec = ProfileSpec(
+            name="derived-bool-enum", provider_type="derived-bool-enum",
+            parameters=[
+                ParameterSpec(name="FLAG_SOURCE", type=str, tier="core", default="true"),
+                ParameterSpec(name="ENABLED", type=bool, tier="core", default=False,
+                              driver_key="enabled", template="{FLAG_SOURCE}"),
+                ParameterSpec(name="MODE_SOURCE", type=str, tier="core", default="production"),
+                ParameterSpec(name="MODE", type=Mode, tier="core", default=Mode.DEV,
+                              driver_key="mode", template="{MODE_SOURCE}"),
+            ],
+        )
+
+        class P(Profile):
+            __spec__ = spec
+
+        p = P()
+        assert p.ENABLED is True
+        assert isinstance(p.ENABLED, bool)
+        assert p.MODE is Mode.PROD
+        assert p.emit() == {"enabled": True, "mode": Mode.PROD}
+
+    def test_derived_secret_is_wrapped_and_unwrapped_only_at_emission(self):
+        spec = ProfileSpec(
+            name="derived-secret", provider_type="derived-secret",
+            parameters=[
+                ParameterSpec(name="RAW", type=str, tier="core", default="s3cr3t-canary"),
+                ParameterSpec(
+                    name="TOKEN", type=str, tier="core", default="",
+                    secret=True, driver_key="token", template="{RAW}",
+                ),
+            ],
+        )
+
+        class P(Profile):
+            __spec__ = spec
+
+        p = P()
+        assert isinstance(p.TOKEN, SecretStr)
+        assert p.TOKEN.get_secret_value() == "s3cr3t-canary"
+        assert "s3cr3t-canary" not in str(p.TOKEN)
+        assert p.emit() == {"token": "s3cr3t-canary"}
+
+
+@pytest.mark.unit
+class TestExplicitOriginPrecedence:
+    """Explicit values win regardless of whether they equal the declared
+    default, None, or empty string -- MAS-SEC-005 checkpoint 1's value-free
+    origin rule. Today's guard compares values, so an explicit value equal
+    to the default/None/"" is misclassified as template-eligible and
+    silently overwritten; red until Task 2's rewrite lands."""
+
+    def _make_spec(self, url_default):
+        return ProfileSpec(
+            name="explicit-origin", provider_type="explicit-origin",
+            parameters=[
+                ParameterSpec(name="HOST", type=str, tier="core", default="host.example"),
+                ParameterSpec(
+                    name="URL", type=str | None, tier="core",
+                    default=url_default, template="https://{HOST}/api",
+                ),
+            ],
+        )
+
+    def test_explicit_value_equal_to_default_is_not_overwritten(self):
+        spec = self._make_spec("https://default.example/")
+
+        class P(Profile):
+            __spec__ = spec
+
+        p = P(URL="https://default.example/")
+        assert p.URL == "https://default.example/"
+
+    def test_explicit_none_is_not_overwritten(self):
+        spec = self._make_spec(None)
+
+        class P(Profile):
+            __spec__ = spec
+
+        p = P(URL=None)
+        assert p.URL is None
+
+    def test_explicit_empty_string_is_not_overwritten(self):
+        spec = self._make_spec("")
+
+        class P(Profile):
+            __spec__ = spec
+
+        p = P(URL="")
+        assert p.URL == ""
+
+
+@pytest.mark.unit
+class TestReinitialiseCacheRoute:
+    """MAS-SEC-005 + MAS-SEC-002 joint gate (M6 Task 1 checklist item 5):
+    flag-off leaves a stale derived value even as its dependency changes;
+    flag-on rederives only previously template-derived fields from the new
+    effective inputs; a final explicit runtime value always wins; the
+    complete invocation validates atomically. Red until Task 3 wires
+    ``_settings_carried_field_names``/``_settings_runtime_field_names`` into
+    ``_initialise_from_cache_frame`` and Task 2 consumes them."""
+
+    def _spec(self):
+        return ProfileSpec(
+            name="reinit", provider_type="reinit",
+            parameters=[
+                ParameterSpec(name="HOST", type=str, tier="core", default="a.example"),
+                ParameterSpec(name="URL", type=str, tier="core", default="",
+                              template="https://{HOST}/api"),
+            ],
+        )
+
+    def test_baseline_derives_url_from_host(self):
+        spec = self._spec()
+
+        class P(Profile):
+            __spec__ = spec
+
+        manager = SettingsManager()
+        # Zero-kwarg baseline: MAS-SEC-002's _source_carry only publishes
+        # from a materialize() call with no runtime overrides at all
+        # (_context.py:524-535), so every "previously derived" case below
+        # seeds it this way before applying a runtime override.
+        p = manager.get_or_create_settings(SettingsParameters.create(settings_class=P))
+        assert p.URL == "https://a.example/api"
+
+    def test_flag_off_host_override_leaves_url_stale(self):
+        spec = self._spec()
+
+        class P(Profile):
+            __spec__ = spec
+
+        manager = SettingsManager()
+        manager.get_or_create_settings(SettingsParameters.create(settings_class=P))
+        p = manager.get_or_create_settings(
+            SettingsParameters.create(settings_class=P, HOST="b.example"),
+        )
+        assert p.HOST == "b.example"
+        assert p.URL == "https://a.example/api"  # intentionally stale, flag is off
+
+    def test_flag_on_host_override_rederives_url(self):
+        spec = self._spec()
+
+        class P(Profile):
+            __spec__ = spec
+
+        manager = SettingsManager()
+        manager.get_or_create_settings(SettingsParameters.create(settings_class=P))
+        p = manager.get_or_create_settings(
+            SettingsParameters.create(settings_class=P, HOST="b.example"),
+            reinitialise=True,
+        )
+        assert p.URL == "https://b.example/api"
+
+    def test_flag_on_explicit_url_override_wins(self):
+        spec = self._spec()
+
+        class P(Profile):
+            __spec__ = spec
+
+        manager = SettingsManager()
+        manager.get_or_create_settings(SettingsParameters.create(settings_class=P))
+        p = manager.get_or_create_settings(
+            SettingsParameters.create(
+                settings_class=P, HOST="b.example", URL="https://custom.example/",
+            ),
+            reinitialise=True,
+        )
+        assert p.URL == "https://custom.example/"
+
+    def test_non_idempotent_validator_runs_once_per_materialization(self):
+        calls: list[int] = []
+
+        def _count_and_return(v: str) -> str:
+            calls.append(1)
+            return v
+
+        spec = ProfileSpec(
+            name="reinit-validator", provider_type="reinit-validator",
+            parameters=[
+                ParameterSpec(name="HOST", type=str, tier="core", default="a.example"),
+                ParameterSpec(
+                    name="URL", type=str, tier="core", default="",
+                    template="https://{HOST}/api", validator=_count_and_return,
+                ),
+            ],
+        )
+
+        class P(Profile):
+            __spec__ = spec
+
+        manager = SettingsManager()
+        manager.get_or_create_settings(SettingsParameters.create(settings_class=P))
+        calls.clear()
+        p = manager.get_or_create_settings(
+            SettingsParameters.create(settings_class=P, HOST="b.example"),
+            reinitialise=True,
+        )
+        assert p.URL == "https://b.example/api"
+        assert calls == [1]  # validated once for this materialization, not per field/source
+
+    def test_atomic_multi_field_override_validates_together(self):
+        spec = ProfileSpec(
+            name="reinit-atomic", provider_type="reinit-atomic",
+            parameters=[
+                ParameterSpec(name="HOST", type=str, tier="core", default="a.example"),
+                ParameterSpec(name="PORT", type=int, tier="core", default=80),
+                ParameterSpec(name="URL", type=str, tier="core", default="",
+                              template="https://{HOST}:{PORT}/api"),
+            ],
+        )
+
+        class P(Profile):
+            __spec__ = spec
+
+        manager = SettingsManager()
+        manager.get_or_create_settings(SettingsParameters.create(settings_class=P))
+        p = manager.get_or_create_settings(
+            SettingsParameters.create(settings_class=P, HOST="b.example", PORT=8443),
+            reinitialise=True,
+        )
+        # Both explicit overrides land in the same validated candidate before
+        # URL rederives from them -- not a stale intermediate from key-by-key
+        # assignment.
+        assert p.URL == "https://b.example:8443/api"
+
+
+@pytest.mark.unit
+class TestSensitiveDerivedFailureBoundary:
+    """MAS-SEC-005 + MAS-SEC-006 gate: a secret-bearing derived field's
+    validation failure goes through the existing chain-free
+    ``resolve._raise_sanitized_resolution_error`` boundary -- no raw value,
+    no retained cause/context -- while an ordinary literal-only derived
+    field keeps its normal useful ``ValidationError``. Approved 2026-09-25
+    as available now (``resolve.py`` already ships this helper); red until
+    Task 2 wraps the ``setattr`` call for secret=True derived fields."""
+
+    def test_derived_secret_validation_failure_is_sanitized(self):
+        def _reject(v: str) -> str:
+            raise ValueError("upstream-secret-value-should-not-leak")
+
+        spec = ProfileSpec(
+            name="derived-secret-fail", provider_type="derived-secret-fail",
+            parameters=[
+                ParameterSpec(name="RAW", type=str, tier="core", default="super-secret-canary"),
+                ParameterSpec(
+                    name="TOKEN", type=str, tier="core", default="",
+                    secret=True, template="{RAW}", validator=_reject,
+                ),
+            ],
+        )
+
+        class P(Profile):
+            __spec__ = spec
+
+        with pytest.raises(ValueError, match="TOKEN") as excinfo:
+            P()
+
+        message = str(excinfo.value)
+        assert "super-secret-canary" not in message
+        assert "upstream-secret-value-should-not-leak" not in message
+        assert excinfo.value.__cause__ is None
+        assert excinfo.value.__suppress_context__ is True
+
+    def test_derived_non_secret_failure_keeps_useful_diagnostic(self):
+        def _reject(v: str) -> str:
+            raise ValueError("must not be empty")
+
+        spec = ProfileSpec(
+            name="derived-plain-fail", provider_type="derived-plain-fail",
+            parameters=[
+                ParameterSpec(name="RAW", type=str, tier="core", default="value"),
+                ParameterSpec(
+                    name="PLAIN", type=str, tier="core", default="",
+                    template="{RAW}", validator=_reject,
+                ),
+            ],
+        )
+
+        class P(Profile):
+            __spec__ = spec
+
+        with pytest.raises(ValidationError, match="must not be empty"):
+            P()
+
+    def test_non_secret_field_stays_useful_even_with_a_store_bound(self):
+        """M6 review finding (2026-09-25): sensitivity is scoped to
+        param.secret only. A secret_store being bound elsewhere on the
+        instance must not blanket-sanitize an unrelated literal-only
+        field's failure -- that would mislabel ordinary validation errors
+        as secret-resolution failures, diluting that signal and hiding
+        real bugs. Red before the narrowing fix (the old `or
+        self._settings_secret_store is not None` branch sanitized this)."""
+        from mountainash_settings.secrets import MemorySecretStore
+
+        def _reject(v: str) -> str:
+            raise ValueError("must not be empty")
+
+        spec = ProfileSpec(
+            name="derived-plain-fail-with-store", provider_type="derived-plain-fail-with-store",
+            parameters=[
+                ParameterSpec(name="RAW", type=str, tier="core", default="value"),
+                ParameterSpec(
+                    name="PLAIN", type=str, tier="core", default="",
+                    template="{RAW}", validator=_reject,
+                ),
+            ],
+        )
+
+        class P(Profile):
+            __spec__ = spec
+
+        with pytest.raises(ValidationError, match="must not be empty"):
+            P(secret_store=MemorySecretStore())
+
+
+@pytest.mark.unit
+class TestDirectReinitialise:
+    """M6 review finding (2026-09-25): a raw, direct call to
+    ``post_init(reinitialise=True)`` on a manually constructed (non-cached)
+    Profile instance must still be able to recompute a previously
+    template-derived field -- it must not be a permanent no-op just because
+    ``_settings_carried_field_names`` (cache-route-only) stays empty
+    outside the cache/fork route. ``_profile_derived_field_names`` (tracked
+    by Profile itself, independent of the cache frame) closes that gap.
+
+    The known limitation documented in ``Profile.post_init``'s docstring is
+    also captured here: outside the cache/fork route there is no per-call
+    "explicit this call" signal, so a manual override made immediately
+    before a direct ``reinitialise=True`` call is not protected."""
+
+    def _spec(self):
+        return ProfileSpec(
+            name="direct-reinit", provider_type="direct-reinit",
+            parameters=[
+                ParameterSpec(name="HOST", type=str, tier="core", default="a.example"),
+                ParameterSpec(name="URL", type=str, tier="core", default="",
+                              template="https://{HOST}/api"),
+            ],
+        )
+
+    def test_direct_reinitialise_recomputes_from_changed_dependency(self):
+        spec = self._spec()
+
+        class P(Profile):
+            __spec__ = spec
+
+        p = P()
+        assert p.URL == "https://a.example/api"
+
+        p.HOST = "b.example"
+        p.post_init(reinitialise=True)
+        assert p.URL == "https://b.example/api"
+
+    def test_direct_reinitialise_known_limitation_overwrites_a_fresh_manual_override(self):
+        spec = self._spec()
+
+        class P(Profile):
+            __spec__ = spec
+
+        p = P()
+        p.HOST = "b.example"
+        p.URL = "https://manually-set.example/"  # caller's fresh override
+        # Documented known limitation: outside the cache/fork route there
+        # is no way to distinguish this from a stale previously-derived
+        # value, so a direct reinitialise=True call recomputes it anyway.
+        p.post_init(reinitialise=True)
+        assert p.URL == "https://b.example/api"
 
 
 @pytest.mark.unit

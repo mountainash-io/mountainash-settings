@@ -322,10 +322,11 @@ projection output is terminal candidate data; it is not recursively treated
 as another reference.
 
 `reinitialise` is a keyword-only cached-retrieval control, not structural
-identity, source reload, or refresh. Profile-origin/template behavior remains
-the later MAS-SEC-005 joint integration; direct-constructor source framing,
-common error handling, and context/provider lifecycle refresh remain
-MAS-SEC-004, MAS-SEC-006, and lifecycle work respectively.
+identity, source reload, or refresh. Profile origin-aware eligibility and
+validated template derivation (MAS-SEC-005) and invocation-local
+direct-constructor source framing (MAS-SEC-004) are both delivered; common
+error handling (MAS-SEC-006) and context/provider lifecycle refresh remain
+separate, later work.
 
 | Component | Role in Cached Retrieval |
 |-----------|--------------------------|

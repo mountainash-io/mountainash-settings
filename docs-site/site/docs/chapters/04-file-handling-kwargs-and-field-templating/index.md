@@ -267,7 +267,7 @@ def post_init(self, template_settings_parameters=None,
     )
 ```
 
-The `Profile` class uses an automated version: it iterates over all `ParameterSpec` entries that declare a `template` attribute and calls `init_setting_from_template()` for each one, applying templates only when the field still holds its default value.
+The `Profile` class uses an automated version: it iterates over all `ParameterSpec` entries that declare a `template` attribute and calls `init_setting_from_template()` for each one, applying templates only when the field was not explicitly supplied to that call (see [Template Priority Rules](#template-priority-rules) below for the exact, origin-aware eligibility rule).
 
 #### Diagram: Template Expansion Timeline
 
@@ -306,22 +306,34 @@ Because mountainash-settings uses `UPath` (from the `universal_pathlib` package)
 
 ## Template Priority Rules
 
-**Template priority rules** determine when a template is evaluated versus when an explicitly provided value takes precedence. The rules follow a simple hierarchy:
+**Template priority rules** determine when a template is evaluated versus when an explicitly provided value takes precedence.
 
-1. If the field has an explicit value from kwargs, environment variable, or config file: **keep the explicit value**
-2. If the field has its declared default (or None): **evaluate the template**
-3. If `reinitialise=True` is passed: **always evaluate the template**, overriding any existing value
+For the low-level `init_setting_from_template()` helper (used directly in a hand-written `post_init()`, as in the examples above), the rule is a simple current-value check:
 
-These rules ensure that templates behave as intelligent defaults. A template for `OUTPUT_PATH = "s3://{BUCKET}/{RUNDATE}/output.parquet"` provides a sensible derived value, but a caller who passes `OUTPUT_PATH="/local/override/path"` gets exactly what they asked for.
+1. If `current_value` is not `None` and `reinitialise` is not `True`: **keep the current value** (a no-op).
+2. Otherwise (no current value, or `reinitialise=True`): **evaluate the template**.
 
-The `Profile` class enforces this by comparing the current field value against the `ParameterSpec.default`:
+`Profile` uses a stricter, origin-aware rule rather than comparing values, because a value-based check cannot distinguish "the caller explicitly passed the same value as the default" from "no value was supplied" -- and misclassifying the former silently overwrites an explicit choice:
+
+1. **Initial construction:** every declared template field not explicitly supplied to *this* call is eligible for derivation, regardless of whether its value happens to equal the declared default, `None`, or `""`.
+2. **`reinitialise=True`:** only fields `Profile` previously recorded as template-derived are eligible, excluding any explicitly supplied to *this* call. A field the caller has ever supplied explicitly is never silently recomputed.
+
+A template for `OUTPUT_PATH = "s3://{BUCKET}/{RUNDATE}/output.parquet"` provides a sensible derived value, but a caller who passes `OUTPUT_PATH="/local/override/path"` gets exactly what they asked for -- including on a later `reinitialise=True` call.
+
+`Profile.post_init()` computes eligibility from field-name sets, never field values:
 
 ```python
-# Only apply template when value matches the declared default
-param_default = param.default if param.default is not MISSING else None
-if current not in (param_default, None, ""):
-    continue  # skip -- explicit value takes precedence
+explicit_at_entry = frozenset(self.__pydantic_fields_set__)
+previously_derived = self._settings_carried_field_names
+explicit_this_call = self._settings_runtime_field_names
+
+if reinitialise:
+    eligible = param.name in previously_derived and param.name not in explicit_this_call
+else:
+    eligible = param.name not in previously_derived and param.name not in explicit_at_entry
 ```
+
+The eligible result is assigned through the model's normal validated `setattr` path -- coercion, field validators, and `SecretStr` wrapping all apply exactly as they would to an equivalent explicit value.
 
 This means that runtime fields (kwargs) are the primary mechanism for user-provided overrides. Structural fields loaded from config files also take precedence over templates, because by the time `post_init()` runs, all source values have already been populated.
 

@@ -128,9 +128,11 @@ caller or the retained context.
 
 `reinitialise=True` is keyword-only operation control. It is not an
 application field, source reload, refresh request, structural selector, or
-lifecycle rotation mechanism. Profile origin/template behavior remains the
-MAS-SEC-005 joint integration; direct-constructor source framing remains
-MAS-SEC-004, shared secret-validation errors remain MAS-SEC-006, and
+lifecycle rotation mechanism. Profile origin-aware eligibility and validated
+template derivation are delivered (MAS-SEC-005; see the [Field Templating
+chapter](../04-file-handling-kwargs-and-field-templating/index.md#template-priority-rules)).
+Invocation-local direct-constructor source framing is delivered
+(MAS-SEC-004). Shared secret-validation errors remain MAS-SEC-006, and
 provider/context refresh remains separate lifecycle work.
 
 ## Cacheable Custom Sources
@@ -250,7 +252,7 @@ class MyAppSettings(AppSettings):
         # Custom template expansion for app-specific fields
 ```
 
-`AppSettings.get_settings()` uses the same structural-context and fresh-result contract. It pins selected source inputs while keeping runtime fields and returned mutable state invocation-local. The Profile-specific origin/template behavior remains the later MAS-SEC-005 joint integration.
+`AppSettings.get_settings()` uses the same structural-context and fresh-result contract. It pins selected source inputs while keeping runtime fields and returned mutable state invocation-local. Profile's origin-aware template derivation (MAS-SEC-005) is delivered and uses this same route.
 
 #### Diagram: AppSettings Inheritance and Integration
 

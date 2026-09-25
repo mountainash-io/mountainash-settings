@@ -486,6 +486,13 @@ class MountainAshBaseSettings(BaseSettings):
     _settings_secret_store: Optional[Any] = PrivateAttr(default=None)
     SETTINGS_SOURCE_SECRETS_DIR: Optional[str] = Field(default=None)
 
+    # MAS-SEC-005 (M6): value-free origin handoff -- field names only, never
+    # values. Populated only inside _initialise_from_cache_frame; both stay
+    # frozenset() on direct (non-cached) construction, since no cache frame
+    # runs there. See the M6 plan's decision checkpoint (2026-09-25).
+    _settings_carried_field_names: frozenset[str] = PrivateAttr(default=frozenset())
+    _settings_runtime_field_names: frozenset[str] = PrivateAttr(default=frozenset())
+
     def __new__(cls, *args: Any, **kwargs: Any) -> "MountainAshBaseSettings":
         """Bind the frame to this outer allocation before custom init can nest."""
         instance = super().__new__(cls)
@@ -546,6 +553,15 @@ class MountainAshBaseSettings(BaseSettings):
             raise ValueError("Cached post-init state cannot be safely owned")
         frame.expected_fields = expected
         frame.recording_instance = self
+        # MAS-SEC-005 (M6): value-free origin handoff for Profile.post_init
+        # (and any other consumer) -- field names only, populated
+        # immediately before the call that consumes them.
+        object.__setattr__(
+            self, "_settings_carried_field_names", frozenset(frame.context._source_carry or {}),
+        )
+        object.__setattr__(
+            self, "_settings_runtime_field_names", _cache_input_field_names(type(self), effective_runtime),
+        )
         try:
             self.post_init(reinitialise=frame.reinitialise)
         finally:
