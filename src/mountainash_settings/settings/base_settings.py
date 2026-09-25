@@ -2,6 +2,9 @@ from typing import Optional, Union, List, Any, Dict, Type, Tuple, TypeVar, cast
 from upath import UPath
 from string import Formatter
 from importlib import import_module
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
@@ -27,6 +30,46 @@ T = TypeVar('T', BaseSettings, 'MountainAshBaseSettings')
 
 _CACHE_SOURCE_UNSET = object()
 _LOCAL_PATH_TYPE = type(UPath("."))
+
+
+@dataclass(frozen=True)
+class _DirectSourceFrame:
+    """Invocation-local file-source paths for one direct construction (MAS-SEC-004).
+
+    Carries only the declared settings class and normalized YAML/TOML/JSON
+    path tuples -- never resolved credential values. Consulted by
+    ``settings_customise_sources`` only when it belongs to the class
+    currently under construction; never exposed as a public API.
+    """
+
+    settings_class: Type[BaseSettings]
+    yaml_files: Any
+    toml_files: Any
+    json_files: Any
+
+
+_CURRENT_DIRECT_SOURCE_FRAME: ContextVar[Optional["_DirectSourceFrame"]] = ContextVar(
+    "mountainash_settings_direct_source_frame", default=None,
+)
+
+
+@contextmanager
+def _direct_source_frame(
+    settings_class: Type[BaseSettings], yaml_files: Any, toml_files: Any, json_files: Any,
+):
+    """Install this invocation's file-source paths for the duration of construction.
+
+    A private ContextVar frame, never a class/model_config mutation: overlapping,
+    nested, and failing construction of the same or different declared classes
+    cannot leak one invocation's source paths into another's.
+    """
+
+    frame = _DirectSourceFrame(settings_class, yaml_files, toml_files, json_files)
+    token = _CURRENT_DIRECT_SOURCE_FRAME.set(frame)
+    try:
+        yield frame
+    finally:
+        _CURRENT_DIRECT_SOURCE_FRAME.reset(token)
 
 
 class _UnownedReconstruction(Exception):
@@ -552,10 +595,10 @@ class MountainAshBaseSettings(BaseSettings):
         SettingsFileHandler.validate_config_files_exist(obj_config_files.toml_files)
         SettingsFileHandler.validate_config_files_exist(obj_config_files.json_files)
 
-        # Handle attribute kwargs
-        valid_pydantic_modelconfig_kwargs: Dict[str, Any] = local_settings_params.get_pydantic_modelconfig_kwargs()
-        valid_attribute_kwargs: Dict[str, Any] =            local_settings_params.get_attribute_settings_kwargs(settings_class=self.__class__)
-        valid_pydantic_kwargs: Dict[str, Any] =             local_settings_params.get_pydantic_settings_kwargs()
+        # Handle attribute kwargs. M5 (MAS-SEC-004): source/schema controls are
+        # rejected value-free here, before sources open -- see
+        # SettingsParameters.get_attribute_settings_kwargs().
+        valid_attribute_kwargs: Dict[str, Any] = local_settings_params.get_attribute_settings_kwargs(settings_class=self.__class__)
         reconstruction_kwargs = _snapshot_reconstruction(valid_attribute_kwargs)
         reconstruction_names = tuple(valid_attribute_kwargs)
         if reconstruction_kwargs is not None:
@@ -566,28 +609,31 @@ class MountainAshBaseSettings(BaseSettings):
         from mountainash_settings.resolve import resolve_references_in_dict
         valid_attribute_kwargs = resolve_references_in_dict(valid_attribute_kwargs, local_settings_params.secret_store)
 
-        # Handle non env config files via model_config
-        self.model_config["yaml_file"] = obj_config_files.yaml_files or None
-        self.model_config["toml_file"] = obj_config_files.toml_files or None
-        self.model_config["json_file"] = obj_config_files.json_files or None
-
-        # Handle model_config kwargs
-        self.model_config.update(**valid_pydantic_modelconfig_kwargs)
-
         # NOTE: All that has happened before now is prior to calling the init on Base Settings!
-        #Now we initialise the values!
-        super().__init__(   _case_sensitive=valid_pydantic_kwargs.get('_case_sensitive', True),
-                            _nested_model_default_partial_update=valid_pydantic_kwargs.get('_nested_model_default_partial_update', False),
-                            _env_prefix=            local_settings_params.env_prefix or valid_pydantic_kwargs.get('_env_prefix', None),
-                            _env_file=              obj_config_files.env_files or valid_pydantic_kwargs.get('_env_file', None),
-                            _env_file_encoding =    valid_pydantic_kwargs.get('_env_file_encoding', 'utf-8'),
-                            _env_ignore_empty =     valid_pydantic_kwargs.get('_env_ignore_empty', True),
-                            _env_nested_delimiter = valid_pydantic_kwargs.get('_env_nested_delimiter', None),
-                            _env_parse_none_str =   valid_pydantic_kwargs.get('_env_parse_none_str', "None"),
-                            _env_parse_enums =      valid_pydantic_kwargs.get('_env_parse_enums', True),
-                            _secrets_dir=           local_settings_params.secrets_dir or valid_pydantic_kwargs.get('_secrets_dir', None),
-                            **valid_attribute_kwargs
-                        )
+        # Now we initialise the values! File-source paths for this invocation
+        # travel through the invocation-local _direct_source_frame (MAS-SEC-004),
+        # never through self.model_config, which stays a shared class dict and
+        # is never mutated by construction. The six explicit literals below are
+        # MountainAsh-owned fixed defaults, not accepted per-call kwargs; keep
+        # them in lockstep with settings_cache/_context.py's mirrored defaults.
+        with _direct_source_frame(
+            self.__class__,
+            obj_config_files.yaml_files or None,
+            obj_config_files.toml_files or None,
+            obj_config_files.json_files or None,
+        ):
+            super().__init__(   _case_sensitive=True,
+                                _nested_model_default_partial_update=False,
+                                _env_prefix=            local_settings_params.env_prefix,
+                                _env_file=              obj_config_files.env_files or None,
+                                _env_file_encoding =    'utf-8',
+                                _env_ignore_empty =     True,
+                                _env_nested_delimiter = None,
+                                _env_parse_none_str =   "None",
+                                _env_parse_enums =      True,
+                                _secrets_dir=           local_settings_params.secrets_dir,
+                                **valid_attribute_kwargs
+                            )
 
 
         # Meta-field bookkeeping only. super().__init__ above already applied
@@ -673,6 +719,20 @@ class MountainAshBaseSettings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        # MAS-SEC-004: use this invocation's own file-source paths when an
+        # active direct-construction frame belongs to settings_cls. A cache
+        # materialization sentinel (see settings_cache/_context.py) never
+        # reaches this hook -- it builds sources itself, bypassing it
+        # entirely -- so there is no precedence conflict to resolve here.
+        # Without a matching frame (a manual/standalone hook call, or a
+        # frame for a different class), fall back to static class
+        # configuration, preserving direct-hook-call compatibility.
+        frame = _CURRENT_DIRECT_SOURCE_FRAME.get()
+        if frame is not None and frame.settings_class is settings_cls:
+            return cls._cache_default_sources(
+                settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+                yaml_files=frame.yaml_files, toml_files=frame.toml_files, json_files=frame.json_files,
+            )
         return cls._cache_default_sources(
             settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
         )

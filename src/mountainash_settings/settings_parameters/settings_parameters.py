@@ -61,31 +61,12 @@ class SettingsParameters():
                                  "validate_default"
     ]
 
-
-    _reserved_pydantic_kwargs = ["_case_sensitive",
-                                 "_nested_model_default_partial_update",
-                                 "_env_prefix",
-                                 "_env_file",
-                                 "_env_file_encoding",
-                                 "_env_ignore_empty",
-                                 "_env_nested_delimiter",
-                                 "_env_parse_none_str",
-                                 "_env_parse_enums",
-                                 "_cli_prog_name",
-                                 "_cli_parse_args",
-                                 "_cli_settings_source",
-                                 "_cli_parse_none_str",
-                                 "_cli_hide_none_type",
-                                 "_cli_avoid_json",
-                                 "_cli_enforce_required",
-                                 "_cli_use_class_docs_for_groups",
-                                 "_cli_exit_on_error",
-                                 "_cli_prefix",
-                                 "_cli_flag_prefix_char",
-                                 "_cli_implicit_flags",
-                                 "_cli_ignore_unknown_args",
-                                 "_secrets_dir",
-                                 ]
+    # M5 (MAS-SEC-004): every underscore-prefixed kwarg -- _env_*, _cli_*,
+    # bare _secrets_dir, and any other underscore-prefixed name
+    # pydantic-settings accepts -- is rejected value-free before sources
+    # open, by the leading-underscore rule, not by an enumerated list. See
+    # get_attribute_settings_kwargs(). Only config_files/settings_class/
+    # env_prefix/secrets_dir/secret_store remain public source selectors.
 
 
 
@@ -331,29 +312,43 @@ class SettingsParameters():
         if settings_class is None:
             return set()
 
-        settings_kwarg_names = self._get_settings_kwarg_names(settings_class)
-        valid_kwarg_names = settings_kwarg_names.union(self._reserved_pydantic_kwargs)
-
-        return valid_kwarg_names
+        return self._get_settings_kwarg_names(settings_class)
 
 
     def get_attribute_settings_kwargs(self,
                                         settings_class: Optional[Type[BaseSettings]] = None
                                         ) -> Dict[str, Any]:
+        """Classify direct-construction kwargs into field inputs, rejecting source/schema controls.
 
-        valid_kwarg_names = self._get_valid_kwarg_names(settings_class=settings_class)
+        Every underscore-prefixed name is rejected value-free before sources
+        open (leading-underscore rule, mirroring get_cache_runtime_kwargs()).
+        A legacy schema-control name (``extra``, ``arbitrary_types_allowed``,
+        ``validate_default``) is accepted only when the settings class
+        declares a field of that name -- otherwise it is rejected value-free
+        rather than silently mutating shared class config.
+        """
 
-        return {k: v for k, v in self.kwargs.items() if k in valid_kwarg_names} if self.kwargs else {}
+        if not self.kwargs:
+            return {}
 
+        for key in self.kwargs:
+            if key.startswith("_"):
+                raise ValueError(f"Unsupported source control kwarg: {key!r}")
 
-    def get_pydantic_settings_kwargs(self) -> Dict[str, Any]:
+        settings_class = settings_class or self.settings_class
+        field_names = self._get_settings_kwarg_names(settings_class)
 
-        return {k: v for k, v in self.kwargs.items() if k in self._reserved_pydantic_kwargs} if self.kwargs else {}
+        result: Dict[str, Any] = {}
+        for key, value in self.kwargs.items():
+            if key in self._reserved_pydantic_modelconfig_kwargs and key not in field_names:
+                raise ValueError(
+                    f"Unsupported schema control kwarg: {key!r}. "
+                    "Configure this on the settings class's model_config instead."
+                )
+            if key in field_names:
+                result[key] = value
 
-
-    def get_pydantic_modelconfig_kwargs(self) -> Dict[str, Any]:
-
-        return {k: v for k, v in self.kwargs.items() if k in self._reserved_pydantic_modelconfig_kwargs} if self.kwargs else {}
+        return result
 
 
     def get_all_kwargs(self) -> Dict[str, Any]:

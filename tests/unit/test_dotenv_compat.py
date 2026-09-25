@@ -128,6 +128,30 @@ def test_cached_enum_with_mutable_value_is_rejected():
     assert "enum-private-canary" not in str(error.value)
 
 
+@pytest.mark.parametrize(
+    "kwarg_name",
+    [
+        "_env_prefix",
+        "_env_file",
+        "_case_sensitive",
+        "_cli_prog_name",
+        "_secrets_dir",
+        "_env_prefix_target",
+    ],
+)
+def test_direct_construction_rejects_every_underscore_source_control(tmp_path, kwarg_name):
+    """M5 (MAS-SEC-004): every underscore-prefixed kwarg -- enumerated in the
+    old 23-name list or not -- fails value-free before sources open on direct
+    construction, naming only the key, and a later instance is unaffected."""
+    with pytest.raises(ValueError, match=kwarg_name):
+        _DotenvSettings(**{kwarg_name: "irrelevant"})
+
+    # No residual state from the rejected construction; class behavior is normal.
+    env_file = tmp_path / "after_rejection.env"
+    env_file.write_text('VALUE="still-works"\n')
+    assert _DotenvSettings(config_files=[env_file]).VALUE == "still-works"
+
+
 def test_cached_enum_with_mutable_slots_is_rejected():
     class SlottedMode(Enum):
         __slots__ = ("payload",)
