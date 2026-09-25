@@ -718,3 +718,4 @@ class TestSecretValidationErrorBoundary:
         assert backend.value not in repr(error)
         assert error.__cause__ is None
         assert error.__context__ is None
+        assert backend.calls == 1
