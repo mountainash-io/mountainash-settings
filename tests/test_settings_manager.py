@@ -681,3 +681,40 @@ class TestReviewedCacheBoundaries:
         assert first.NAME == second.NAME == "caller"
         assert first.PASSWORD.get_secret_value() == second.PASSWORD.get_secret_value() == "baseline"
         assert backend.calls == 1
+
+
+class _PlainRejectingSettings(BaseSettings):
+    """Plain (non-MountainAsh) settings class, routed through the ``else``
+    branch of ``_SettingsContext.materialize()`` (MAS-SEC-006, M7)."""
+
+    TOKEN: str = "unset"
+
+    @field_validator("TOKEN")
+    @classmethod
+    def _reject(cls, v: str) -> str:
+        raise ValueError("upstream-validator-rejected")
+
+
+class TestSecretValidationErrorBoundary:
+    """MAS-SEC-006 (M7): the plain-``BaseSettings`` cache-hit route must not
+    leak a resolved local-record value into a later validation failure's
+    text, repr, cause, or context. Red until Task 3 fixes this route's
+    guard (currently ``raise ValueError(...) from None`` *inside* the
+    active ``except`` block, which Python reattaches to ``__context__``
+    regardless of the ``from None`` clause)."""
+
+    def test_plain_settings_cache_hit_sanitizes_resolved_marker(self):
+        backend = _CountingBackend("M7-UNMISTAKABLE-SECRET-MARKER-plain")
+        manager = SettingsManager()
+        params = SettingsParameters.create(
+            settings_class=_PlainRejectingSettings,
+            secret_store=backend,
+            TOKEN="secret:db.password",
+        )
+        with pytest.raises(ValueError) as excinfo:
+            manager.get_or_create_settings(params)
+        error = excinfo.value
+        assert backend.value not in str(error)
+        assert backend.value not in repr(error)
+        assert error.__cause__ is None
+        assert error.__context__ is None

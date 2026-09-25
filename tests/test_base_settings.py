@@ -2,7 +2,7 @@ from typing import Any, List, Optional, Type, Union
 
 import pytest
 # from pydantic_settings import SettingsConfigDict, BaseSettings
-from pydantic import Field
+from pydantic import Field, ValidationError, field_validator
 from pytest_check import check
 from upath import UPath
 
@@ -447,3 +447,100 @@ class TestSecretsResolution:
             )
         )
         assert settings.auth.password.get_secret_value() == "resolved_db/password"
+
+
+# --- MAS-SEC-006 (M7): secret-resolution validation-error boundary ---
+
+
+class _M7MarkerBackend:
+    """Dummy SecretReader with an unmistakable marker and a call counter.
+
+    Per the M7 plan's Task 1: disposable, never logs, and its marker is
+    unambiguous enough that any appearance in error text/repr/chain proves
+    a leak rather than a coincidence.
+    """
+
+    MARKER = "M7-UNMISTAKABLE-SECRET-MARKER-3f9a"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def get(self, key: str) -> dict[str, str] | None:
+        self.calls += 1
+        return {"value": self.MARKER}
+
+
+class _M7RejectingSettings(MountainAshBaseSettings):
+    """A field whose validator always rejects, regardless of input, so the
+    same class proves both the disclosure boundary (secret-resolved input)
+    and the compatibility boundary (literal input) for MAS-SEC-006."""
+
+    TOKEN: str = Field(default="unset")
+
+    @field_validator("TOKEN")
+    @classmethod
+    def _reject(cls, v: str) -> str:
+        raise ValueError("upstream-validator-rejected")
+
+
+class TestSecretValidationErrorBoundary:
+    """MAS-SEC-006 (M7): a local-record value successfully resolved from a
+    ``secret:`` reference must never survive into a later validation
+    failure's text, repr, structured payload, cause, or context, on either
+    the constructor or cache-hit route. Red until Task 3 adds the guard
+    boundary at both routes; the literal-only and missing-reference cases
+    are controls that must already pass and must keep passing."""
+
+    def test_constructor_rejecting_validator_sanitizes_resolved_marker(self):
+        backend = _M7MarkerBackend()
+        with pytest.raises(ValueError) as excinfo:
+            _M7RejectingSettings(
+                settings_parameters=SettingsParameters.create(
+                    settings_class=_M7RejectingSettings,
+                    secret_store=backend,
+                    TOKEN="secret:db",
+                )
+            )
+        error = excinfo.value
+        assert backend.MARKER not in str(error)
+        assert backend.MARKER not in repr(error)
+        assert "upstream-validator-rejected" not in str(error)
+        assert "_M7RejectingSettings" in str(error)
+        assert "TOKEN" in str(error)
+        assert error.__cause__ is None
+        assert error.__context__ is None
+
+    def test_constructor_literal_only_validator_error_stays_ordinary(self):
+        """Control: a caller-known literal was never resolved, so the
+        ordinary Pydantic diagnostic must remain -- this must NOT sanitize."""
+        with pytest.raises(ValidationError, match="upstream-validator-rejected"):
+            _M7RejectingSettings(TOKEN="plain-literal-value")
+
+    def test_constructor_missing_reference_keeps_key_error(self):
+        """Control: no local-record value was ever produced, so the
+        existing descriptive ``KeyError`` contract must be preserved."""
+        from mountainash_settings.secrets import MemorySecretStore
+
+        with pytest.raises(KeyError):
+            _M7RejectingSettings(
+                settings_parameters=SettingsParameters.create(
+                    settings_class=_M7RejectingSettings,
+                    secret_store=MemorySecretStore(),
+                    TOKEN="secret:missing.nonexistent_field_xyz",
+                )
+            )
+
+    def test_cache_hit_rejecting_validator_sanitizes_resolved_marker(self, settings_manager):
+        backend = _M7MarkerBackend()
+        params = SettingsParameters.create(
+            settings_class=_M7RejectingSettings,
+            secret_store=backend,
+            TOKEN="secret:db",
+        )
+        with pytest.raises(ValueError) as excinfo:
+            get_settings(settings_parameters=params)
+        error = excinfo.value
+        assert backend.MARKER not in str(error)
+        assert backend.MARKER not in repr(error)
+        assert error.__cause__ is None
+        assert error.__context__ is None
