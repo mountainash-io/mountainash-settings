@@ -16,7 +16,7 @@ from __future__ import annotations
 import typing as t
 import warnings
 
-from pydantic import AfterValidator, SecretStr, ValidationError
+from pydantic import AfterValidator, PrivateAttr, SecretStr, ValidationError
 from pydantic.fields import FieldInfo
 
 from mountainash_settings import MountainAshBaseSettings
@@ -95,6 +95,17 @@ class Profile(MountainAshBaseSettings):
     ] = None
     __adapters__: t.ClassVar[dict[t.Hashable, "Adapter"]] = {}
 
+    # MAS-SEC-005 (M6 review follow-up, 2026-09-25): field names -- never
+    # values -- that THIS instance's own post_init has derived via template,
+    # across every call regardless of route. _settings_carried_field_names
+    # (base class) only ever reflects the cache/fork route; this ledger
+    # additionally covers direct (non-cached) construction, so a later
+    # manual post_init(reinitialise=True) call on a plain instance can still
+    # recompute a field whose dependency has since changed, rather than
+    # being a permanent no-op (see the code-review findings recorded in the
+    # M6 plan doc).
+    _profile_derived_field_names: frozenset[str] = PrivateAttr(default=frozenset())
+
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: t.Any) -> None:
         """Install fields described by ``__spec__`` on the subclass."""
@@ -168,7 +179,19 @@ class Profile(MountainAshBaseSettings):
           declared default, ``None``, or ``""``.
         - On ``reinitialise=True``: only fields previously recorded as
           template-derived are eligible, excluding any explicitly supplied
-          to *this* call. A caller's explicit value always wins.
+          to *this* call (through the cache/fork route). A caller's
+          explicit value always wins through that route.
+
+        Known limitation: ``_settings_runtime_field_names`` (the "explicit
+        this call" exclusion) is only ever populated by the cache/fork
+        route (``SettingsManager`` / ``get_settings(reinitialise=True)``).
+        A raw, direct call to ``post_init(reinitialise=True)`` on a
+        manually constructed instance has no way to tell "the caller just
+        set this field moments ago" from "this field still holds an old
+        derived value" -- it will re-derive every field this instance has
+        ever template-derived (see ``_profile_derived_field_names`` below)
+        from current attribute state, with no per-call explicit-override
+        protection outside the cache/fork route.
 
         See the MAS-SEC-005 decision checkpoint (mountainash-central
         04.planning/mountainash-settings/superpowers/plans/
@@ -185,8 +208,12 @@ class Profile(MountainAshBaseSettings):
             return
 
         explicit_at_entry = frozenset(self.__pydantic_fields_set__)
-        previously_derived = self._settings_carried_field_names
+        # _profile_derived_field_names covers direct (non-cached)
+        # construction, where _settings_carried_field_names never
+        # populates (no cache frame runs there) -- see the docstring above.
+        previously_derived = self._settings_carried_field_names | self._profile_derived_field_names
         explicit_this_call = self._settings_runtime_field_names
+        newly_derived: set[str] = set()
 
         for param in spec.parameters:
             if param.template is None:
@@ -208,7 +235,20 @@ class Profile(MountainAshBaseSettings):
                 current_value=None,  # force template evaluation
                 reinitialise=reinitialise,
             )
-            sensitive = param.secret or self._settings_secret_store is not None
+            # Sensitivity is narrowly scoped to fields the spec itself
+            # declares secret=True. A store being bound elsewhere on this
+            # instance does not make an unrelated literal-only field
+            # "secret" -- blanket-sanitizing every derived field once any
+            # store is bound would mislabel ordinary validation failures as
+            # secret-resolution failures, diluting that signal and hiding
+            # real bugs behind a misleading message (see the M6 review
+            # findings recorded in the plan doc). The residual case this
+            # narrower criterion does not cover -- a non-secret-typed field
+            # populated via a runtime `secret:` override, then referenced
+            # by a template, whose derived value fails validation -- is an
+            # explicit known limitation for MAS-SEC-001/006 provenance
+            # tracking, not something to paper over here.
+            sensitive = param.secret
             try:
                 setattr(self, param.name, new_val)
             except ValidationError:
@@ -217,6 +257,12 @@ class Profile(MountainAshBaseSettings):
 
                     _raise_sanitized_resolution_error(type(self), [param.name])
                 raise
+            newly_derived.add(param.name)
+
+        if newly_derived:
+            object.__setattr__(
+                self, "_profile_derived_field_names", self._profile_derived_field_names | newly_derived,
+            )
 
     # --- Kwargs helpers ------------------------------------------------------
 

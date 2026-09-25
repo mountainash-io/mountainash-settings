@@ -507,6 +507,90 @@ class TestSensitiveDerivedFailureBoundary:
         with pytest.raises(ValidationError, match="must not be empty"):
             P()
 
+    def test_non_secret_field_stays_useful_even_with_a_store_bound(self):
+        """M6 review finding (2026-09-25): sensitivity is scoped to
+        param.secret only. A secret_store being bound elsewhere on the
+        instance must not blanket-sanitize an unrelated literal-only
+        field's failure -- that would mislabel ordinary validation errors
+        as secret-resolution failures, diluting that signal and hiding
+        real bugs. Red before the narrowing fix (the old `or
+        self._settings_secret_store is not None` branch sanitized this)."""
+        from mountainash_settings.secrets import MemorySecretStore
+
+        def _reject(v: str) -> str:
+            raise ValueError("must not be empty")
+
+        spec = ProfileSpec(
+            name="derived-plain-fail-with-store", provider_type="derived-plain-fail-with-store",
+            parameters=[
+                ParameterSpec(name="RAW", type=str, tier="core", default="value"),
+                ParameterSpec(
+                    name="PLAIN", type=str, tier="core", default="",
+                    template="{RAW}", validator=_reject,
+                ),
+            ],
+        )
+
+        class P(Profile):
+            __spec__ = spec
+
+        with pytest.raises(ValidationError, match="must not be empty"):
+            P(secret_store=MemorySecretStore())
+
+
+@pytest.mark.unit
+class TestDirectReinitialise:
+    """M6 review finding (2026-09-25): a raw, direct call to
+    ``post_init(reinitialise=True)`` on a manually constructed (non-cached)
+    Profile instance must still be able to recompute a previously
+    template-derived field -- it must not be a permanent no-op just because
+    ``_settings_carried_field_names`` (cache-route-only) stays empty
+    outside the cache/fork route. ``_profile_derived_field_names`` (tracked
+    by Profile itself, independent of the cache frame) closes that gap.
+
+    The known limitation documented in ``Profile.post_init``'s docstring is
+    also captured here: outside the cache/fork route there is no per-call
+    "explicit this call" signal, so a manual override made immediately
+    before a direct ``reinitialise=True`` call is not protected."""
+
+    def _spec(self):
+        return ProfileSpec(
+            name="direct-reinit", provider_type="direct-reinit",
+            parameters=[
+                ParameterSpec(name="HOST", type=str, tier="core", default="a.example"),
+                ParameterSpec(name="URL", type=str, tier="core", default="",
+                              template="https://{HOST}/api"),
+            ],
+        )
+
+    def test_direct_reinitialise_recomputes_from_changed_dependency(self):
+        spec = self._spec()
+
+        class P(Profile):
+            __spec__ = spec
+
+        p = P()
+        assert p.URL == "https://a.example/api"
+
+        p.HOST = "b.example"
+        p.post_init(reinitialise=True)
+        assert p.URL == "https://b.example/api"
+
+    def test_direct_reinitialise_known_limitation_overwrites_a_fresh_manual_override(self):
+        spec = self._spec()
+
+        class P(Profile):
+            __spec__ = spec
+
+        p = P()
+        p.HOST = "b.example"
+        p.URL = "https://manually-set.example/"  # caller's fresh override
+        # Documented known limitation: outside the cache/fork route there
+        # is no way to distinguish this from a stale previously-derived
+        # value, so a direct reinitialise=True call recomputes it anyway.
+        p.post_init(reinitialise=True)
+        assert p.URL == "https://b.example/api"
+
 
 @pytest.mark.unit
 class TestSpecAttributeFallback:
