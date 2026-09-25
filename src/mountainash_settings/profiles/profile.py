@@ -249,14 +249,26 @@ class Profile(MountainAshBaseSettings):
             # explicit known limitation for MAS-SEC-001/006 provenance
             # tracking, not something to paper over here.
             sensitive = param.secret
+            validation_error: t.Optional[ValidationError] = None
             try:
                 setattr(self, param.name, new_val)
-            except ValidationError:
+            except ValidationError as exc:
+                validation_error = exc
+            if validation_error is not None:
+                # MAS-SEC-006 (M7): record the failure and leave the
+                # handler before raising -- Python reattaches whatever
+                # exception is currently being handled into a newly raised
+                # error's __context__ regardless of how it's raised, so the
+                # sanitizer must run outside this except block, never
+                # inside it (confirmed by direct reproduction: raising here
+                # left the real ValidationError, and the secret value
+                # inside it, reachable via __context__ despite
+                # __suppress_context__).
                 if sensitive:
                     from mountainash_settings.resolve import _raise_sanitized_resolution_error
 
                     _raise_sanitized_resolution_error(type(self), [param.name])
-                raise
+                raise validation_error
             newly_derived.add(param.name)
 
         if newly_derived:

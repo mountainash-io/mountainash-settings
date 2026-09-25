@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from threading import Lock
 from typing import Any, Iterator, Type, cast
 
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel
 from pydantic._internal._utils import deep_update
 from pydantic_settings import (
     BaseSettings,
@@ -29,7 +29,7 @@ from pydantic_settings.sources import (
 
 from pydantic_settings.sources.utils import InitState
 
-from ..resolve import resolve_references_in_dict
+from ..resolve import _resolve_dict_with_changed_fields
 from ..secrets.backend import SecretReader
 from ..settings_parameters import SettingsFileHandler, SettingsParameters
 from .sources import CacheableSettingsSource
@@ -93,6 +93,11 @@ class _CacheFrame:
     recording_instance: BaseSettings | None = None
     suppressed_fields: frozenset[str] = frozenset()
     has_runtime_inputs: bool = False
+    # MAS-SEC-006 (M7): this invocation's own runtime-override field names
+    # that were resolved from a secret: reference -- field names only,
+    # never values. Populated by candidate() as a side effect of the single
+    # resolution _candidate() already performs, never a second store read.
+    runtime_sensitive_fields: frozenset[str] = frozenset()
 
     def bind(self, instance: BaseSettings) -> None:
         if (
@@ -109,7 +114,7 @@ class _CacheFrame:
 
     def candidate(self, effective_runtime: dict[str, Any]) -> dict[str, Any]:
         self.has_runtime_inputs = bool(effective_runtime)
-        candidate, self.suppressed_fields = self.context._candidate(
+        candidate, self.suppressed_fields, self.runtime_sensitive_fields = self.context._candidate(
             effective_runtime, reinitialise=self.reinitialise,
         )
         return candidate
@@ -333,18 +338,25 @@ def _capture_sources(key: _StructuralKey) -> tuple[tuple[_SourceSnapshot, ...], 
 
 def _resolve_capture(
     key: _StructuralKey, snapshots: tuple[_SourceSnapshot, ...],
-) -> tuple[_SourceSnapshot, ...]:
-    return tuple(
-        (
-            source_type,
-            name,
-            _owned(snapshot) if source_type is DefaultSettingsSource else _owned(
-                resolve_references_in_dict(_copy_for_call(snapshot), key.secret_store)
-            ),
-            custom,
+) -> tuple[tuple[_SourceSnapshot, ...], frozenset[str]]:
+    """Resolve every non-default source snapshot; also report which
+    top-level field names, across all sources, were resolved from a
+    secret: reference (MAS-SEC-006, M7). Field names only, never values --
+    collected as a side effect of the resolution walk each source already
+    requires, never a second store read.
+    """
+    changed_fields: set[str] = set()
+    resolved: list[_SourceSnapshot] = []
+    for source_type, name, snapshot, custom in snapshots:
+        if source_type is DefaultSettingsSource:
+            resolved.append((source_type, name, _owned(snapshot), custom))
+            continue
+        resolved_snapshot, changed = _resolve_dict_with_changed_fields(
+            _copy_for_call(snapshot), key.secret_store,
         )
-        for source_type, name, snapshot, custom in snapshots
-    )
+        changed_fields |= changed
+        resolved.append((source_type, name, _owned(resolved_snapshot), custom))
+    return tuple(resolved), frozenset(changed_fields)
 
 
 def _capture_static_defaults(key: _StructuralKey) -> dict[str, Any]:
@@ -372,11 +384,17 @@ class _SettingsContext:
         self._resolved_sources: tuple[_SourceSnapshot, ...] | None = None
         self._resolved_static_defaults: dict[str, Any] = {}
         self._source_carry: dict[str, Any] | None = None
+        # MAS-SEC-006 (M7): deterministic top-level field names -- never
+        # values -- whose captured config/env/static-default value was
+        # resolved from a secret: reference. Computed once at capture()
+        # time as a side effect of the resolution walk each source already
+        # performs. See source_sensitive_field_names().
+        self._source_sensitive_fields: frozenset[str] = frozenset()
         self._publication_lock = Lock()
 
     def capture(self) -> None:
         raw_sources, _ = _capture_sources(self.key)
-        resolved_sources = _resolve_capture(self.key, raw_sources)
+        resolved_sources, source_sensitive_fields = _resolve_capture(self.key, raw_sources)
         static_defaults = _capture_static_defaults(self.key)
         self._raw_sources = tuple(
             (source_type, name, _owned(values), custom)
@@ -387,6 +405,13 @@ class _SettingsContext:
             for source_type, name, values, custom in resolved_sources
         )
         self._resolved_static_defaults = _owned(static_defaults)
+        self._source_sensitive_fields = source_sensitive_fields | frozenset(static_defaults)
+
+    def source_sensitive_field_names(self) -> frozenset[str]:
+        """Deterministic top-level field names whose captured source or
+        static-default value was resolved from a secret: reference
+        (MAS-SEC-006). Field names only, never values or reference text."""
+        return self._source_sensitive_fields
 
     def _project_sources(self, runtime: dict[str, Any]) -> dict[str, Any]:
         if self._resolved_sources is None:
@@ -434,28 +459,9 @@ class _SettingsContext:
         """Return only the caller's source-form runtime input."""
         return _copy_for_call(original_runtime)
 
-    def has_secret_reference(self, runtime: dict[str, Any]) -> bool:
-        def contains_reference(value: Any) -> bool:
-            if isinstance(value, SecretStr):
-                return value.get_secret_value().startswith("secret:")
-            if isinstance(value, str):
-                return value.startswith("secret:")
-            if isinstance(value, dict):
-                return any(contains_reference(child) for child in value.values())
-            if isinstance(value, (list, tuple)):
-                return any(contains_reference(child) for child in value)
-            return False
-
-        if contains_reference(runtime):
-            return True
-        return self._raw_sources is not None and any(
-            contains_reference(snapshot)
-            for _, _, snapshot, _ in self._raw_sources
-        )
-
     def _candidate(
         self, effective_runtime: dict[str, Any], *, reinitialise: bool = False,
-    ) -> tuple[dict[str, Any], frozenset[str]]:
+    ) -> tuple[dict[str, Any], frozenset[str], frozenset[str]]:
         from ..settings.base_settings import (
             MountainAshBaseSettings,
             _cache_input_field_names,
@@ -463,8 +469,11 @@ class _SettingsContext:
         )
 
         runtime = _owned(effective_runtime) if effective_runtime else {}
+        runtime_sensitive_fields: frozenset[str] = frozenset()
         if runtime:
-            runtime = resolve_references_in_dict(runtime, self.key.secret_store)
+            runtime, runtime_sensitive_fields = _resolve_dict_with_changed_fields(
+                runtime, self.key.secret_store,
+            )
         candidate = self._project_sources(runtime)
         with self._publication_lock:
             retained_carry = self._source_carry
@@ -489,6 +498,7 @@ class _SettingsContext:
             candidate,
             frozenset(carry)
             | _cache_input_field_names(cls, effective_runtime),
+            runtime_sensitive_fields,
         )
 
     def materialize(self, runtime: dict[str, Any], *, reinitialise: bool = False) -> BaseSettings:
@@ -509,14 +519,29 @@ class _SettingsContext:
         else:
             if cls.__init__ is not BaseSettings.__init__:
                 raise ValueError("Cached retrieval requires BaseSettings.__init__ for plain settings classes")
-            candidate, _ = self._candidate(runtime, reinitialise=reinitialise)
+            candidate, _, runtime_sensitive_fields = self._candidate(runtime, reinitialise=reinitialise)
             result = cls.__new__(cls)
+            caught_error: Exception | None = None
             try:
                 BaseModel.__init__(result, **candidate)
-            except Exception:
-                if self.has_secret_reference(runtime):
-                    raise ValueError(f"Cached validation failed for {cls.__name__}") from None
-                raise
+            except Exception as exc:
+                caught_error = exc
+            if caught_error is not None:
+                # MAS-SEC-006 (M7): record the failure and leave the handler
+                # before raising -- Python reattaches whatever exception is
+                # currently being handled into a newly raised error's
+                # __context__ regardless of `from None`, so the sanitizer
+                # must run outside this except block, never inside it. Only
+                # guard when the fields the error actually names overlap
+                # with fields resolved from a reference -- an unrelated
+                # ordinary field failing in the same batch validation call
+                # must keep its real diagnostic, not be mislabeled as a
+                # secret-resolution failure (review finding, 2026-09-25).
+                sensitive_fields = self._source_sensitive_fields | runtime_sensitive_fields
+                from ..resolve import _sanitize_if_implicated
+
+                _sanitize_if_implicated(cls, caught_error, sensitive_fields)
+                raise caught_error
             _apply_cached_static_defaults(
                 result, candidate, _copy_for_call(self._resolved_static_defaults),
             )

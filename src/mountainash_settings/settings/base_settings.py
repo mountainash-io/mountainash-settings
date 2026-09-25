@@ -523,12 +523,27 @@ class MountainAshBaseSettings(BaseSettings):
         parameters = frame.context.key.parameters()
         config_files = SettingsFileHandler.separate_config_files(parameters.config_files)
         candidate = frame.candidate(effective_runtime)
+        caught_error: Optional[Exception] = None
         try:
             BaseModel.__init__(self, **candidate)
-        except Exception:
-            if frame.context.has_secret_reference(effective_runtime):
-                raise ValueError(f"Cached validation failed for {type(self).__name__}") from None
-            raise
+        except Exception as exc:
+            caught_error = exc
+        if caught_error is not None:
+            # MAS-SEC-006 (M7): record the failure and leave the handler
+            # before raising -- Python reattaches whatever exception is
+            # currently being handled into a newly raised error's
+            # __context__ regardless of `from None`, so the sanitizer must
+            # run outside this except block, never inside it. Only guard
+            # when the fields the error actually names overlap with fields
+            # resolved from a reference -- an unrelated ordinary field
+            # failing in the same batch validation call must keep its real
+            # diagnostic, not be mislabeled as a secret-resolution failure
+            # (review finding, 2026-09-25).
+            sensitive_fields = frame.context.source_sensitive_field_names() | frame.runtime_sensitive_fields
+            from mountainash_settings.resolve import _sanitize_if_implicated
+
+            _sanitize_if_implicated(type(self), caught_error, sensitive_fields)
+            raise caught_error
         _apply_cached_static_defaults(
             self, candidate, frame.static_defaults_for_call(),
         )
@@ -622,8 +637,10 @@ class MountainAshBaseSettings(BaseSettings):
 
 
         # Resolve prefixed references (e.g. secret:) in kwargs before pydantic validation
-        from mountainash_settings.resolve import resolve_references_in_dict
-        valid_attribute_kwargs = resolve_references_in_dict(valid_attribute_kwargs, local_settings_params.secret_store)
+        from mountainash_settings.resolve import _resolve_dict_with_changed_fields
+        valid_attribute_kwargs, _resolved_field_names = _resolve_dict_with_changed_fields(
+            valid_attribute_kwargs, local_settings_params.secret_store,
+        )
 
         # NOTE: All that has happened before now is prior to calling the init on Base Settings!
         # Now we initialise the values! File-source paths for this invocation
@@ -632,24 +649,43 @@ class MountainAshBaseSettings(BaseSettings):
         # is never mutated by construction. The six explicit literals below are
         # MountainAsh-owned fixed defaults, not accepted per-call kwargs; keep
         # them in lockstep with settings_cache/_context.py's mirrored defaults.
+        construction_error: Optional[Exception] = None
         with _direct_source_frame(
             self.__class__,
             obj_config_files.yaml_files or None,
             obj_config_files.toml_files or None,
             obj_config_files.json_files or None,
         ):
-            super().__init__(   _case_sensitive=True,
-                                _nested_model_default_partial_update=False,
-                                _env_prefix=            local_settings_params.env_prefix,
-                                _env_file=              obj_config_files.env_files or None,
-                                _env_file_encoding =    'utf-8',
-                                _env_ignore_empty =     True,
-                                _env_nested_delimiter = None,
-                                _env_parse_none_str =   "None",
-                                _env_parse_enums =      True,
-                                _secrets_dir=           local_settings_params.secrets_dir,
-                                **valid_attribute_kwargs
-                            )
+            try:
+                super().__init__(   _case_sensitive=True,
+                                    _nested_model_default_partial_update=False,
+                                    _env_prefix=            local_settings_params.env_prefix,
+                                    _env_file=              obj_config_files.env_files or None,
+                                    _env_file_encoding =    'utf-8',
+                                    _env_ignore_empty =     True,
+                                    _env_nested_delimiter = None,
+                                    _env_parse_none_str =   "None",
+                                    _env_parse_enums =      True,
+                                    _secrets_dir=           local_settings_params.secrets_dir,
+                                    **valid_attribute_kwargs
+                                )
+            except Exception as exc:
+                construction_error = exc
+        if construction_error is not None:
+            # MAS-SEC-006 (M7): record the failure and leave the handler
+            # (and the _direct_source_frame block) before raising -- Python
+            # reattaches whatever exception is currently being handled into
+            # a newly raised error's __context__ regardless of `from None`,
+            # so the sanitizer must run outside this except block, never
+            # inside it. Only guard when the fields the error actually
+            # names overlap with fields resolved from a reference -- an
+            # unrelated ordinary field failing in the same batch validation
+            # call must keep its real diagnostic, not be mislabeled as a
+            # secret-resolution failure (review finding, 2026-09-25).
+            from mountainash_settings.resolve import _sanitize_if_implicated
+
+            _sanitize_if_implicated(self.__class__, construction_error, _resolved_field_names)
+            raise construction_error
 
 
         # Meta-field bookkeeping only. super().__init__ above already applied
@@ -893,14 +929,30 @@ class MountainAshBaseSettings(BaseSettings):
             merged = _patch_reconstruction(merged, patch, type(self))
         else:
             merged = None
+        resolved_field_names: frozenset[str] = frozenset()
         if backend is not None:
-            from mountainash_settings.resolve import resolve_references_in_dict
-            settings_dict = resolve_references_in_dict(settings_dict, backend)
+            from mountainash_settings.resolve import _resolve_dict_with_changed_fields
+            settings_dict, resolved_field_names = _resolve_dict_with_changed_fields(settings_dict, backend)
         for key, value in settings_dict.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
-            else:
+            if not hasattr(self, key):
                 raise AttributeError(f"The object does not have an attribute named '{key}'")
+            # MAS-SEC-006 (M7): a resolved-reference value can still fail
+            # this key's own validation; record the failure and leave the
+            # handler before raising the sanitized error, same as every
+            # other route that validates an already-resolved secret. This
+            # is a single-field assignment, so the failing key is already
+            # known precisely -- no batch cross-field attribution needed.
+            assignment_error: Optional[Exception] = None
+            try:
+                setattr(self, key, value)
+            except Exception as exc:
+                assignment_error = exc
+            if assignment_error is not None:
+                if key in resolved_field_names:
+                    from mountainash_settings.resolve import _raise_sanitized_resolution_error
+
+                    _raise_sanitized_resolution_error(type(self), [key])
+                raise assignment_error
 
         self._settings_reconstruction_kwargs = merged
         names = tuple(merged) if merged is not None else tuple(dict.fromkeys(

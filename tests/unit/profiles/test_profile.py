@@ -537,6 +537,44 @@ class TestSensitiveDerivedFailureBoundary:
         with pytest.raises(ValidationError, match="must not be empty"):
             P(secret_store=MemorySecretStore())
 
+    def test_sanitized_error_context_does_not_retain_the_original_validation_error(self):
+        """MAS-SEC-006 (M7): ``_raise_sanitized_resolution_error`` is called
+        from *inside* the ``except ValidationError:`` block in
+        ``Profile.post_init``. Python reattaches the exception currently
+        being handled into ``__context__`` when you raise while still
+        inside its handler, even though the helper explicitly sets
+        ``error.__context__ = None`` first -- the manual assignment is
+        overwritten by the interpreter's own raise machinery. Only raising
+        after the handler has been exited (record a flag, leave the
+        ``except`` block, then raise) actually achieves
+        ``__context__ is None``. Red until Task 4 fixes the call site;
+        ``__suppress_context__`` alone (asserted by the M6 test above) only
+        hides the chain from a printed traceback -- ``__context__`` remains
+        walkable by anything that inspects the exception object directly
+        (structured logging, Sentry, ``traceback.format_exception``)."""
+
+        def _reject(v: str) -> str:
+            raise ValueError("upstream-secret-value-should-not-leak")
+
+        spec = ProfileSpec(
+            name="derived-secret-context-leak", provider_type="derived-secret-context-leak",
+            parameters=[
+                ParameterSpec(name="RAW", type=str, tier="core", default="super-secret-canary"),
+                ParameterSpec(
+                    name="TOKEN", type=str, tier="core", default="",
+                    secret=True, template="{RAW}", validator=_reject,
+                ),
+            ],
+        )
+
+        class P(Profile):
+            __spec__ = spec
+
+        with pytest.raises(ValueError) as excinfo:
+            P()
+
+        assert excinfo.value.__context__ is None
+
 
 @pytest.mark.unit
 class TestDirectReinitialise:

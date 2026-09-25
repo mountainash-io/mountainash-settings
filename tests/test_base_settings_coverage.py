@@ -363,6 +363,46 @@ class TestUpdateSettingsFromDict:
         assert settings.TEST_VAL_1 == "updated1"
         assert settings.TEST_VAL_2 == "original2"  # Should remain unchanged
 
+    @pytest.mark.unit
+    def test_apply_settings_inputs_with_backend_sanitizes_resolved_marker(self):
+        """MAS-SEC-006 (M7) review finding (2026-09-25): _apply_settings_inputs
+        accepts a ``backend`` for reference resolution, but no current caller
+        ever passes one (update_settings_from_dict() always uses the default
+        None) -- confirmed dead in practice, but the disclosure boundary must
+        still hold if a future caller ever does pass one, since this shares
+        the exact resolve-then-validate shape fixed at every other M7 route."""
+        from pydantic import field_validator
+
+        class _RejectingSettings(MountainAshBaseSettings):
+            TOKEN: str = Field(default="unset")
+
+            @field_validator("TOKEN")
+            @classmethod
+            def _reject(cls, v: str) -> str:
+                raise ValueError("upstream-validator-rejected")
+
+        class _Backend:
+            MARKER = "M7-APPLY-SETTINGS-INPUTS-MARKER"
+
+            def get(self, key: str) -> dict:
+                return {"value": self.MARKER}
+
+        settings = _RejectingSettings.__new__(_RejectingSettings)
+        object.__setattr__(settings, "_settings_secret_store", None)
+        settings._settings_reconstruction_kwargs = {}
+        object.__setattr__(settings, "SETTINGS_SOURCE_KWARG_NAMES", ())
+        object.__setattr__(settings, "__dict__", {**settings.__dict__, "TOKEN": "unset"})
+        object.__setattr__(settings, "__pydantic_fields_set__", set())
+
+        backend = _Backend()
+        with pytest.raises(ValueError) as excinfo:
+            settings._apply_settings_inputs({"TOKEN": "secret:db"}, backend=backend)
+        error = excinfo.value
+        assert backend.MARKER not in str(error)
+        assert "upstream-validator-rejected" not in str(error)
+        assert error.__cause__ is None
+        assert error.__context__ is None
+
 
 class TestExtractSettingsParameters:
     """Test extract_settings_parameters() method."""
