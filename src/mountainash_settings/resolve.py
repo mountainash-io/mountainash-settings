@@ -408,13 +408,38 @@ def _resolve_reference_value(
     return value, False
 
 
+def _resolve_dict_with_changed_fields(
+    data: dict[str, t.Any],
+    store: "SecretReader | None",
+    prefix: str = "secret:",
+) -> tuple[dict[str, t.Any], frozenset[str]]:
+    """Resolve top-level dict entries; also report which keys changed.
+
+    MAS-SEC-006 (M7): the second member is value-free diagnostic metadata
+    only -- deterministic top-level key names, never values or reference
+    text. It exists so a caller can scope a later validation-error
+    sanitizer to fields that could actually carry a resolved secret,
+    rather than guarding every field whenever any reference exists
+    anywhere in the invocation. Never attach it to provenance, logs, or
+    exceptions.
+    """
+    changed_fields: set[str] = set()
+    resolved: dict[str, t.Any] = {}
+    for key, value in data.items():
+        new_value, item_changed = _resolve_reference_value(value, store, prefix)
+        resolved[key] = new_value
+        if item_changed:
+            changed_fields.add(key)
+    return resolved, frozenset(changed_fields)
+
+
 def resolve_references_in_dict(
     data: dict[str, t.Any],
     store: "SecretReader | None",
     prefix: str = "secret:",
 ) -> dict[str, t.Any]:
-    resolved, _ = _resolve_reference_value(data, store, prefix)
-    return t.cast(dict[str, t.Any], resolved)
+    resolved, _ = _resolve_dict_with_changed_fields(data, store, prefix)
+    return resolved
 
 
 def resolve_references_in_model_tree(
