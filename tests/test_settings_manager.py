@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 import pytest
-from pydantic import AliasPath, BaseModel, Field, PrivateAttr, SecretStr, field_validator, model_validator
+from pydantic import AliasPath, BaseModel, Field, PrivateAttr, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from mountainash_settings import (
@@ -719,3 +719,26 @@ class TestSecretValidationErrorBoundary:
         assert error.__cause__ is None
         assert error.__context__ is None
         assert backend.calls == 1
+
+    def test_unrelated_field_failure_keeps_its_own_diagnostic(self):
+        """Review finding (2026-09-25): a batch validation call can fail on
+        an ordinary field that was never resolved, even while some other
+        field in the same call *was* resolved from a secret: reference.
+        Sanitizing on "any field in this call was resolved" hides the real
+        unrelated diagnostic."""
+
+        class _MixedFieldsPlainSettings(BaseSettings):
+            PASSWORD: str = "x"
+            PORT: int = 1
+
+        backend = _CountingBackend("M7-UNMISTAKABLE-SECRET-MARKER-mixed")
+        manager = SettingsManager()
+        params = SettingsParameters.create(
+            settings_class=_MixedFieldsPlainSettings,
+            secret_store=backend,
+            PASSWORD="secret:db.password",
+            PORT="not-a-number",
+        )
+        with pytest.raises(ValidationError, match="PORT") as excinfo:
+            manager.get_or_create_settings(params)
+        assert backend.value not in str(excinfo.value)

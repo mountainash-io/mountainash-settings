@@ -313,6 +313,65 @@ def _raise_sanitized_resolution_error(
     raise error
 
 
+def _implicated_field_names(error: BaseException) -> "frozenset[str] | None":
+    """Return the top-level field names ``error`` actually names, or
+    ``None`` when that cannot be determined.
+
+    ``None`` means "cannot narrow" -- a caller should treat every candidate
+    field as implicated rather than silently skip sanitization, since an
+    un-attributable failure (a bare ``TypeError``/``ValueError`` raised by a
+    validator, which carries no structured ``.errors()``) can still embed a
+    resolved secret in its own message.
+    """
+    errors_method = getattr(error, "errors", None)
+    if not callable(errors_method):
+        return None
+    try:
+        raw_errors = errors_method()
+    except Exception:
+        return None
+    names: set[str] = set()
+    for entry in raw_errors:
+        loc = entry.get("loc") if isinstance(entry, dict) else None
+        if loc:
+            names.add(str(loc[0]))
+    return frozenset(names)
+
+
+def _sanitize_if_implicated(
+    model_type: type[BaseModel],
+    error: BaseException,
+    candidate_sensitive_fields: "frozenset[str]",
+) -> None:
+    """Raise the sanitized error only when ``error`` actually implicates one
+    of ``candidate_sensitive_fields``; otherwise return normally so the
+    caller re-raises the real error untouched.
+
+    A batch multi-field validation call (constructor, cache-hit candidate)
+    can fail because of an ordinary unrelated field even when some other
+    field in the same call was resolved from a ``secret:`` reference.
+    Sanitizing on "any field in this invocation was resolved" rather than
+    "the field(s) that actually failed were resolved" mislabels that
+    unrelated failure as a secret-resolution failure and hides the real
+    diagnostic -- the same over-broad-sanitization mistake MAS-SEC-005's
+    review already caught once for ``Profile.post_init`` (see the M6 plan
+    doc). Centralizing the decision here, rather than re-deriving it at
+    each guard site, keeps that mistake from recurring at a new call site.
+    Caller must invoke this only after leaving the ``except`` block that
+    caught ``error`` (see ``_raise_sanitized_resolution_error``).
+    """
+    if not candidate_sensitive_fields:
+        return None
+    implicated = _implicated_field_names(error)
+    guard_fields = (
+        candidate_sensitive_fields if implicated is None
+        else candidate_sensitive_fields & implicated
+    )
+    if guard_fields:
+        _raise_sanitized_resolution_error(model_type, sorted(guard_fields))
+    return None
+
+
 def _resolve_reference_value(
     value: t.Any,
     store: "SecretReader | None",

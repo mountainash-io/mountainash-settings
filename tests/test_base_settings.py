@@ -545,3 +545,46 @@ class TestSecretValidationErrorBoundary:
         assert error.__cause__ is None
         assert error.__context__ is None
         assert backend.calls == 1
+
+    def test_constructor_unrelated_field_failure_keeps_its_own_diagnostic(self):
+        """Review finding (2026-09-25): a batch validation call can fail on
+        an ordinary field that was never resolved, even while some other
+        field in the same call *was* resolved from a secret: reference.
+        Sanitizing on "any field in this call was resolved" rather than
+        "the field(s) that actually failed were resolved" hides the real
+        unrelated diagnostic -- the same over-broad-sanitization mistake
+        MAS-SEC-005's review already caught once for Profile.post_init."""
+
+        class _MixedFieldsSettings(MountainAshBaseSettings):
+            PASSWORD: str = Field(default="x")
+            PORT: int = Field(default=1)
+
+        backend = _M7MarkerBackend()
+        with pytest.raises(ValidationError, match="PORT") as excinfo:
+            _MixedFieldsSettings(
+                settings_parameters=SettingsParameters.create(
+                    settings_class=_MixedFieldsSettings,
+                    secret_store=backend,
+                    PASSWORD="secret:db",
+                    PORT="not-a-number",
+                )
+            )
+        assert backend.MARKER not in str(excinfo.value)
+
+    def test_cache_hit_unrelated_field_failure_keeps_its_own_diagnostic(self, settings_manager):
+        """Same as the constructor case, through the cache-hit route."""
+
+        class _MixedFieldsCacheSettings(MountainAshBaseSettings):
+            PASSWORD: str = Field(default="x")
+            PORT: int = Field(default=1)
+
+        backend = _M7MarkerBackend()
+        params = SettingsParameters.create(
+            settings_class=_MixedFieldsCacheSettings,
+            secret_store=backend,
+            PASSWORD="secret:db",
+            PORT="not-a-number",
+        )
+        with pytest.raises(ValidationError, match="PORT") as excinfo:
+            get_settings(settings_parameters=params)
+        assert backend.MARKER not in str(excinfo.value)

@@ -531,12 +531,16 @@ class _SettingsContext:
                 # before raising -- Python reattaches whatever exception is
                 # currently being handled into a newly raised error's
                 # __context__ regardless of `from None`, so the sanitizer
-                # must run outside this except block, never inside it.
+                # must run outside this except block, never inside it. Only
+                # guard when the fields the error actually names overlap
+                # with fields resolved from a reference -- an unrelated
+                # ordinary field failing in the same batch validation call
+                # must keep its real diagnostic, not be mislabeled as a
+                # secret-resolution failure (review finding, 2026-09-25).
                 sensitive_fields = self._source_sensitive_fields | runtime_sensitive_fields
-                if sensitive_fields:
-                    from ..resolve import _raise_sanitized_resolution_error
+                from ..resolve import _sanitize_if_implicated
 
-                    _raise_sanitized_resolution_error(cls, sorted(sensitive_fields))
+                _sanitize_if_implicated(cls, caught_error, sensitive_fields)
                 raise caught_error
             _apply_cached_static_defaults(
                 result, candidate, _copy_for_call(self._resolved_static_defaults),
