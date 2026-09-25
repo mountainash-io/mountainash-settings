@@ -210,16 +210,19 @@ class TestGetValidKwargNames:
 
     @pytest.mark.unit
     def test_get_valid_kwarg_names_with_class_provided(self):
-        """Test _get_valid_kwarg_names with settings_class provided."""
+        """Test _get_valid_kwarg_names with settings_class provided.
+
+        M5 (MAS-SEC-004): only declared fields are valid; underscore source
+        controls are rejected, not treated as valid attribute kwargs.
+        """
         params = SettingsParameters.create()
 
         result = params._get_valid_kwarg_names(settings_class=SimpleSettings)
 
-        # Should have model fields plus reserved pydantic kwargs
         assert "VALUE" in result
         assert "COUNT" in result
-        assert "_env_prefix" in result
-        assert "_case_sensitive" in result
+        assert "_env_prefix" not in result
+        assert "_case_sensitive" not in result
 
     @pytest.mark.unit
     def test_get_valid_kwarg_names_uses_stored_class(self):
@@ -328,66 +331,39 @@ class TestGetAttributeSettingsKwargs:
         assert "ANOTHER_INVALID" not in result
 
 
-class TestGetPydanticKwargs:
-    """Test get_pydantic_settings_kwargs() and get_pydantic_modelconfig_kwargs()."""
+class TestGetAttributeSettingsKwargsSourceControlRejection:
+    """M5 (MAS-SEC-004): get_attribute_settings_kwargs() rejects source and
+    undeclared schema controls value-free, before sources open, rather than
+    routing them to pydantic-settings kwargs or model_config."""
 
     @pytest.mark.unit
-    def test_get_pydantic_settings_kwargs_with_none_kwargs(self):
-        """Test get_pydantic_settings_kwargs returns empty dict when kwargs is None."""
-        params = SettingsParameters.create()
-
-        result = params.get_pydantic_settings_kwargs()
-
-        assert result == {}
-
-    @pytest.mark.unit
-    def test_get_pydantic_modelconfig_kwargs_with_none_kwargs(self):
-        """Test get_pydantic_modelconfig_kwargs returns empty dict when kwargs is None."""
-        params = SettingsParameters.create()
-
-        result = params.get_pydantic_modelconfig_kwargs()
-
-        assert result == {}
+    def test_rejects_every_underscore_prefixed_kwarg(self):
+        """Rejection is keyed to the leading-underscore rule, not an
+        enumerated list -- covers _env_*, _cli_*, and unlisted names alike."""
+        for key in ("_env_prefix", "_case_sensitive", "_cli_prog_name", "_secrets_dir", "_env_prefix_target"):
+            params = SettingsParameters(settings_class=SimpleSettings, kwargs={key: "x"})
+            with pytest.raises(ValueError, match=key):
+                params.get_attribute_settings_kwargs()
 
     @pytest.mark.unit
-    def test_get_pydantic_settings_kwargs_filters_correctly(self):
-        """Test that only pydantic settings kwargs are returned."""
+    def test_rejects_undeclared_legacy_schema_control(self):
+        """extra/arbitrary_types_allowed/validate_default fail value-free
+        unless the settings class declares a field of that name."""
         params = SettingsParameters(
-            kwargs={
-                "_env_prefix": "TEST_",
-                "_case_sensitive": True,
-                "regular_field": "value",
-                "extra": "allow"
-            }
+            settings_class=SimpleSettings,
+            kwargs={"extra": "allow", "arbitrary_types_allowed": True, "validate_default": False},
         )
 
-        result = params.get_pydantic_settings_kwargs()
-
-        assert "_env_prefix" in result
-        assert "_case_sensitive" in result
-        assert "regular_field" not in result
-        assert "extra" not in result
+        with pytest.raises(ValueError):
+            params.get_attribute_settings_kwargs()
 
     @pytest.mark.unit
-    def test_get_pydantic_modelconfig_kwargs_filters_correctly(self):
-        """Test that only pydantic modelconfig kwargs are returned."""
-        params = SettingsParameters(
-            kwargs={
-                "extra": "allow",
-                "arbitrary_types_allowed": True,
-                "validate_default": False,
-                "_env_prefix": "TEST_",
-                "regular_field": "value"
-            }
-        )
+    def test_none_kwargs_returns_empty_dict(self):
+        params = SettingsParameters.create()
 
-        result = params.get_pydantic_modelconfig_kwargs()
+        result = params.get_attribute_settings_kwargs()
 
-        assert "extra" in result
-        assert "arbitrary_types_allowed" in result
-        assert "validate_default" in result
-        assert "_env_prefix" not in result
-        assert "regular_field" not in result
+        assert result == {}
 
 
 class TestIntegration:

@@ -137,21 +137,22 @@ class TestSettingsParameters:
         expected_fields = {"field1", "field2", "field3"}
         assert result == expected_fields
 
-    def test_get_valid_kwarg_names_includes_reserved_pydantic_kwargs(self):
+    def test_get_valid_kwarg_names_only_includes_declared_fields(self):
+        """M5 (MAS-SEC-004): only declared fields are valid attribute kwargs;
+        underscore source-control names are no longer treated as valid."""
         params = SettingsParameters(settings_class=MockSettings)
         result = params._get_valid_kwarg_names()
 
         assert "field1" in result
         assert "field2" in result
         assert "field3" in result
-        assert "_case_sensitive" in result
-        assert "_env_prefix" in result
+        assert "_case_sensitive" not in result
+        assert "_env_prefix" not in result
 
     def test_get_attribute_settings_kwargs_filters_correctly(self):
         kwargs = {
             "field1": "value1",
             "field2": 100,
-            "_env_prefix": "TEST_",
             "invalid_field": "should_be_filtered"
         }
 
@@ -160,40 +161,29 @@ class TestSettingsParameters:
 
         assert "field1" in result
         assert "field2" in result
-        assert "_env_prefix" in result
         assert "invalid_field" not in result
 
-    def test_get_pydantic_settings_kwargs_returns_only_pydantic_kwargs(self):
-        kwargs = {
-            "field1": "value1",
-            "_env_prefix": "TEST_",
-            "_case_sensitive": True,
-            "custom_field": "value"
-        }
+    def test_get_attribute_settings_kwargs_rejects_underscore_source_control(self):
+        """M5 (MAS-SEC-004): every underscore-prefixed kwarg fails value-free
+        before sources open, by the leading-underscore rule."""
+        params = SettingsParameters(
+            settings_class=MockSettings,
+            kwargs={"field1": "value1", "_env_prefix": "TEST_"},
+        )
 
-        params = SettingsParameters(kwargs=kwargs)
-        result = params.get_pydantic_settings_kwargs()
+        with pytest.raises(ValueError, match="_env_prefix"):
+            params.get_attribute_settings_kwargs()
 
-        assert "_env_prefix" in result
-        assert "_case_sensitive" in result
-        assert "field1" not in result
-        assert "custom_field" not in result
+    def test_get_attribute_settings_kwargs_rejects_undeclared_legacy_schema_control(self):
+        """A legacy schema-control name is rejected unless the settings class
+        declares a field of that name; it never mutates shared class config."""
+        params = SettingsParameters(
+            settings_class=MockSettings,
+            kwargs={"extra": "allow"},
+        )
 
-    def test_get_pydantic_modelconfig_kwargs_returns_only_modelconfig_kwargs(self):
-        kwargs = {
-            "extra": "allow",
-            "arbitrary_types_allowed": True,
-            "field1": "value1",
-            "_env_prefix": "TEST_"
-        }
-
-        params = SettingsParameters(kwargs=kwargs)
-        result = params.get_pydantic_modelconfig_kwargs()
-
-        assert "extra" in result
-        assert "arbitrary_types_allowed" in result
-        assert "field1" not in result
-        assert "_env_prefix" not in result
+        with pytest.raises(ValueError, match="extra"):
+            params.get_attribute_settings_kwargs()
 
     def test_get_all_kwargs_returns_all_kwargs(self):
         kwargs = {
