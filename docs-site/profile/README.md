@@ -47,10 +47,10 @@ selectors and materializes a fresh, independently owned result for every
 caller. Selected source inputs and their prevalidation-resolved baseline
 references are pinned per context; runtime fields and explicit runtime secret
 references are invocation-local. Defaults and default factories remain
-Pydantic behavior evaluated per materialization. This does not claim the
-later Profile origin/template integration (MAS-SEC-005), direct-constructor
-source isolation (MAS-SEC-004), common errors (MAS-SEC-006), or lifecycle
-refresh work.
+Pydantic behavior evaluated per materialization. Profile origin/template
+integration (MAS-SEC-005) and direct-constructor source isolation
+(MAS-SEC-004) are delivered; common errors (MAS-SEC-006) and lifecycle
+refresh work remain separate, later work.
 
 ### Secrets Resolution
 
@@ -95,6 +95,7 @@ request. `CacheableSettingsSource.capture()` may perform the one external
 capture; `project(snapshot, current_state, sources_data)` must be pure and
 return terminal values. Do not treat its results as new source references.
 
-The profile-specific template/origin lifecycle, direct source framing,
-common error API, and refresh/rotation behavior remain the separately ordered
-MAS-SEC-005, MAS-SEC-004, MAS-SEC-006, and lifecycle work.
+The profile-specific template/origin lifecycle (MAS-SEC-005) and direct
+source framing (MAS-SEC-004) are delivered. The common error API
+(MAS-SEC-006) and refresh/rotation behavior remain separately ordered,
+later work.
