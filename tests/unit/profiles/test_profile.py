@@ -341,9 +341,11 @@ class TestReinitialiseCacheRoute:
             __spec__ = spec
 
         manager = SettingsManager()
-        p = manager.get_or_create_settings(
-            SettingsParameters.create(settings_class=P, HOST="a.example"),
-        )
+        # Zero-kwarg baseline: MAS-SEC-002's _source_carry only publishes
+        # from a materialize() call with no runtime overrides at all
+        # (_context.py:524-535), so every "previously derived" case below
+        # seeds it this way before applying a runtime override.
+        p = manager.get_or_create_settings(SettingsParameters.create(settings_class=P))
         assert p.URL == "https://a.example/api"
 
     def test_flag_off_host_override_leaves_url_stale(self):
@@ -353,9 +355,7 @@ class TestReinitialiseCacheRoute:
             __spec__ = spec
 
         manager = SettingsManager()
-        manager.get_or_create_settings(
-            SettingsParameters.create(settings_class=P, HOST="a.example"),
-        )
+        manager.get_or_create_settings(SettingsParameters.create(settings_class=P))
         p = manager.get_or_create_settings(
             SettingsParameters.create(settings_class=P, HOST="b.example"),
         )
@@ -369,9 +369,7 @@ class TestReinitialiseCacheRoute:
             __spec__ = spec
 
         manager = SettingsManager()
-        manager.get_or_create_settings(
-            SettingsParameters.create(settings_class=P, HOST="a.example"),
-        )
+        manager.get_or_create_settings(SettingsParameters.create(settings_class=P))
         p = manager.get_or_create_settings(
             SettingsParameters.create(settings_class=P, HOST="b.example"),
             reinitialise=True,
@@ -385,9 +383,7 @@ class TestReinitialiseCacheRoute:
             __spec__ = spec
 
         manager = SettingsManager()
-        manager.get_or_create_settings(
-            SettingsParameters.create(settings_class=P, HOST="a.example"),
-        )
+        manager.get_or_create_settings(SettingsParameters.create(settings_class=P))
         p = manager.get_or_create_settings(
             SettingsParameters.create(
                 settings_class=P, HOST="b.example", URL="https://custom.example/",
@@ -418,9 +414,7 @@ class TestReinitialiseCacheRoute:
             __spec__ = spec
 
         manager = SettingsManager()
-        manager.get_or_create_settings(
-            SettingsParameters.create(settings_class=P, HOST="a.example"),
-        )
+        manager.get_or_create_settings(SettingsParameters.create(settings_class=P))
         calls.clear()
         p = manager.get_or_create_settings(
             SettingsParameters.create(settings_class=P, HOST="b.example"),
@@ -444,9 +438,7 @@ class TestReinitialiseCacheRoute:
             __spec__ = spec
 
         manager = SettingsManager()
-        manager.get_or_create_settings(
-            SettingsParameters.create(settings_class=P, HOST="a.example", PORT=80),
-        )
+        manager.get_or_create_settings(SettingsParameters.create(settings_class=P))
         p = manager.get_or_create_settings(
             SettingsParameters.create(settings_class=P, HOST="b.example", PORT=8443),
             reinitialise=True,
