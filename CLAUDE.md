@@ -6,6 +6,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 mountainash-settings is a Python package for advanced configuration management with support for multiple file formats, authentication providers, and secret management. It provides a unified interface for loading settings from environment variables, configuration files (YAML, TOML, JSON), and various secret management systems.
 
+## Planning, Specs & Principles (live in mountainash-central)
+
+This repo holds **code only**. All design specs, implementation plans, the technical-debt
+backlog, and the architecture principles live in the ecosystem repo **`mountainash-central`**
+(sibling checkout: `../mountainash-central`):
+
+| Artifact | Location in `mountainash-central` |
+|----------|-----------------------------------|
+| Design specs | `04.planning/mountainash-settings/superpowers/specs/` |
+| Implementation plans | `04.planning/mountainash-settings/superpowers/plans/` |
+| Technical-debt backlog (+ `archive/`) | `04.planning/mountainash-settings/a.backlog/` |
+| ENFORCED architecture principles | `01.principles/mountainash-settings/` |
+
+**When running the superpowers flow (brainstorming → writing-plans → SDD) for this repo,
+write the spec/plan to `mountainash-central/04.planning/mountainash-settings/superpowers/{specs,plans}/`,
+not to a local `docs/superpowers/` directory.** (The superpowers skills default to a local
+`docs/superpowers/` path — override that default to the central location above.) Only source,
+tests, and this `CLAUDE.md` live in this repo's tree.
+
 ## Architecture
 
 ### Core Components
