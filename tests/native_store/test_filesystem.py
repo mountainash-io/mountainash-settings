@@ -150,13 +150,16 @@ def test_postcommit_marker_close_failure_reports_commit_without_retry(
     raw_file(store, tmp_path, ".one.cleared", b"")
     real_open, real_close = store._ops.open_file, store._ops.close
     marker_handle = None
+    marker_opens = 0
     marker_closes = 0
 
     def observe_open(parent, name, *, writable=False):
-        nonlocal marker_handle
+        nonlocal marker_handle, marker_opens
         handle = real_open(parent, name, writable=writable)
         if name == ".one.cleared":
-            marker_handle = handle
+            marker_opens += 1
+            if marker_handle is None:
+                marker_handle = handle
         return handle
 
     def fail_after_release(handle):
@@ -176,6 +179,7 @@ def test_postcommit_marker_close_failure_reports_commit_without_retry(
     assert_safe(caught.value, "write_committed_cleanup_failed")
     assert store.get("one") == {"token": "new"}
     assert not store.is_cleared("one")  # This injected error follows real release.
+    assert marker_opens == (2 if os.name == "nt" else 1)
     assert marker_closes == 1
 
 
