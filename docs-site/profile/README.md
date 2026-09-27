@@ -1,5 +1,10 @@
 # mountainash-settings
 
+> **Historical generated snapshot:** this profile and its module/facet JSON describe
+> the source revision dated 2026-05-13 in `manifest.json`, not the 0.1.0 API.
+> Generation provenance is retained. For supported usage, follow the
+> [current package guide](../../README.md) and [0.1 migration guide](../../docs/migration-0.1.md).
+
 **Typed, testable configuration for data applications -- one base class that loads any format, resolves secrets, and auto-derives connection parameters.**
 
 ## Vision

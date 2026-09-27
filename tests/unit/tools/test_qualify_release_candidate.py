@@ -39,6 +39,22 @@ def test_validate_python_identities_requires_312_and_313_once_each():
         )
 
 
+def test_installed_probe_rejects_stale_version(monkeypatch):
+    import mountainash_settings as version_module
+    qualifier = _qualifier_module()
+    monkeypatch.setattr(version_module, "__version__", "26.5.0")
+    with pytest.raises(AssertionError):
+        qualifier._common.installed_api_evidence()
+
+
+def test_installed_probe_rejects_profile_shim(monkeypatch):
+    import mountainash_settings.profiles as profiles
+    qualifier = _qualifier_module()
+    monkeypatch.setattr(profiles, "DescriptorProfile", profiles.Profile, raising=False)
+    with pytest.raises(AssertionError):
+        qualifier._common.installed_api_evidence()
+
+
 def test_validate_python_identities_rejects_additional_versions():
     qualifier = _qualifier_module()
 

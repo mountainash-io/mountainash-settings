@@ -7,6 +7,11 @@ description: 'A practitioner manual for mountainash-settings — typed configura
 [← Back to Ecosystem](https://docs.mountainash.io/)
 # Mountainash Settings
 
+**0.1.0 API reset:** read the [migration guide](https://github.com/mountainash-io/mountainash-settings/blob/develop/docs/migration-0.1.md)
+for supported names, target adapters and MountainAsh-only cached retrieval.
+Generated learning-graph material retains its historical source baseline and is
+not the current API reference.
+
 Define fully-typed application settings with Pydantic, load configuration from YAML, TOML, JSON, or .env files, and retrieve a cached instance with a single call.
 
 ## Why a Guided Manual?
@@ -70,7 +75,7 @@ After working through this manual, you will know how to:
 3. **Settings Parameters and Merge Strategies** — SettingsParameters with structural hash/eq, merge framework, FileHandler, KwargsHandler
 4. **File Handling, Kwargs, and Field Templating** — {FIELD_NAME} template syntax, template resolution in post_init, UPath path derivation
 5. **Secrets Resolution** — Secrets registry, two-pass resolution pipeline, pluggable providers (Vault, SSM, Key Vault)
-6. **Connection Profiles** — ProfileDescriptor, ParameterSpec, MISSING sentinel, dynamic Pydantic field installation, DescriptorProfile
+6. **Connection Profiles** — ProfileSpec, ParameterSpec, MISSING sentinel, dynamic Pydantic field installation, Profile
 7. **Profile Registry and Invariants** — Name-keyed store, @decorator registration pattern, duplicate prevention, invariant testing
 8. **Authentication System** — AuthSpec base with kind literal, 10+ concrete auth modes as discriminated union, dispatch to driver kwargs
 9. **Caching, Settings Management, and App Settings** — Private structural source contexts, complete invocation materialization, source-form runtime inputs, isolated returns, and the AppSettings convenience class

@@ -5,6 +5,10 @@
 Advanced configuration management for Python applications — typed settings with smart caching, multi-format file loading, template-driven derived fields, a pluggable secrets layer, and a declarative system for building typed connection profiles.
 Requires Python 3.12 or later.
 
+The next release is **0.1.0 (SemVer)**, a clean API break. See the
+[0.1 migration guide](docs/migration-0.1.md) for profile, adapter, registry,
+cached-settings and selected-store changes.
+
 > Public PyPI publication is not confirmed by these source changes. Treat builds as unpublished candidates until the public confirmation stage succeeds; the install command below describes the published distribution. See [RELEASE.md](RELEASE.md) for candidate verification and separately authorized publishing.
 
 ## Installation

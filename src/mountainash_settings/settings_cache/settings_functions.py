@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 
-from typing import Any, List, Optional, Type, Union
+from typing import Any, Optional, TYPE_CHECKING
 
-from pydantic_settings import BaseSettings
-from upath import UPath
+from ..settings_parameters.filehandler import ConfigFilesInput
+
+if TYPE_CHECKING:
+    from ..settings.base_settings import MountainAshBaseSettings
 
 from ..settings_parameters.settings_parameters import SettingsParameters
 from .settings_manager import SettingsManager
@@ -19,13 +21,13 @@ def get_settings_manager() -> SettingsManager:
 
 def get_settings(
     settings_parameters: Optional[SettingsParameters] = None,
-    settings_class: Optional[Type[BaseSettings]] = None,
-    config_files: Optional[Union[UPath, str, List[UPath | str]]] = None,
+    settings_class: type[MountainAshBaseSettings] | None = None,
+    config_files: ConfigFilesInput = None,
     env_prefix: Optional[str] = None,
     *,
     reinitialise: bool = False,
     **kwargs: Any,
-) -> BaseSettings:
+) -> MountainAshBaseSettings:
     """Materialize an isolated result from a pinned structural source context."""
     if settings_parameters is not None:
         if not isinstance(settings_parameters, SettingsParameters):

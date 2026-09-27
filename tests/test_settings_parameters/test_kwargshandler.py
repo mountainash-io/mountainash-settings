@@ -17,10 +17,10 @@ class TestFormatKwargsDict:
     """Test format_kwargs_dict method."""
 
     @pytest.mark.unit
-    def test_format_none_returns_none(self):
-        """Test that None input returns None."""
+    def test_format_none_returns_empty_dict(self):
+        """Absent kwargs have the same collection shape as populated kwargs."""
         result = SettingsKwargsHandler.format_kwargs_dict(None)
-        assert result is None
+        assert result == {}
 
     @pytest.mark.unit
     def test_format_empty_dict_returns_empty_dict(self):
@@ -61,19 +61,19 @@ class TestFormatKwargsDict:
     @pytest.mark.unit
     def test_format_invalid_type_raises_error(self):
         """Test that invalid type raises ValueError."""
-        with pytest.raises(ValueError, match="Invalid p_kwargs"):
+        with pytest.raises(TypeError, match="Invalid kwargs"):
             SettingsKwargsHandler.format_kwargs_dict("invalid_string")
 
     @pytest.mark.unit
     def test_format_invalid_int_raises_error(self):
         """Test that integer input raises ValueError."""
-        with pytest.raises(ValueError, match="Invalid p_kwargs"):
+        with pytest.raises(TypeError, match="Invalid kwargs"):
             SettingsKwargsHandler.format_kwargs_dict(12345)
 
     @pytest.mark.unit
     def test_format_invalid_list_raises_error(self):
         """Test that list input raises ValueError."""
-        with pytest.raises(ValueError, match="Invalid p_kwargs"):
+        with pytest.raises(TypeError, match="Invalid kwargs"):
             SettingsKwargsHandler.format_kwargs_dict(["item1", "item2"])
 
     @pytest.mark.unit
@@ -132,19 +132,19 @@ class TestFormatKwargsTuple:
     @pytest.mark.unit
     def test_format_invalid_type_raises_error(self):
         """Test that invalid type raises ValueError."""
-        with pytest.raises(ValueError, match="Invalid p_kwargs"):
+        with pytest.raises(TypeError, match="Invalid kwargs"):
             SettingsKwargsHandler.format_kwargs_tuple("invalid_string")
 
     @pytest.mark.unit
     def test_format_invalid_int_raises_error(self):
         """Test that integer input raises ValueError."""
-        with pytest.raises(ValueError, match="Invalid p_kwargs"):
+        with pytest.raises(TypeError, match="Invalid kwargs"):
             SettingsKwargsHandler.format_kwargs_tuple(12345)
 
     @pytest.mark.unit
     def test_format_invalid_list_raises_error(self):
         """Test that list input raises ValueError."""
-        with pytest.raises(ValueError, match="Invalid p_kwargs"):
+        with pytest.raises(TypeError, match="Invalid kwargs"):
             SettingsKwargsHandler.format_kwargs_tuple(["item1", "item2"])
 
     @pytest.mark.unit
@@ -166,10 +166,10 @@ class TestMergeKwargs:
     """Test merge_kwargs method."""
 
     @pytest.mark.unit
-    def test_merge_both_none_returns_none(self):
-        """Test that both None inputs return None."""
+    def test_merge_both_none_returns_empty_dict(self):
+        """Absent inputs merge to an empty mapping."""
         result = SettingsKwargsHandler.merge_kwargs(None, None)
-        assert result is None
+        assert result == {}
 
     @pytest.mark.unit
     def test_merge_first_none_returns_second(self):
@@ -235,9 +235,7 @@ class TestMergeKwargs:
         kwargs1 = {"key1": "value1"}
         kwargs2 = {"kwargs": {"key2": "value2"}}
         result = SettingsKwargsHandler.merge_kwargs(kwargs1, kwargs2)
-        # After merge: {"key1": "value1", "kwargs": {"key2": "value2"}}
-        # Then .get("kwargs", ...) extracts the inner dict
-        assert result == {"key2": "value2"}
+        assert result == {"key1": "value1", "key2": "value2"}
 
     @pytest.mark.unit
     def test_merge_preserves_various_value_types(self):
@@ -332,15 +330,27 @@ class TestIntegration:
     def test_format_dict_with_all_edge_cases(self):
         """Test format_kwargs_dict with edge cases in sequence."""
         # Test None
-        assert SettingsKwargsHandler.format_kwargs_dict(None) is None
-
-        # Test empty
+        assert SettingsKwargsHandler.format_kwargs_dict(None) == {}
         assert SettingsKwargsHandler.format_kwargs_dict({}) == {}
-
-        # Test plain dict
         plain = {"key": "value"}
         assert SettingsKwargsHandler.format_kwargs_dict(plain) == plain
-
-        # Test nested
         nested = {"kwargs": {"key": "value"}}
         assert SettingsKwargsHandler.format_kwargs_dict(nested) == {"key": "value"}
+
+
+@pytest.mark.parametrize("value", [{"kwargs": None}, {"kwargs": []}, [("x",)], {1: "x"}])
+def test_malformed_kwargs_raise_value_free_type_error(value):
+    with pytest.raises(TypeError, match="Invalid kwargs") as caught:
+        SettingsKwargsHandler.format_kwargs_dict(value)
+    assert caught.value.__context__ is None
+
+
+def test_mapping_and_one_shot_iterables_normalize_without_mutation():
+    from types import MappingProxyType
+
+    source = {"b": 2, "a": 1}
+    assert SettingsKwargsHandler.format_kwargs_dict(MappingProxyType(source)) == source
+    assert SettingsKwargsHandler.format_kwargs_tuple(iter(source.items())) == (("a", 1), ("b", 2))
+    result = SettingsKwargsHandler.format_kwargs_dict(source)
+    result["a"] = 3
+    assert source == {"b": 2, "a": 1}

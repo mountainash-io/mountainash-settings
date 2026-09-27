@@ -25,9 +25,24 @@ from mountainash_settings.settings_parameters.filehandler import (
     FileTypeRegistry,
     SettingsFiles,
     SettingsFileHandler,
-    ConfigFileType,
-    ConfigFileList,
 )
+
+
+def test_single_path_validation_and_first_seen_order(tmp_path):
+    a, b = tmp_path / "a.yaml", tmp_path / "b.yaml"
+    a.write_text("x: first\n")
+    b.write_text("x: second\n")
+    SettingsFileHandler.validate_config_files_exist(str(a))
+    paths = SettingsFileHandler.merge_config_files([str(b)], [UPath(a), UPath(b)])
+    assert tuple(map(str, paths)) == (str(b), str(a))
+    assert SettingsFileHandler.separate_config_files(None) == SettingsFiles((), (), (), ())
+    assert isinstance(SettingsFileHandler.separate_config_files(paths).yaml_files, tuple)
+
+
+def test_unknown_extension_raises_without_printing(capsys):
+    with pytest.raises(ValueError):
+        SettingsFileHandler.identify_file_extension("config.unsupported")
+    assert capsys.readouterr().out == ""
 
 
 class TestFileType:
@@ -149,10 +164,10 @@ class TestSettingsFiles:
     def test_settings_files_creation_empty(self):
         """Test creating SettingsFiles with no files."""
         files = SettingsFiles()
-        assert files.env_files is None
-        assert files.yaml_files is None
-        assert files.toml_files is None
-        assert files.json_files is None
+        assert files.env_files == ()
+        assert files.yaml_files == ()
+        assert files.toml_files == ()
+        assert files.json_files == ()
 
     @pytest.mark.unit
     def test_settings_files_creation_with_values(self):
@@ -203,9 +218,9 @@ class TestSeparateConfigFiles:
         result = SettingsFileHandler.separate_config_files(temp_yaml_file)
         assert result.yaml_files is not None
         assert len(result.yaml_files) == 1
-        assert result.env_files is None
-        assert result.toml_files is None
-        assert result.json_files is None
+        assert result.env_files == ()
+        assert result.toml_files == ()
+        assert result.json_files == ()
 
     @pytest.mark.unit
     def test_separate_single_yml_file(self, create_config_file):
@@ -229,7 +244,7 @@ class TestSeparateConfigFiles:
         assert len(result.toml_files) == 1
         assert result.json_files is not None
         assert len(result.json_files) == 1
-        assert result.env_files is None
+        assert result.env_files == ()
 
     @pytest.mark.unit
     def test_separate_multiple_yaml_files(self, temp_multiple_yaml_files):
@@ -274,9 +289,9 @@ class TestSeparateConfigFiles:
         result = SettingsFileHandler.separate_config_files(temp_dotenv_file)
         assert result.env_files is not None
         assert len(result.env_files) == 1
-        assert result.yaml_files is None
-        assert result.toml_files is None
-        assert result.json_files is None
+        assert result.yaml_files == ()
+        assert result.toml_files == ()
+        assert result.json_files == ()
 
     @pytest.mark.unit
     def test_separate_dotenv_with_other_files(
@@ -292,7 +307,7 @@ class TestSeparateConfigFiles:
         assert len(result.yaml_files) == 1
         assert result.toml_files is not None
         assert len(result.toml_files) == 1
-        assert result.json_files is None
+        assert result.json_files == ()
 
 
 class TestMergeConfigFiles:
@@ -302,7 +317,7 @@ class TestMergeConfigFiles:
     def test_merge_both_none(self):
         """Test merging when both inputs are None."""
         result = SettingsFileHandler.merge_config_files(None, None)
-        assert result is None
+        assert result == ()
 
     @pytest.mark.unit
     def test_merge_first_none(self):
@@ -342,8 +357,8 @@ class TestIdentifyFileExtension:
     @pytest.mark.unit
     def test_identify_none_returns_none(self):
         """Test that None input returns None."""
-        result = SettingsFileHandler.identify_file_extension(None)
-        assert result is None
+        with pytest.raises(TypeError):
+            SettingsFileHandler.identify_file_extension(None)
 
     @pytest.mark.unit
     def test_identify_yaml_extension(self):
@@ -380,12 +395,9 @@ class TestIdentifyFileExtension:
     @pytest.mark.unit
     def test_identify_unknown_extension_returns_none(self, capsys):
         """Test that unknown extension returns None and prints warning."""
-        result = SettingsFileHandler.identify_file_extension("config.txt")
-        assert result is None
-
-        # Check that warning was printed
-        captured = capsys.readouterr()
-        assert "Invalid file type" in captured.out
+        with pytest.raises(ValueError):
+            SettingsFileHandler.identify_file_extension("config.txt")
+        assert capsys.readouterr().out == ""
 
     @pytest.mark.unit
     def test_identify_dotenv_file_extension(self):
@@ -522,13 +534,13 @@ class TestDeduplicateFiles:
     def test_deduplicate_none_returns_none(self):
         """Test that None input returns None."""
         result = SettingsFileHandler.deduplicate_files(None)
-        assert result is None
+        assert result == []
 
     @pytest.mark.unit
     def test_deduplicate_empty_list_returns_none(self):
         """Test that empty list returns None."""
         result = SettingsFileHandler.deduplicate_files([])
-        assert result is None
+        assert result == []
 
     @pytest.mark.unit
     def test_deduplicate_single_file(self):
@@ -578,13 +590,13 @@ class TestFormatConfigFileTuple:
     def test_format_none_returns_none(self):
         """Test that None input returns None."""
         result = SettingsFileHandler.format_config_file_tuple(None)
-        assert result is None
+        assert result == ()
 
     @pytest.mark.unit
     def test_format_empty_list_returns_none(self):
         """Test that empty list returns None."""
         result = SettingsFileHandler.format_config_file_tuple([])
-        assert result is None
+        assert result == ()
 
     @pytest.mark.unit
     def test_format_single_string_to_tuple(self):
@@ -623,19 +635,19 @@ class TestFormatConfigFileList:
     def test_format_none_returns_none(self):
         """Test that None input returns None."""
         result = SettingsFileHandler.format_config_file_list(None)
-        assert result is None
+        assert result == []
 
     @pytest.mark.unit
     def test_format_empty_list_returns_none(self):
         """Test that empty list returns None."""
         result = SettingsFileHandler.format_config_file_list([])
-        assert result is None
+        assert result == []
 
     @pytest.mark.unit
     def test_format_empty_tuple_returns_none(self):
         """Test that empty tuple returns None."""
         result = SettingsFileHandler.format_config_file_list(())
-        assert result is None
+        assert result == []
 
     @pytest.mark.unit
     def test_format_single_string_to_list(self):
@@ -668,7 +680,7 @@ class TestFormatConfigFileList:
     @pytest.mark.unit
     def test_format_invalid_type_raises_error(self):
         """Test that invalid type raises ValueError."""
-        with pytest.raises(ValueError, match="Invalid config_files"):
+        with pytest.raises(TypeError, match="Invalid configuration paths"):
             SettingsFileHandler.format_config_file_list(12345)
 
 

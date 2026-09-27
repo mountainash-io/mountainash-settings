@@ -1,11 +1,11 @@
-from typing import Optional, List, Tuple
+from typing import Optional
 from datetime import datetime
 
 from pydantic import Field
-from upath import UPath
 
 # from mountainash_utils_os import get_platform_slash
 from mountainash_settings import MountainAshBaseSettings, SettingsParameters
+from mountainash_settings.settings_parameters.filehandler import ConfigFilesInput
 
 from .app_settings_templates import  AppSettingsTemplates
 
@@ -23,7 +23,7 @@ Parameters:
 class AppSettings(MountainAshBaseSettings):
 
     def __init__(self,
-                 config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 config_files: ConfigFilesInput = None,
                  settings_parameters:   Optional[SettingsParameters] = None,
                  template_settings_parameters:   Optional[SettingsParameters] = None,
 
@@ -42,7 +42,7 @@ class AppSettings(MountainAshBaseSettings):
     DEBUG: bool =                            Field(default=False)
     RUNDATE: str =                           Field(default=datetime.now().strftime("%Y%m%d"))
     RUNTIME: str =                           Field(default=datetime.now().strftime("%H%M%S"))
-    RUNDATETIME: str =                       Field(default=None)
+    RUNDATETIME: str | None =                Field(default=None)
 
 
 

@@ -57,9 +57,8 @@ class TestProfile:
         kwargs = p._default_kwargs()
         assert "password" not in kwargs
 
-    def test_backend_and_profile_name(self):
+    def test_profile_name(self):
         p = DummyProfile(HOST="h")
-        assert p.backend == "dummy"
         assert p.profile_name == "dummy"
 
     def test_provider_type_property(self):
@@ -105,21 +104,20 @@ class TestProfile:
         with pytest.raises(ValidationError, match="must be positive"):
             P(N=-1)
 
-    def test_adapter_owns_pipeline(self):
-        def _adapter(profile: "Profile") -> dict:
-            kwargs = profile._default_kwargs()
+    def test_target_adapter_composes(self):
+        def _adapter(profile: "Profile", kwargs: dict) -> dict:
             kwargs["adapter_added"] = True
             return kwargs
 
         class Adapted(Profile):
             __spec__ = DUMMY_SPEC
-            __adapter__ = staticmethod(_adapter)
+            __adapters__ = {"http": _adapter}
 
         # Note: Profile itself has no to_driver_kwargs; adapters
         # are invoked by domain subclasses. We test the mechanism indirectly
         # by confirming the adapter attr is accessible.
         p = Adapted(HOST="h")
-        assert type(p).__dict__.get("__adapter__") is not None
+        assert p.emit("http", base={"timeout": 5}) == {"host": "h", "port": 9999, "timeout": 5, "adapter_added": True}
 
     def test_template_populates_derived_field(self):
         """ParameterSpec(template=...) auto-populates field in post_init."""
@@ -630,52 +628,9 @@ class TestDirectReinitialise:
         assert p.URL == "https://b.example/api"
 
 
-@pytest.mark.unit
-class TestSpecAttributeFallback:
-    """Tests for the __spec__ / __descriptor__ deprecation fallback."""
+def test_descriptor_attribute_does_not_install_fields():
+    class OldStyleProfile(Profile):
+        __descriptor__ = DUMMY_SPEC
 
-    def test_old_descriptor_attribute_emits_warning(self):
-        """A class declaring only __descriptor__ (no __spec__) still works
-        but emits DeprecationWarning at class creation.
-
-        Methods that read self.__spec__ (profile_name, backend,
-        provider_type, _default_kwargs) must keep working — _resolve_spec
-        installs cls.__spec__ as an alias for cls.__descriptor__ when
-        falling back to the old attribute.
-        """
-        with pytest.warns(DeprecationWarning, match="__descriptor__.*deprecated"):
-            class OldStyleProfile(Profile):
-                __descriptor__ = DUMMY_SPEC
-
-        # Field installation still works from the old attribute
-        instance = OldStyleProfile(HOST="h")
-        assert instance.HOST == "h"
-
-        # Methods that read self.__spec__ must work too — these previously
-        # raised AttributeError on __descriptor__-only classes.
-        assert instance.profile_name == "dummy"
-        assert instance.backend == "dummy"
-        assert instance.provider_type == "dummy"
-        kwargs = instance._default_kwargs()
-        assert kwargs == {"host": "h", "port": 9999}
-
-    def test_conflicting_spec_and_descriptor_raises(self):
-        """Declaring both __spec__ and __descriptor__ with different values raises."""
-        OTHER_SPEC = ProfileSpec(
-            name="other", provider_type="other",
-            parameters=[ParameterSpec(name="HOST", type=str, tier="core", driver_key="host")],
-        )
-        with pytest.raises(TypeError, match="conflicting"):
-            class ConflictProfile(Profile):
-                __spec__ = DUMMY_SPEC
-                __descriptor__ = OTHER_SPEC
-
-    def test_matching_spec_and_descriptor_no_warning(self):
-        """Declaring both pointing at the same object works without warning."""
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", DeprecationWarning)
-            class BothProfile(Profile):
-                __spec__ = DUMMY_SPEC
-                __descriptor__ = DUMMY_SPEC
-            # No warning raised — test passes by reaching this line
-        assert BothProfile.__spec__ is DUMMY_SPEC
+    assert "HOST" not in OldStyleProfile.model_fields
+    assert "__spec__" not in OldStyleProfile.__dict__

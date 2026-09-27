@@ -108,18 +108,6 @@ class HttpAdaptedProfile(Profile):
     __adapters__ = {"http": _http_basic}
 
 
-# Legacy owns-the-pipeline adapter (1-arg).
-def _legacy_adapter(profile):
-    kw = profile._default_kwargs()
-    kw["legacy"] = True
-    return kw
-
-
-class LegacyAdaptedProfile(Profile):
-    __spec__ = BARE_SPEC
-    __adapter__ = staticmethod(_legacy_adapter)
-
-
 @pytest.mark.unit
 class TestEmit:
     def test_untargeted_emit_equals_default_kwargs(self):
@@ -159,11 +147,6 @@ class TestEmit:
         # SCOPED_SPEC driver_keys are paramiko-only, so no stray username/password.
         assert "username" not in out and "password" not in out
 
-    def test_legacy_adapter_owns_pipeline(self):
-        p = LegacyAdaptedProfile(HOST="h", PASSWORD="s")
-        # Not target-scoped (no __adapters__, no dict driver_keys) → emit() allowed.
-        out = p.emit()
-        assert out == {"host": "h", "password": "s", "legacy": True}
 
 
 @pytest.mark.unit

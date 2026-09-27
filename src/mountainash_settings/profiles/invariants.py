@@ -11,7 +11,6 @@ Each consumer domain drops this helper into its test suite::
 Every spec registered in ``MY_REGISTRY`` is then checked against the
 invariants below. New registrations get coverage for free.
 
-Public from 26.5.0. Previously named ``descriptor_invariants_for``.
 """
 
 from __future__ import annotations
@@ -32,8 +31,8 @@ def spec_invariants_for(registry: Registry) -> type:
     # Lazy import: keeps ``mountainash_settings`` importable in non-test envs.
     import pytest
 
-    entries = list(registry.descriptors.items())
-    ids = list(registry.descriptors.keys()) or [""]
+    entries = list(registry.specs.items())
+    ids = list(registry.specs.keys()) or [""]
 
     @pytest.mark.unit
     @pytest.mark.parametrize("name,spec", entries, ids=ids)

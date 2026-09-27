@@ -5,14 +5,15 @@ import pytest
 
 from mountainash_settings.profiles import (
     ParameterSpec,
-    ProfileDescriptor,
+    ProfileSpec,
+    Profile,
     Registry,
 )
 from mountainash_settings.profiles.invariants import spec_invariants_for
 
 
 FAKE_REGISTRY = Registry("fake_tests")
-FAKE_DESC = ProfileDescriptor(
+FAKE_DESC = ProfileSpec(
     name="fake",
     provider_type="fake",
     parameters=[
@@ -21,11 +22,11 @@ FAKE_DESC = ProfileDescriptor(
 )
 
 
-class _FakeProfile:
-    pass
+class _FakeProfile(Profile):
+    __spec__ = FAKE_DESC
 
 
-FAKE_REGISTRY.register(FAKE_DESC, _FakeProfile)  # type: ignore[arg-type]
+FAKE_REGISTRY.register(FAKE_DESC, _FakeProfile)
 
 
 # Dynamic class — pytest collects its parameterized methods:

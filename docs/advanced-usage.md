@@ -274,12 +274,10 @@ This hook is separate from the direct-construction
 `settings_customise_sources` hook. A class that overrides the legacy hook
 must explicitly adapt it for cached retrieval; otherwise cached retrieval
 fails before source reads. Ordinary direct construction retains its existing
-semantics. Standard plain `BaseSettings` classes whose constructor is the
-inherited `BaseSettings.__init__` remain supported by cached retrieval.
-Plain subclasses with a custom constructor are rejected by cached retrieval
-before reads; direct construction remains available, and
-`MountainAshBaseSettings` supplies the supported cached custom-constructor
-path.
+semantics. Cached retrieval requires a `MountainAshBaseSettings` subclass.
+Plain Pydantic `BaseSettings` classes are rejected before source reads,
+regardless of their constructor; ordinary direct construction remains available.
+See the [0.1 migration guide](migration-0.1.md).
 
 ## Container secret references
 
