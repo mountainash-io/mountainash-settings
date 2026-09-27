@@ -64,7 +64,10 @@ class TestFilesystemBackendBasic:
 
 @pytest.mark.unit
 class TestFilesystemBackendSecurity:
-    @pytest.mark.skipif(os.name == "nt", reason="POSIX mode contract; Windows DACL tested natively")
+    @pytest.mark.skipif(
+        os.name == "nt",
+        reason="optional-native: POSIX mode contract; Windows DACL tested natively",
+    )
     def test_file_permissions_0600(self, backend, tmp_path):
         backend.set("wearables.strava.default", {"token": "x"})
         path = tmp_path / "wearables" / "strava-default.yaml"
@@ -81,5 +84,4 @@ class TestFilesystemBackendTransaction:
             data["token"] = "new"
             backend.set("wearables.strava.default", data)
         assert backend.get("wearables.strava.default") == {"token": "new"}
-
 
