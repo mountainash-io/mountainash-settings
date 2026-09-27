@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from enum import Enum
 
 import pytest
@@ -97,7 +98,10 @@ def test_cached_sources_preserve_mountainash_environment_parsing(monkeypatch):
         SettingsParameters.create(settings_class=_ParsingSettings, env_prefix="MAS002_"),
     )
     assert (settings.CASE, settings.EMPTY, settings.NULL, settings.MODE) == (
-        "default", "fallback", None, _ParsingMode.PROD,
+        "lowercase" if os.name == "nt" else "default",
+        "fallback",
+        None,
+        _ParsingMode.PROD,
     )
 
 
