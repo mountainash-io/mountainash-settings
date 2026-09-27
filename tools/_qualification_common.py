@@ -26,14 +26,6 @@ from typing import Any
 
 
 @dataclass(frozen=True)
-class AcceptedSkip:
-    """One exact xfail that a qualification run may record as a limitation."""
-
-    name: str
-    reason_contains: str
-
-
-@dataclass(frozen=True)
 class CandidateArtifacts:
     """Candidate artifacts and the environment that built them."""
 
@@ -398,8 +390,6 @@ def _skip_reason(skipped: ET.Element) -> str:
 
 def inspect_junit(
     path: Path,
-    *,
-    accepted_skips: tuple[AcceptedSkip, ...] = (),
 ) -> dict[str, object]:
     """Classify candidate failures, required skips and accepted limitations."""
     root = ET.parse(path).getroot()
@@ -414,14 +404,8 @@ def inspect_junit(
         if skipped is None:
             continue
         reason = _skip_reason(skipped)
-        accepted = any(
-            skipped.get("type") == "pytest.xfail"
-            and case.get("name") == allowed.name
-            and allowed.reason_contains in reason
-            for allowed in accepted_skips
-        )
         entry = {"case": identity, "reason": reason}
-        if reason.startswith("optional-native:") or accepted:
+        if reason.startswith("optional-native:"):
             limitations.append(entry)
         else:
             required_skips.append(entry)

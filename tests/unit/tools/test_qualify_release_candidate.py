@@ -61,3 +61,33 @@ def test_qualify_writes_failed_receipt_for_preflight_failure(tmp_path: Path):
     receipt = json.loads(output.read_text(encoding="utf-8"))
     assert receipt["status"] == "failed"
     assert receipt["failure"]
+
+
+def test_candidate_inspection_rejects_the_retired_windows_xfail(tmp_path: Path):
+    qualifier = _qualifier_module()
+    junit = tmp_path / "junit.xml"
+    junit.write_text(
+        """
+        <testsuites><testsuite tests="1">
+          <testcase classname="tests.native_store.test_filesystem"
+                    name="test_postcommit_marker_close_failure_reports_commit_without_retry">
+            <skipped type="pytest.xfail"
+                     message="windows-marker-close-reason-classification.md" />
+          </testcase>
+        </testsuite></testsuites>
+        """,
+        encoding="utf-8",
+    )
+
+    evidence = qualifier.inspect_candidate_junit(junit)
+
+    assert evidence["limitations"] == []
+    assert evidence["required_skips"] == [
+        {
+            "case": (
+                "tests.native_store.test_filesystem::"
+                "test_postcommit_marker_close_failure_reports_commit_without_retry"
+            ),
+            "reason": "windows-marker-close-reason-classification.md",
+        }
+    ]

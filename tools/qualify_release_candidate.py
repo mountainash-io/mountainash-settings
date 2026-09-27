@@ -27,10 +27,6 @@ def _load_common():
 
 _common = _load_common()
 
-_WINDOWS_MARKER_CLOSE = _common.AcceptedSkip(
-    name="test_postcommit_marker_close_failure_reports_commit_without_retry",
-    reason_contains="windows-marker-close-reason-classification.md",
-)
 _TEST_REQUIREMENTS = ("pytest==8.3.5", "pytest-check==2.5.3")
 
 
@@ -59,6 +55,11 @@ def _clean_environment() -> dict[str, str]:
         for key, value in os.environ.items()
         if key not in {"PYTHONPATH", "PYTHONHOME"}
     }
+
+
+def inspect_candidate_junit(path: Path) -> dict[str, object]:
+    """Reject every candidate failure and non-optional skip, including xfails."""
+    return _common.inspect_junit(path)
 
 
 def _save_artifacts(candidate, output: Path) -> dict[str, dict[str, str]]:
@@ -129,8 +130,7 @@ def _run_installed_suite(
     (destination / "pytest.txt").write_text(
         completed.stdout + completed.stderr, encoding="utf-8"
     )
-    accepted = (_WINDOWS_MARKER_CLOSE,) if sys.platform == "win32" else ()
-    tests = _common.inspect_junit(junit, accepted_skips=accepted)
+    tests = inspect_candidate_junit(junit)
     probe = json.loads(
         _common.run(
             [

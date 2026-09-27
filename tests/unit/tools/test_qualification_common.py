@@ -54,7 +54,7 @@ def test_inspect_junit_accepts_optional_native_reason_from_collection_body(
     ]
 
 
-def test_inspect_junit_accepts_only_exact_xfail_allowlist_entry(tmp_path: Path):
+def test_inspect_junit_rejects_xfail(tmp_path: Path):
     common = _common()
     junit = tmp_path / "junit.xml"
     _write_junit(
@@ -67,43 +67,7 @@ def test_inspect_junit_accepts_only_exact_xfail_allowlist_entry(tmp_path: Path):
         </testcase>
         """,
     )
-    accepted = common.AcceptedSkip(
-        name="test_marker_close",
-        reason_contains="windows-marker-close-reason-classification.md",
-    )
-
-    evidence = common.inspect_junit(junit, accepted_skips=(accepted,))
-
-    assert evidence["required_skips"] == []
-    assert evidence["limitations"] == [
-        {
-            "case": "tests.native_store.test_filesystem::test_marker_close",
-            "reason": "Tracked: windows-marker-close-reason-classification.md",
-        }
-    ]
-
-
-def test_inspect_junit_rejects_non_xfail_even_when_name_and_reason_match(
-    tmp_path: Path,
-):
-    common = _common()
-    junit = tmp_path / "junit.xml"
-    _write_junit(
-        junit,
-        """
-        <testcase classname="tests.native_store.test_filesystem"
-                  name="test_marker_close">
-          <skipped type="pytest.skip"
-                   message="Tracked: windows-marker-close-reason-classification.md" />
-        </testcase>
-        """,
-    )
-    accepted = common.AcceptedSkip(
-        name="test_marker_close",
-        reason_contains="windows-marker-close-reason-classification.md",
-    )
-
-    evidence = common.inspect_junit(junit, accepted_skips=(accepted,))
+    evidence = common.inspect_junit(junit)
 
     assert evidence["limitations"] == []
     assert evidence["required_skips"] == [
