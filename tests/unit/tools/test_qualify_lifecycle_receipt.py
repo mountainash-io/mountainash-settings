@@ -109,9 +109,7 @@ def test_receipt_paths_are_confined_to_os_temporary_directory(tmp_path: Path):
         tmp_path / "receipt.json"
     ).resolve()
     with pytest.raises(ValueError, match="OS temporary directory"):
-        lifecycle.confine_to_temp(
-            Path(__file__).resolve().parents[3] / "receipt.json"
-        )
+        lifecycle.confine_to_temp(Path.home() / "m9-outside-temp-receipt.json")
 
 
 def test_lifecycle_qualify_writes_failed_receipt_for_preflight_failure(
