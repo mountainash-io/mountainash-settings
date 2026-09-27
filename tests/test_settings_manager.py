@@ -16,7 +16,7 @@ from mountainash_settings import (
     get_settings_manager,
 )
 from mountainash_settings.settings_parameters import SettingsFileHandler
-from fixtures.settings_classes import MockBaseSettings, TestSettings
+from .fixtures.settings_classes import MockBaseSettings, TestSettings
 
 
 class _RequiredInvocationSettings(MountainAshBaseSettings):

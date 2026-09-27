@@ -7,7 +7,10 @@ from pathlib import Path
 import pytest
 
 if os.name != "nt":
-    pytest.skip("Windows-native primitives", allow_module_level=True)
+    pytest.skip(
+        "optional-native: Windows-native primitives are not selected",
+        allow_module_level=True,
+    )
 
 from mountainash_settings.secrets import _native_windows as native  # noqa: E402
 from mountainash_settings.secrets.errors import _Failure  # noqa: E402

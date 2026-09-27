@@ -34,7 +34,10 @@ def read_linux_acl(parent: Path) -> str:
 
 def linux_default_acl(parent: Path) -> str:
     if not shutil.which("setfacl") or not shutil.which("getfacl"):
-        pytest.skip("setfacl/getfacl unavailable: Linux ACL privacy is not qualified")
+        pytest.skip(
+            "optional-native: setfacl/getfacl unavailable; "
+            "Linux ACL privacy is not qualified"
+        )
     uid = os.geteuid() + 100_000
     try:
         subprocess.run(
@@ -43,7 +46,10 @@ def linux_default_acl(parent: Path) -> str:
         )
         return read_linux_acl(parent)
     except subprocess.CalledProcessError:
-        pytest.skip("host/filesystem rejects default ACL fixture: Linux ACL privacy is not qualified")
+        pytest.skip(
+            "optional-native: host/filesystem rejects default ACL fixture; "
+            "Linux ACL privacy is not qualified"
+        )
 
 
 def darwin_inheritable_acl(parent: Path) -> None:
@@ -53,7 +59,10 @@ def darwin_inheritable_acl(parent: Path) -> None:
             check=True, capture_output=True, text=True, timeout=5,
         )
     except subprocess.CalledProcessError:
-        pytest.skip("host/filesystem rejects inheritable ACL fixture: Darwin ACL privacy is not qualified")
+        pytest.skip(
+            "optional-native: host/filesystem rejects inheritable ACL fixture; "
+            "Darwin ACL privacy is not qualified"
+        )
 
 
 def darwin_acl_fingerprint(path: Path) -> list[str]:
