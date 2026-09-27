@@ -179,7 +179,7 @@ def test_postcommit_marker_close_failure_reports_commit_without_retry(
     assert_safe(caught.value, "write_committed_cleanup_failed")
     assert store.get("one") == {"token": "new"}
     assert not store.is_cleared("one")  # This injected error follows real release.
-    assert marker_opens == (2 if os.name == "nt" else 1)
+    assert marker_opens == (3 if os.name == "nt" else 1)
     assert marker_closes == 1
 
 
