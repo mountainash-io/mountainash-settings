@@ -35,6 +35,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes acl
       - name: Qualify full installed candidate
         shell: bash
+        env:
+          TMPDIR: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
         run: >-
           "$PYTHON_312" -I tools/qualify_release_candidate.py
           --output "$RUNNER_TEMP/release-candidate-proof/full-suite.json"
@@ -42,6 +46,10 @@ jobs:
           --python "$PYTHON_313"
       - name: Qualify two-process lifecycle
         shell: bash
+        env:
+          TMPDIR: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
         run: >-
           "$PYTHON_312" -I tools/qualify_lifecycle_receipt.py
           --output "$RUNNER_TEMP/release-candidate-proof/lifecycle.json"
