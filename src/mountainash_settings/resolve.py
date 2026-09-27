@@ -51,8 +51,9 @@ def _validation_paths(
     field: FieldInfo,
 ) -> tuple[tuple[str | int, ...], ...]:
     alias = field.validation_alias
+    aliases: tuple[str | AliasPath, ...]
     if isinstance(alias, AliasChoices):
-        aliases = alias.choices
+        aliases = tuple(alias.choices)
     elif alias is None:
         aliases = (field_name,)
     else:

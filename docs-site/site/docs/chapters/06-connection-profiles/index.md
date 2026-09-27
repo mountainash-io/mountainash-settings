@@ -10,7 +10,7 @@ version: 0.08
 
 ## Summary
 
-This chapter introduces the connection profile system that allows reusable, typed connection configurations to be defined declaratively. You will learn about the ProfileDescriptor class with its identity and provider type fields, the ParameterSpec class for defining typed parameters with name conventions, Python types, tiers, default values, the MISSING sentinel, driver key mappings, secret flags, transform functions, and validator functions. The chapter concludes with DescriptorProfile and its dynamic Pydantic field installation mechanism.
+This chapter introduces reusable, typed connection configurations declared with ProfileSpec, ParameterSpec and Profile. Parameters define names, Python types, tiers, defaults, driver-key mappings, secret flags, transforms and validators. Profile installs the declared Pydantic fields dynamically.
 
 ---
 
@@ -24,9 +24,9 @@ The profile system solves this by separating _what_ a backend needs (declared in
 <!-- concept:57 -->
 <!-- concept:59 -->
 <!-- concept:69 -->
-## ProfileDescriptor Class
+## ProfileSpec Class
 
-The **ProfileDescriptor** (now canonically named `ProfileSpec` as of version 26.5.0) is a frozen dataclass that captures the complete specification of a connection profile. It is the declarative blueprint from which a `Profile` settings class generates its Pydantic fields.
+**ProfileSpec** is a frozen dataclass specifying a connection profile. It is the blueprint from which a `Profile` settings class generates its Pydantic fields. The former descriptor alias is removed in 0.1.0.
 
 ```python
 @dataclass(frozen=True, kw_only=True)
@@ -280,9 +280,9 @@ ParameterSpec(
 
 During dynamic field installation, when a validator is present, the type annotation is wrapped with `Annotated[type, AfterValidator(validator)]`. This means the validator runs after Pydantic's built-in type coercion but before the value is stored on the instance.
 
-## DescriptorProfile Class
+## Profile Class
 
-The **DescriptorProfile** (now canonically named `Profile` as of version 26.5.0) is a base class that inherits from `MountainAshBaseSettings` and uses `__pydantic_init_subclass__` to install fields from a `ProfileSpec`. When you subclass `Profile` and declare `__spec__`, the base class automatically generates Pydantic fields for each `ParameterSpec` in the spec, plus an `auth` field typed as a discriminated union of the spec's auth modes.
+**Profile** inherits from `MountainAshBaseSettings` and uses `__pydantic_init_subclass__` to install fields from its class-body `__spec__`. Each ParameterSpec creates a Pydantic field. Target-specific `__adapters__` compose the merged base and driver-key kwargs when `emit(target)` is called; the singular adapter hook is removed in 0.1.0.
 
 ```python
 from mountainash_settings import Profile, ProfileSpec

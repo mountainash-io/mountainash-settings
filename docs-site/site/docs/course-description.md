@@ -38,7 +38,7 @@ By working through this manual, you will be able to:
 2. Load and merge configuration from multiple files and environment variables with predictable, well-understood priority rules.
 3. Derive fields from other fields using `{FIELD_NAME}` template syntax — connection strings, log paths, output directories — without writing custom derivation code.
 4. Wire up a secrets provider (Vault, AWS SSM, Azure Key Vault, or a custom one) so `secret:path/to/value` references resolve transparently before validation runs.
-5. Build reusable connection profiles for databases, storage backends, and APIs using `ProfileDescriptor`, complete with typed parameters and auth-mode selection.
+5. Build reusable connection profiles for databases, storage backends, and APIs using `ProfileSpec`, typed parameters and target-specific adapters.
 6. Select and configure the right authentication mode from a discriminated union of 10+ auth kinds, each with `SecretStr`-protected credentials.
 7. Cache settings instances with `get_settings()` so an application constructs each configuration once and reuses it efficiently, while still supporting per-call runtime overrides.
 
@@ -53,7 +53,7 @@ The manual proceeds as 9 chapters, each building on the concepts introduced befo
 | 3 | Settings Parameters and Merge Strategies | Structural vs. runtime parameters, the merge framework |
 | 4 | File Handling, Kwargs, and Field Templating | Multi-format loading and `{FIELD_NAME}` templating |
 | 5 | Secrets Resolution | The secrets registry and two-pass resolution pipeline |
-| 6 | Connection Profiles | `ProfileDescriptor`, `ParameterSpec`, dynamic field installation |
+| 6 | Connection Profiles | `ProfileSpec`, `ParameterSpec`, dynamic field installation |
 | 7 | Profile Registry and Invariants | Registration, duplicate prevention, invariant testing |
 | 8 | Authentication System | `AuthSpec`, the auth-mode discriminated union, driver dispatch |
 | 9 | Caching, Settings Management, and App Settings | Structural source-context reuse, fresh owned materialization, `SettingsManager`, `AppSettings` |

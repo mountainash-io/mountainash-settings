@@ -5,10 +5,7 @@ A ProfileSpec captures everything the generic Profile base needs to install
 pydantic fields for a given configuration. A ParameterSpec describes one field
 within a spec.
 
-This module is the canonical home for these types. The old module
-`mountainash_settings.profiles.descriptor` remains as a compatibility shim
-exporting `ProfileDescriptor` (alias for `ProfileSpec`) and `_Missing`
-(alias for `Missing`) with DeprecationWarning until 26.6.0.
+This module is the canonical home for these types.
 """
 
 from __future__ import annotations
@@ -25,8 +22,6 @@ class Missing:
     Pydantic ``Field(...)`` is emitted when a ParameterSpec default is this
     sentinel; ``Field(default=...)`` otherwise.
 
-    Public from mountainash-settings 26.5.0. Previously available as the
-    private ``_Missing`` class in ``mountainash_settings.profiles.descriptor``.
     """
 
     _instance: "t.ClassVar[Missing | None]" = None
@@ -98,7 +93,6 @@ class ProfileSpec:
             dialect name). Domains wanting strong typing may subclass
             ``ProfileSpec`` and add typed fields instead.
 
-    Public from 26.5.0. Previously named ``ProfileDescriptor``.
     """
 
     name: str

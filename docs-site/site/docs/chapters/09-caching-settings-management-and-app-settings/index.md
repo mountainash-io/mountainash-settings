@@ -170,11 +170,9 @@ A class that overrides the legacy hook must explicitly adapt it through
 `settings_capture_sources`; otherwise cached retrieval rejects it before
 source reads. Direct construction keeps its existing custom-source semantics.
 
-Standard plain `BaseSettings` subclasses inheriting `BaseSettings.__init__`
-remain supported. Plain subclasses with custom constructors are rejected
-before source reads by cached retrieval; direct construction remains
-unchanged. `MountainAshBaseSettings` provides the supported cached
-custom-constructor path.
+Cached retrieval requires a `MountainAshBaseSettings` subclass. Plain Pydantic
+`BaseSettings` subclasses are rejected before source reads, with or without a
+custom constructor. Their ordinary direct construction remains available.
 
 ## AppSettings Class
 

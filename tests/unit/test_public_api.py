@@ -3,6 +3,11 @@
 import pytest
 
 
+def test_clean_break_version():
+    from mountainash_settings.__version__ import __version__
+    assert __version__ == "0.1.0"
+
+
 @pytest.mark.unit
 def test_profiles_surface_imports():
     from mountainash_settings import (

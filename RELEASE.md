@@ -2,6 +2,24 @@
 
 mountainash-settings requires Python 3.12+. Source changes and candidate builds do not establish public publication. Its declared third-party dependencies must resolve from public PyPI.
 
+## Current candidate — 0.1.0
+
+The next release is **0.1.0**, using SemVer. The [migration guide](docs/migration-0.1.md)
+defines the clean profile, registry, adapter and cached-settings break. Plain
+Pydantic `BaseSettings` is direct-construction-only; all managed caching requires
+`MountainAshBaseSettings`.
+
+Before source freeze, downstream migration branches must pass ecosystem rehearsal
+against identified candidate artifacts. Then run the complete settings-only
+Linux/macOS/Windows × Python 3.12/3.13 qualification for both artifact forms and
+the two-process lifecycle. Historical M9 run `36294907723` and the historical
+receipts below do not qualify the reset candidate. Downstream merges/releases
+follow publication of settings 0.1.0. Publication and old-artifact deletion require
+separate owner authorization under the central release contract.
+
+The notes below retain historical development evidence; their old API-support
+statements and hashes are superseded by the current contract above.
+
 ## Unpublished compatibility note — MAS-SEC-001
 
 The next release removes the public `SETTINGS_SOURCE_KWARGS` model field.

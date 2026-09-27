@@ -499,7 +499,29 @@ class _Api:
 def _last_error(action: str) -> OSError:
     return OSError(c.get_last_error(), f"{action}: {c.WinError(c.get_last_error())}")
 
-def _identity(handle: HANDLE) -> dict[str, int | bool]:
+class _Identity(t.TypedDict):
+    volume: int
+    file_index: int
+    links: int
+    directory: bool
+    disk_file: bool
+    reparse: bool
+    reparse_tag: int
+
+
+class _DaclDetails(t.TypedDict):
+    scope: str
+    reason: t.NotRequired[str]
+    owner_sid: t.NotRequired[str | None]
+    group_sid: t.NotRequired[str | None]
+    protected: t.NotRequired[bool]
+    allow_sids: t.NotRequired[list[str]]
+    masks: t.NotRequired[list[int]]
+    ace_flags: t.NotRequired[list[int]]
+    rejected: t.NotRequired[list[str]]
+
+
+def _identity(handle: HANDLE) -> _Identity:
     basic = BY_HANDLE_FILE_INFORMATION()
     standard = FILE_STANDARD_INFO()
     tag = FILE_ATTRIBUTE_TAG_INFO()
@@ -553,7 +575,10 @@ def _current_sid() -> str:
             "ConvertSidToStringSidW",
         )
         try:
-            return text.value
+            value = text.value
+            if value is None:
+                raise _Failure("unavailable")
+            return value
         finally:
             api.LocalFree(c.cast(text, HANDLE))
     finally:
@@ -571,6 +596,8 @@ def _private_descriptor() -> tuple[PVOID, str]:
         ),
         "ConvertStringSecurityDescriptorToSecurityDescriptorW(private create)",
     )
+    if descriptor.value is None:
+        raise _Failure("unavailable")
     return descriptor, sid
 
 def _sid_text(sid: PVOID) -> str:
@@ -579,11 +606,14 @@ def _sid_text(sid: PVOID) -> str:
         _api().ConvertSidToStringSidW(sid, c.byref(text)), "ConvertSidToStringSidW ACE"
     )
     try:
-        return text.value
+        value = text.value
+        if value is None:
+            raise _Failure("unavailable")
+        return value
     finally:
         _api().LocalFree(c.cast(text, HANDLE))
 
-def _dacl_private(handle: HANDLE) -> tuple[bool, dict[str, object]]:
+def _dacl_private(handle: HANDLE) -> tuple[bool, _DaclDetails]:
     """Narrow effective policy: protected current-user/SYSTEM full-control DACL."""
     descriptor = PVOID()
     dacl = PVOID()
@@ -631,15 +661,18 @@ def _dacl_private(handle: HANDLE) -> tuple[bool, dict[str, object]]:
         for index in range(info.AceCount):
             ace = PVOID()
             _check_bool(_api().GetAce(dacl, index, c.byref(ace)), "GetAce")
+            address = ace.value
+            if address is None:
+                raise _Failure("unavailable")
             header = c.cast(ace, c.POINTER(ACE_HEADER)).contents
             ace_flags.append(header.AceFlags)
             if header.AceType != ACCESS_ALLOWED_ACE_TYPE:
                 rejected.append(f"ace-type-{header.AceType}")
                 continue
             mask = c.cast(
-                PVOID(ace.value + c.sizeof(ACE_HEADER)), c.POINTER(DWORD)
+                PVOID(address + c.sizeof(ACE_HEADER)), c.POINTER(DWORD)
             ).contents.value
-            sid_pointer = PVOID(ace.value + c.sizeof(ACE_HEADER) + c.sizeof(DWORD))
+            sid_pointer = PVOID(address + c.sizeof(ACE_HEADER) + c.sizeof(DWORD))
             sid = _sid_text(sid_pointer)
             allow_sids.append(sid)
             masks.append(mask)
@@ -730,12 +763,15 @@ def _open_relative(parent: int, name: str, disposition: int, *, directory: bool,
         options |= FILE_DIRECTORY_FILE
     try:
         _check_status(_api().NtCreateFile(c.byref(result), access, c.byref(attributes), c.byref(iosb), None, FILE_ATTRIBUTE_DIRECTORY if directory else FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, disposition, options, None, 0), "NtCreateFile")
+        value = result.value
+        if value is None or value == INVALID_HANDLE_VALUE:
+            raise _Failure("unavailable")
         facts = _identity(result)
         if facts["reparse"]:
             raise _ReparseRefused()
         if not facts["disk_file"] or bool(facts["directory"]) is not directory:
             raise PermissionError("unexpected object")
-        return int(result.value)
+        return value
     except Exception as exc:
         if result.value not in (None, INVALID_HANDLE_VALUE):
             try:
@@ -747,8 +783,11 @@ def _open_relative(parent: int, name: str, disposition: int, *, directory: bool,
 def open_root(path: Path) -> int:
     try:
         raw = HANDLE(_api().CreateFileW(str(path), DIRECTORY_ACCESS, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, None, OPEN_EXISTING, 0x02000000, None))
-        if raw.value == INVALID_HANDLE_VALUE:
+        value = raw.value
+        if value == INVALID_HANDLE_VALUE:
             raise OSError(c.get_last_error(), "CreateFileW")
+        if value is None:
+            raise _Failure("unavailable")
         facts = _identity(raw)
         if not facts["directory"] or not facts["disk_file"] or facts["reparse"]:
             raise PermissionError("unsafe root")
@@ -759,7 +798,7 @@ def open_root(path: Path) -> int:
         if not flags.value & 0x00000008:  # FILE_PERSISTENT_ACLS
             raise _Failure("unsupported_filesystem")
         _dacl_private(raw)  # Inspect capability, not private-directory policy.
-        return int(raw.value)
+        return value
     except Exception as exc:
         if "raw" in locals() and raw.value not in (None, INVALID_HANDLE_VALUE):
             try:
@@ -781,7 +820,7 @@ def _private_leaf(handle: HANDLE) -> None:
     if facts["directory"] or not facts["disk_file"] or facts["reparse"] or facts["links"] != 1:
         raise PermissionError("unsafe leaf")
     private, details = _dacl_private(handle)
-    if not private or any(details["ace_flags"]):
+    if not private or any(details.get("ace_flags", [])):
         raise PermissionError("unsafe DACL")
 
 def open_file(parent: int, name: str, *, writable: bool = False) -> int:

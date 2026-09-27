@@ -83,7 +83,7 @@ class TestMergeConfigFiles:
         base = SettingsParameters.create(settings_class=TestSettings)
         other = SettingsParameters.create(settings_class=TestSettings)
         result = SettingsParameters.merge(base, other)
-        assert result.config_files is None
+        assert result.config_files == ()
 
     @pytest.mark.unit
     def test_config_files_prioritise_base(self):
@@ -139,7 +139,7 @@ class TestMergeKwargs:
         base = SettingsParameters.create(settings_class=TestSettings)
         other = SettingsParameters.create(settings_class=TestSettings)
         result = SettingsParameters.merge(base, other)
-        assert result.kwargs is None
+        assert result.kwargs == {}
 
     @pytest.mark.unit
     def test_kwargs_prioritise_base(self):

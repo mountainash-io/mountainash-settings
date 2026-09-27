@@ -86,9 +86,9 @@ class TestSettingsParameters:
         assert isinstance(params.config_files, tuple)
         assert len(params.config_files) == 2
 
-    def test_create_with_no_kwargs_sets_kwargs_to_none(self):
+    def test_create_with_no_kwargs_normalizes_to_empty_mapping(self):
         params = SettingsParameters.create()
-        assert params.kwargs is None
+        assert params.kwargs == {}
 
     def test_to_dict_with_all_fields_populated(self):
         kwargs = {"DEBUG": True, "VERBOSE": False}

@@ -23,9 +23,10 @@ from pydantic_settings import (
 )
 
 from mountainash_settings.settings_parameters import SettingsFileHandler, SettingsParameters, SettingsKwargsHandler, SettingsFiles
+from mountainash_settings.settings_parameters.filehandler import ConfigFilesInput
 
 # T = TypeVar('T', bound='BaseSettings')
-T = TypeVar('T', BaseSettings, 'MountainAshBaseSettings')
+T = TypeVar('T', bound='MountainAshBaseSettings')
 
 
 _CACHE_SOURCE_UNSET = object()
@@ -473,8 +474,8 @@ class MountainAshBaseSettings(BaseSettings):
         )
 
     #Tracablility and repeatability
-    SETTINGS_CLASS: Type =                                            Field(default=None)
-    SETTINGS_CLASS_NAME: str =                                        Field(default=None)
+    SETTINGS_CLASS: type | None =                                     Field(default=None)
+    SETTINGS_CLASS_NAME: str | None =                                 Field(default=None)
 
     SETTINGS_SOURCE_ENV_FILES: Optional[Union[Any, str, List[Any|str]]] =       Field(default=None)
     SETTINGS_SOURCE_ENV_PREFIX: Optional[str] =                                 Field(default=None)
@@ -595,7 +596,7 @@ class MountainAshBaseSettings(BaseSettings):
 
 
     def __init__(self,
-                 config_files:          Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 config_files:          ConfigFilesInput = None,
                  settings_parameters:   Optional[SettingsParameters] = None,
                  template_settings_parameters:   Optional[SettingsParameters] = None,
                  **kwargs) -> None:
@@ -660,7 +661,7 @@ class MountainAshBaseSettings(BaseSettings):
                 super().__init__(   _case_sensitive=True,
                                     _nested_model_default_partial_update=False,
                                     _env_prefix=            local_settings_params.env_prefix,
-                                    _env_file=              obj_config_files.env_files or None,
+                                    _env_file=              tuple(str(path) for path in obj_config_files.env_files) or None,
                                     _env_file_encoding =    'utf-8',
                                     _env_ignore_empty =     True,
                                     _env_nested_delimiter = None,
@@ -725,7 +726,7 @@ class MountainAshBaseSettings(BaseSettings):
         settings_cls: Type[BaseSettings],
         init_settings: PydanticBaseSettingsSource,
         env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
+        dotenv_settings: DotEnvSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
         *,
         yaml_files: Any = _CACHE_SOURCE_UNSET,
@@ -780,6 +781,8 @@ class MountainAshBaseSettings(BaseSettings):
         # frame for a different class), fall back to static class
         # configuration, preserving direct-hook-call compatibility.
         frame = _CURRENT_DIRECT_SOURCE_FRAME.get()
+        if not isinstance(dotenv_settings, DotEnvSettingsSource):
+            raise TypeError("Expected DotEnvSettingsSource")
         if frame is not None and frame.settings_class is settings_cls:
             return cls._cache_default_sources(
                 settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
@@ -801,7 +804,7 @@ class MountainAshBaseSettings(BaseSettings):
         cls,
         settings_parameters: Optional[SettingsParameters] = None,
         settings_class: Optional[Type[T]] = None,
-        config_files: Optional[Union[UPath, str, List[UPath | str]]] = None,
+        config_files: ConfigFilesInput = None,
         env_prefix: Optional[str] = None,
         *,
         reinitialise: bool = False,

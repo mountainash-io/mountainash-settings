@@ -5,16 +5,11 @@ A subclass declares ``__spec__`` (a :class:`ProfileSpec`); this base uses
 pydantic v2's ``__pydantic_init_subclass__`` hook to materialize the spec
 into pydantic fields.
 
-During the 26.5.x deprecation window, this class also accepts the old
-``__descriptor__`` attribute name; concrete classes that still declare
-``__descriptor__`` emit a ``DeprecationWarning`` but install fields
-correctly. Removed in 26.6.0.
 """
 
 from __future__ import annotations
 
 import typing as t
-import warnings
 
 from pydantic import AfterValidator, PrivateAttr, SecretStr, ValidationError
 from pydantic.fields import FieldInfo
@@ -28,8 +23,7 @@ __all__ = ["Adapter", "Profile"]
 
 # A target adapter composes credential/config kwargs: it receives the profile
 # and the already-merged (base + driver_key renames) dict, and returns the final
-# dict. Distinct from the legacy 1-arg ``__adapter__`` which owns the whole
-# pipeline (see Profile docstring).
+# dict.
 Adapter = t.Callable[["Profile", dict[str, t.Any]], dict[str, t.Any]]
 
 # Sentinel distinguishing "no target argument passed" from an explicit ``None``
@@ -38,38 +32,10 @@ _UNSET: t.Any = object()
 
 
 def _resolve_spec(cls: type) -> ProfileSpec | None:
-    """Resolve a class's bound spec from __spec__ (new) or __descriptor__ (old).
-
-    Reads only from cls.__dict__ (not the MRO) because field installation
-    must use the spec declared on this class specifically.
-
-    Returns:
-        The bound ProfileSpec, or None if neither attribute is set.
-
-    Raises:
-        TypeError: If both __spec__ and __descriptor__ are declared with
-            different values.
-    """
+    """Resolve only the spec declared on this class, not an inherited spec."""
     spec = cls.__dict__.get("__spec__")
-    old = cls.__dict__.get("__descriptor__")
-    if spec is None and old is not None:
-        warnings.warn(
-            f"{cls.__name__} declares '__descriptor__' (deprecated). "
-            f"Rename to '__spec__' before mountainash-settings 26.6.0.",
-            DeprecationWarning, stacklevel=4,
-        )
-        # Install __spec__ as an alias so instance properties and methods
-        # that read self.__spec__ keep working during the 26.5.x deprecation
-        # window. Without this, __descriptor__-only classes have fields
-        # installed but profile_name/backend/provider_type/_default_kwargs()
-        # raise AttributeError.
-        cls.__spec__ = old
-        return old
-    if spec is not None and old is not None and spec is not old:
-        raise TypeError(
-            f"{cls.__name__} declares both '__spec__' and '__descriptor__' "
-            f"with conflicting values: {spec!r} vs {old!r}"
-        )
+    if spec is not None and not isinstance(spec, ProfileSpec):
+        raise TypeError("Class-body __spec__ must be a ProfileSpec")
     return spec
 
 
@@ -77,22 +43,15 @@ class Profile(MountainAshBaseSettings):
     """Declarative settings base — subclasses set ``__spec__`` only.
 
     Public contract:
-        - :attr:`backend` / :attr:`profile_name` — spec name.
+        - :attr:`profile_name` — spec name.
         - :attr:`provider_type` — spec provider_type.
         - :meth:`_default_kwargs` — 1:1 ``driver_key`` mappings from the spec.
         - :meth:`emit` — target-aware kwargs: ``driver_key`` renames →
-          per-target ``__adapters__`` (2-arg compose) → legacy ``__adapter__``
-          (1-arg, owns-pipeline) → merged dict.
+          per-target ``__adapters__`` (2-arg compose) → merged dict.
         - ``__adapters__`` — per-target adapter map (``{target: Adapter}``).
-        - ``__adapter__`` — legacy all-targets adapter; owns the output pipeline.
-
-    Public from 26.5.0. Previously named ``DescriptorProfile``.
     """
 
     __spec__: t.ClassVar[ProfileSpec]
-    __adapter__: t.ClassVar[
-        t.Callable[["Profile"], dict[str, t.Any]] | None
-    ] = None
     __adapters__: t.ClassVar[dict[t.Hashable, "Adapter"]] = {}
 
     # MAS-SEC-005 (M6 review follow-up, 2026-09-25): field names -- never
@@ -148,11 +107,6 @@ class Profile(MountainAshBaseSettings):
         return self.__spec__.name
 
     @property
-    def backend(self) -> str:
-        """Alias for ``profile_name`` — preserves naming from mountainash-data."""
-        return self.__spec__.name
-
-    @property
     def provider_type(self) -> t.Any:
         return self.__spec__.provider_type
 
@@ -202,8 +156,6 @@ class Profile(MountainAshBaseSettings):
             reinitialise=reinitialise,
         )
         spec = lookup_class_var(type(self), "__spec__")
-        if spec is None:
-            spec = lookup_class_var(type(self), "__descriptor__")
         if spec is None:
             return
 
@@ -354,9 +306,8 @@ class Profile(MountainAshBaseSettings):
     ) -> dict[str, t.Any]:
         """Produce SDK kwargs for ``target``, layered onto ``base``.
 
-        Three-tier: ``driver_key`` renames, then the per-target adapter in
-        ``__adapters__`` (2-arg compose), else the legacy ``__adapter__``
-        (1-arg, owns-pipeline), else the merged dict.
+        Apply ``driver_key`` renames, then the per-target adapter in
+        ``__adapters__`` (2-arg compose), or return the merged dict.
 
         Fail-closed: a target-scoped profile (dict driver_keys or any
         ``__adapters__``) emitted with no explicit target raises rather than
@@ -390,7 +341,4 @@ class Profile(MountainAshBaseSettings):
         adapter = type(self).__adapters__.get(target)
         if adapter is not None:
             return adapter(self, merged)
-        if type(self).__adapter__ is not None:
-            return type(self).__adapter__(self)  # legacy 1-arg owns-pipeline
         return merged
-

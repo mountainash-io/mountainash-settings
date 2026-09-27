@@ -271,6 +271,7 @@ def installed_api_evidence() -> dict[str, bool]:
     """Prove retired secrets APIs are absent from the importable candidate."""
     import mountainash_settings  # type: ignore[import-untyped]
     import mountainash_settings.secrets as secrets  # type: ignore[import-untyped]
+    import mountainash_settings.profiles as profiles
     from mountainash_settings import (  # type: ignore[import-untyped]
         MountainAshBaseSettings,
         SettingsParameters,
@@ -313,6 +314,19 @@ def installed_api_evidence() -> dict[str, bool]:
         MountainAshBaseSettings, "SETTINGS_SOURCE_SECRETS_PROVIDER", _MISSING
     ) is _MISSING
     evidence = {
+        "version_0_1_0": mountainash_settings.__version__ == "0.1.0",
+        "profile_shims_absent": all(
+            not hasattr(surface, name)
+            for surface in (mountainash_settings, profiles)
+            for name in ("ProfileDescriptor", "DescriptorProfile", "descriptor_invariants_for", "_Missing")
+        ),
+        "descriptor_module_absent": importlib.util.find_spec("mountainash_settings.profiles.descriptor") is None,
+        "profile_attributes_absent": all(
+            not hasattr(profiles.Profile, name) for name in ("__descriptor__", "__adapter__", "backend")
+        ),
+        "registry_aliases_absent": all(
+            not hasattr(profiles.Registry, name) for name in ("descriptors", "get_descriptor")
+        ),
         "registry_module_absent": registry_module_absent,
         "removed_exports_absent": removed_exports_absent,
         "secrets_provider_absent": secrets_provider_absent,
@@ -320,6 +334,18 @@ def installed_api_evidence() -> dict[str, bool]:
             settings_source_secrets_provider_absent
         ),
     }
+    registry = profiles.Registry("candidate")
+    spec = profiles.ProfileSpec(name="candidate", provider_type="http", parameters=[])
+
+    @registry.decorator()
+    class Candidate(profiles.Profile):
+        __spec__ = spec
+        __adapters__ = {"http": lambda profile, kwargs: {**kwargs, "profile": profile.profile_name}}
+
+    evidence["canonical_profile_emission"] = (
+        registry.get_spec("candidate") is spec
+        and Candidate().emit("http", base={"timeout": 1}) == {"timeout": 1, "profile": "candidate"}
+    )
     assert all(evidence.values())
     return evidence
 

@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from typing import Optional, Any, Tuple, Type, List, Dict, TYPE_CHECKING
+from typing import Optional, Any, Dict, TYPE_CHECKING
 from dataclasses import dataclass, field
 
 if TYPE_CHECKING:
     from ..secrets.backend import SecretReader
-
-from pydantic_settings import BaseSettings
-from upath import UPath
+    from ..settings.base_settings import MountainAshBaseSettings
 
 
-from .filehandler import SettingsFileHandler
+
+from .filehandler import ConfigFilesInput, SettingsFileHandler
 from .kwargshandler import SettingsKwargsHandler
 
 @dataclass(frozen=True)
@@ -45,8 +44,8 @@ class SettingsParameters():
         params2 = SettingsParameters(config_files=["config.yaml"],
                                    kwargs={"log_level": "INFO"})
     """
-    config_files:   Optional[List[str|UPath]|Tuple[str|UPath, ...]] = None
-    settings_class: Optional[Type[BaseSettings]] = None
+    config_files:   ConfigFilesInput = None
+    settings_class: type[MountainAshBaseSettings] | None = None
     env_prefix:     Optional[str] = None
     secrets_dir:    Optional[str] = None
     kwargs:         Optional[Dict[str,Any]] = field(default=None, repr=False)
@@ -143,7 +142,7 @@ class SettingsParameters():
         )
 
 
-    def get_settings(self, *, reinitialise: bool = False, **kwargs: Any) -> BaseSettings:
+    def get_settings(self, *, reinitialise: bool = False, **kwargs: Any) -> MountainAshBaseSettings:
         # Lazy import to avoid circular dependency
         from ..settings_cache import get_settings
 
@@ -158,8 +157,8 @@ class SettingsParameters():
     # Creation methods
     @classmethod
     def create(cls,
-               config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath, ...]] = None,
-               settings_class: Optional[Type[BaseSettings]] = None,
+               config_files: ConfigFilesInput = None,
+               settings_class: type[MountainAshBaseSettings] | None = None,
                env_prefix: Optional[str] = None,
                secrets_dir: Optional[str] = None,
                secret_store: Optional["SecretReader"] = None,
@@ -169,7 +168,7 @@ class SettingsParameters():
 
         #Combine the parameters into a single object
         resolved_config_files =  SettingsFileHandler.format_config_file_tuple(config_files)
-        resolved_kwargs =        SettingsKwargsHandler.format_kwargs_dict(kwargs) if kwargs else None
+        resolved_kwargs =        SettingsKwargsHandler.format_kwargs_dict(kwargs)
 
         return cls(
             config_files=resolved_config_files,
@@ -219,15 +218,7 @@ class SettingsParameters():
         elif prioritise_base:
             merged_config_files = base.config_files or other.config_files
         else:
-            ordered_files = [
-                *(base.config_files or ()),
-                *(other.config_files or ()),
-            ]
-            merged_config_files = (
-                tuple(dict.fromkeys(str(path) for path in ordered_files))
-                if ordered_files
-                else None
-            )
+            merged_config_files = SettingsFileHandler.merge_config_files(base.config_files, other.config_files)
 
         # Settings class: validate compatibility
         if base.settings_class is not None and other.settings_class is not None:
@@ -277,7 +268,7 @@ class SettingsParameters():
     #Export / retrieve values
     def to_dict(self) -> Dict[str, Any]:
         return {
-            'config_files': list(self.config_files) if self.config_files else None,
+            'config_files': SettingsFileHandler.format_config_file_list(self.config_files) if self.config_files else None,
             'kwargs': self.get_all_kwargs() if self.kwargs else None,
             'settings_class': self.settings_class,
             'env_prefix': self.env_prefix,
@@ -286,7 +277,7 @@ class SettingsParameters():
 
 
     def _get_settings_kwarg_names(self,
-                             settings_class: Optional[Type[BaseSettings]] = None
+                             settings_class: type[MountainAshBaseSettings] | None = None
                              ) -> set[str]:
 
         if settings_class is None:
@@ -304,7 +295,7 @@ class SettingsParameters():
         return settings_kwarg_names
 
     def _get_valid_kwarg_names(self,
-                          settings_class:    Optional[Type[BaseSettings]] = None
+                          settings_class:    type[MountainAshBaseSettings] | None = None
                           ) -> set[str]:
 
         if settings_class is None:
@@ -316,7 +307,7 @@ class SettingsParameters():
 
 
     def get_attribute_settings_kwargs(self,
-                                        settings_class: Optional[Type[BaseSettings]] = None
+                                        settings_class: type[MountainAshBaseSettings] | None = None
                                         ) -> Dict[str, Any]:
         """Classify direct-construction kwargs into field inputs, rejecting source/schema controls.
 
@@ -356,7 +347,7 @@ class SettingsParameters():
         return {k: v for k, v in self.kwargs.items()} if self.kwargs else {}
 
     def get_cache_runtime_kwargs(
-        self, settings_class: Optional[Type[BaseSettings]] = None,
+        self, settings_class: type[MountainAshBaseSettings] | None = None,
     ) -> Dict[str, Any]:
         """Return runtime inputs after rejecting cache identity and source controls."""
         settings_class = settings_class or self.settings_class

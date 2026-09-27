@@ -1,7 +1,7 @@
 """Public MRO-walking helper for class-level attribute lookup.
 
-Used by Profile to resolve __spec__ (and __descriptor__ during deprecation)
-and __adapter__. Exposed as public API so downstream consumers can use it
+Used by Profile to resolve __spec__
+and __adapters__. Exposed as public API so downstream consumers can use it
 for their own class-level dunder lookups without depending on private symbols.
 """
 

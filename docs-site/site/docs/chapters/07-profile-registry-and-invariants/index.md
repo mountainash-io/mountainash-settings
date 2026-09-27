@@ -10,7 +10,7 @@ version: 0.08
 
 ## Summary
 
-This chapter covers the profile registry that provides a centralized store for ProfileDescriptor instances. You will learn about the Registry class with its name-keyed store, decorator-based registration pattern, registry decorator factory for customizing registration, duplicate prevention, iteration and lookup by name, descriptor invariants that validate profile definitions, and the invariant test generator for automated testing.
+This chapter covers the profile registry that provides a centralized store for ProfileSpec instances. You will learn about its name-keyed store, bare class-decorator registration, duplicate prevention, lookup by name, spec invariants and automated invariant tests.
 
 ---
 
@@ -67,7 +67,7 @@ The **name-keyed store** is the core data structure: two dictionaries keyed by t
 The store supports three access patterns:
 
 - **Registration** -- `register(spec, cls)` adds a new entry
-- **Lookup by name** -- `get_descriptor(name)` and `get_settings_class(name)` retrieve entries
+- **Lookup by name** -- `get_spec(name)` and `get_settings_class(name)` retrieve entries
 - **Containment check** -- `name in registry` tests whether a name is registered
 
 ```python
@@ -76,7 +76,7 @@ The store supports three access patterns:
 assert "postgresql" in DATABASES_REGISTRY
 assert len(DATABASES_REGISTRY) == 1
 
-spec = DATABASES_REGISTRY.get_descriptor("postgresql")
+spec = DATABASES_REGISTRY.get_spec("postgresql")
 cls = DATABASES_REGISTRY.get_settings_class("postgresql")
 ```
 
@@ -96,7 +96,7 @@ class PostgreSQLProfile(ConnectionProfile):
 
 The bare `@register` form (without arguments) is the canonical pattern as of version 26.5.0. The decorator reads `cls.__spec__` from the class body and calls `registry.register(spec, cls)` internally. This ensures that the spec and class are always in sync -- the spec declared on the class is exactly the spec registered in the registry.
 
-The decorator returns the class unchanged, so the decorated class can be used normally after registration. The decoration has no effect on the class's behavior -- it only adds the class to the registry's lookup tables and sets `cls.__spec__` (for the deprecation-window mirror to `cls.__descriptor__`).
+The bare decorator returns the Profile subclass unchanged, validates its class-body `__spec__`, and adds it to the registry's lookup tables. There is no descriptor mirror or decorator-with-spec form in 0.1.0.
 
 #### Diagram: Decorator Registration Flow
 
@@ -167,12 +167,12 @@ Duplicate prevention applies per-registry. A name like `"postgresql"` can exist 
 print(len(DATABASES_REGISTRY))  # e.g., 5
 
 # Iterate over all specs
-for name, spec in DATABASES_REGISTRY.descriptors.items():
+for name, spec in DATABASES_REGISTRY.specs.items():
     print(f"{name}: {len(spec.parameters)} parameters")
 
 # Check membership
 if "postgresql" in DATABASES_REGISTRY:
-    spec = DATABASES_REGISTRY.get_descriptor("postgresql")
+    spec = DATABASES_REGISTRY.get_spec("postgresql")
 ```
 
 The `descriptors` property returns a copy of the internal dictionary, which means iterating or modifying the returned dict does not affect the registry. The `__contains__` method checks `isinstance(name, str)` before lookup, ensuring that non-string values always return `False` rather than raising a `TypeError`.
@@ -182,17 +182,17 @@ The `descriptors` property returns a copy of the internal dictionary, which mean
 
 **Registry lookup by name** is provided by two methods that mirror the two internal dictionaries:
 
-- `get_descriptor(name)` -- returns the `ProfileSpec` for the given name
+- `get_spec(name)` -- returns the `ProfileSpec` for the given name
 - `get_settings_class(name)` -- returns the `Profile` subclass for the given name
 
 Both methods raise `KeyError` with a helpful message that lists all known names in the registry:
 
 ```python
-def get_descriptor(self, name: str) -> ProfileSpec:
+def get_spec(self, name: str) -> ProfileSpec:
     try:
-        return self._descriptors[name]
+        return self._specs[name]
     except KeyError:
-        known = ", ".join(sorted(self._descriptors)) or "<none>"
+        known = ", ".join(sorted(self._specs)) or "<none>"
         raise KeyError(
             f"No profile registered under {name!r} in {self.name} "
             f"registry. Known: {known}"

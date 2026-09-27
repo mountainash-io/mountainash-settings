@@ -97,7 +97,7 @@ class _NestedDefault(BaseModel):
     value: int = 3
 
 
-class _ExplicitDefaultSettings(BaseSettings):
+class _ExplicitDefaultSettings(MountainAshBaseSettings):
     model_config = SettingsConfigDict(nested_model_default_partial_update=True)
     nested: _NestedDefault = _NestedDefault()
 
@@ -298,25 +298,24 @@ class TestSettingsManagerRoutes:
 
         assert settings.REINITIALISED is True
 
-    def test_standard_plain_base_settings_is_materialized_on_warm_retrieval(self):
+    def test_standard_plain_base_settings_is_direct_only(self, tmp_path):
         manager = SettingsManager()
         params = SettingsParameters.create(
             settings_class=MockBaseSettings,
+            config_files=str(tmp_path / "missing.yaml"),
             env_prefix="PLAIN_STANDARD_",
             test_field="configured",
         )
 
-        first = manager.get_or_create_settings(params)
-        second = manager.get_or_create_settings(params)
-
-        assert isinstance(first, MockBaseSettings)
-        assert isinstance(second, MockBaseSettings)
-        assert second.test_field == "configured"
+        assert MockBaseSettings(test_field="configured").test_field == "configured"
+        for call in (manager.get_or_create_settings, manager.get_settings_object, get_settings):
+            with pytest.raises(TypeError, match="MountainAshBaseSettings"):
+                call(params)
 
     def test_cached_plain_custom_constructor_is_rejected_without_changing_direct_use(self):
         assert _PlainCustomConstructorSettings(VALUE="value").VALUE == "direct:value"
 
-        with pytest.raises(ValueError, match="BaseSettings.__init__"):
+        with pytest.raises(TypeError, match="MountainAshBaseSettings"):
             SettingsManager().get_or_create_settings(
                 SettingsParameters.create(
                     settings_class=_PlainCustomConstructorSettings,
@@ -534,7 +533,7 @@ class TestReviewedCacheBoundaries:
         assert manager.get_or_create_settings(parameters).value == "derived"
         assert manager.get_or_create_settings(parameters).value == "derived"
 
-    def test_plain_nested_partial_defaults_survive_source_and_runtime_inputs(self, monkeypatch):
+    def test_plain_nested_partial_defaults_remain_available_directly(self, monkeypatch):
         class Nested(BaseModel):
             a: int = 1
             b: int = 2
@@ -544,12 +543,8 @@ class TestReviewedCacheBoundaries:
             nested: Nested = Nested(a=1, b=9)
 
         monkeypatch.setenv("MASPARTIAL_nested", '{"a":5}')
-        manager = SettingsManager()
-        parameters = SettingsParameters.create(settings_class=PartialSettings, env_prefix="MASPARTIAL_")
-        assert manager.get_or_create_settings(parameters).nested == Nested(a=5, b=9)
-        assert manager.get_or_create_settings(SettingsParameters.create(
-            settings_class=PartialSettings, env_prefix="MASPARTIAL_", nested={"a": 7},
-        )).nested == Nested(a=7, b=9)
+        assert PartialSettings(_env_prefix="MASPARTIAL_").nested == Nested(a=5, b=9)
+        assert PartialSettings(_env_prefix="MASPARTIAL_", nested={"a": 7}).nested == Nested(a=7, b=9)
 
     def test_named_override_allows_absent_indexed_alias_alternative(self):
         from pydantic import AliasChoices
@@ -683,9 +678,8 @@ class TestReviewedCacheBoundaries:
         assert backend.calls == 1
 
 
-class _PlainRejectingSettings(BaseSettings):
-    """Plain (non-MountainAsh) settings class, routed through the ``else``
-    branch of ``_SettingsContext.materialize()`` (MAS-SEC-006, M7)."""
+class _PlainRejectingSettings(MountainAshBaseSettings):
+    """Supported cached class with a rejecting validator (MAS-SEC-006)."""
 
     TOKEN: str = "unset"
 
@@ -727,7 +721,7 @@ class TestSecretValidationErrorBoundary:
         Sanitizing on "any field in this call was resolved" hides the real
         unrelated diagnostic."""
 
-        class _MixedFieldsPlainSettings(BaseSettings):
+        class _MixedFieldsPlainSettings(MountainAshBaseSettings):
             PASSWORD: str = "x"
             PORT: int = 1
 

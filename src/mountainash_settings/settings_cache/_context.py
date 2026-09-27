@@ -5,12 +5,10 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Any, Iterator, Type, cast
+from typing import Any, Iterator, TYPE_CHECKING, cast
 
-from pydantic import BaseModel
 from pydantic._internal._utils import deep_update
 from pydantic_settings import (
-    BaseSettings,
     DotEnvSettingsSource,
     EnvSettingsSource,
     JsonConfigSettingsSource,
@@ -34,24 +32,31 @@ from ..secrets.backend import SecretReader
 from ..settings_parameters import SettingsFileHandler, SettingsParameters
 from .sources import CacheableSettingsSource
 
+if TYPE_CHECKING:
+    from ..settings.base_settings import MountainAshBaseSettings
+
 _SourceSnapshot = tuple[type[PydanticBaseSettingsSource], str, dict[str, Any], bool]
 
 
 @dataclass(frozen=True, eq=False)
 class _StructuralKey:
-    config_files: tuple[str, ...] | None
-    settings_class: Type[BaseSettings]
+    config_files: tuple[str, ...]
+    settings_class: type[MountainAshBaseSettings]
     env_prefix: str | None
     secrets_dir: str | None
     secret_store: "SecretReader | None" = field(repr=False)
 
     @classmethod
     def from_parameters(cls, parameters: SettingsParameters) -> "_StructuralKey":
+        from ..settings.base_settings import MountainAshBaseSettings
+
         if parameters.settings_class is None:
             raise ValueError("settings_parameters.settings_class cannot be empty.")
+        if not isinstance(parameters.settings_class, type) or not issubclass(parameters.settings_class, MountainAshBaseSettings):
+            raise TypeError("Cached retrieval requires a MountainAshBaseSettings subclass")
         files = SettingsFileHandler.format_config_file_tuple(parameters.config_files)
         return cls(
-            tuple(str(path) for path in files) if files else None,
+            tuple(str(path) for path in files),
             parameters.settings_class,
             parameters.env_prefix,
             parameters.secrets_dir,
@@ -86,11 +91,11 @@ class _CacheFrame:
     context: "_SettingsContext"
     reinitialise: bool
     original_runtime: dict[str, Any] = field(default_factory=dict)
-    bound_instance: BaseSettings | None = None
+    bound_instance: MountainAshBaseSettings | None = None
     consumed: bool = False
     raw_assignments: dict[str, Any] | None = None
     expected_fields: dict[str, Any] | None = None
-    recording_instance: BaseSettings | None = None
+    recording_instance: MountainAshBaseSettings | None = None
     suppressed_fields: frozenset[str] = frozenset()
     has_runtime_inputs: bool = False
     # MAS-SEC-006 (M7): this invocation's own runtime-override field names
@@ -99,14 +104,14 @@ class _CacheFrame:
     # resolution _candidate() already performs, never a second store read.
     runtime_sensitive_fields: frozenset[str] = frozenset()
 
-    def bind(self, instance: BaseSettings) -> None:
+    def bind(self, instance: MountainAshBaseSettings) -> None:
         if (
             self.bound_instance is None
             and type(instance) is self.context.key.settings_class
         ):
             self.bound_instance = instance
 
-    def consume(self, instance: BaseSettings) -> bool:
+    def consume(self, instance: MountainAshBaseSettings) -> bool:
         if self.consumed or instance is not self.bound_instance:
             return False
         self.consumed = True
@@ -158,13 +163,13 @@ def cache_materialization_frame(
         _CURRENT_FRAME.reset(token)
 
 
-def bind_cache_frame_instance(instance: BaseSettings) -> None:
+def bind_cache_frame_instance(instance: MountainAshBaseSettings) -> None:
     frame = _CURRENT_FRAME.get()
     if frame is not None:
         frame.bind(instance)
 
 
-def consume_cache_frame(instance: BaseSettings) -> _CacheFrame | None:
+def consume_cache_frame(instance: MountainAshBaseSettings) -> _CacheFrame | None:
     frame = _CURRENT_FRAME.get()
     if frame is not None and frame.consume(instance):
         return frame
@@ -212,12 +217,8 @@ def _settings_sources(key: _StructuralKey) -> tuple[PydanticBaseSettingsSource, 
     cls = key.settings_class
     from ..settings.base_settings import MountainAshBaseSettings
 
-    if issubclass(cls, MountainAshBaseSettings):
-        inherited_hook = MountainAshBaseSettings.settings_capture_sources
-        inherited_legacy = MountainAshBaseSettings.settings_customise_sources
-    else:
-        inherited_hook = None
-        inherited_legacy = BaseSettings.settings_customise_sources
+    inherited_hook = MountainAshBaseSettings.settings_capture_sources
+    inherited_legacy = MountainAshBaseSettings.settings_customise_sources
     capture_hook = getattr(cls, "settings_capture_sources", None)
     legacy = getattr(cls, "settings_customise_sources")
     hook_is_inherited = capture_hook is None or (
@@ -234,29 +235,18 @@ def _settings_sources(key: _StructuralKey) -> tuple[PydanticBaseSettingsSource, 
     # Cache admission permits only the five structural selectors.  Construct the
     # configured sources ourselves so legacy hooks are never invoked implicitly.
     config = cls.model_config
-    is_mountainash = issubclass(cls, MountainAshBaseSettings)
     nested_update: bool | None
     case_sensitive: bool | None
     env_ignore_empty: bool | None
     env_parse_none_str: str | None
     env_parse_enums: bool | None
     env_file_encoding: str | None
-    if is_mountainash:
-        # These are MountainAshBaseSettings.__init__'s effective source
-        # options, rather than pydantic-settings' native defaults.
-        nested_update = False
-        case_sensitive = True
-        env_ignore_empty = True
-        env_parse_none_str = "None"
-        env_parse_enums = True
-        env_file_encoding = "utf-8"
-    else:
-        nested_update = config.get("nested_model_default_partial_update")
-        case_sensitive = config.get("case_sensitive")
-        env_ignore_empty = config.get("env_ignore_empty")
-        env_parse_none_str = config.get("env_parse_none_str")
-        env_parse_enums = config.get("env_parse_enums")
-        env_file_encoding = config.get("env_file_encoding")
+    nested_update = False
+    case_sensitive = True
+    env_ignore_empty = True
+    env_parse_none_str = "None"
+    env_parse_enums = True
+    env_file_encoding = "utf-8"
     env_prefix_target: EnvPrefixTarget | None = config.get("env_prefix_target")
     env_nested_delimiter: str | None = config.get("env_nested_delimiter")
     env_nested_max_split: int | None = config.get("env_nested_max_split")
@@ -285,7 +275,7 @@ def _settings_sources(key: _StructuralKey) -> tuple[PydanticBaseSettingsSource, 
     SettingsFileHandler.validate_config_files_exist(files.toml_files)
     SettingsFileHandler.validate_config_files_exist(files.json_files)
     env_file: DotenvType | None = (
-        cast(DotenvType, files.env_files) if files.env_files else config.get("env_file")
+        tuple(str(path) for path in files.env_files) if files.env_files else config.get("env_file")
     )
     dotenv = DotEnvSettingsSource(
         cls, env_file=env_file, env_file_encoding=env_file_encoding,
@@ -299,15 +289,10 @@ def _settings_sources(key: _StructuralKey) -> tuple[PydanticBaseSettingsSource, 
         env_prefix_target=env_prefix_target, _init_state=init_state,
     )
     builtins: tuple[PydanticBaseSettingsSource, ...]
-    if is_mountainash:
-        # Pass None explicitly rather than letting source constructors inherit
-        # file selectors mutated by an earlier direct MountainAsh construction.
-        builtins = MountainAshBaseSettings._cache_default_sources(
-            cls, init, env, dotenv, secrets,
-            yaml_files=files.yaml_files, toml_files=files.toml_files, json_files=files.json_files,
-        )
-    else:
-        builtins = (init, env, dotenv, secrets)
+    builtins = MountainAshBaseSettings._cache_default_sources(
+        cls, init, env, dotenv, secrets,
+        yaml_files=files.yaml_files, toml_files=files.toml_files, json_files=files.json_files,
+    )
     if capture_hook is not None:
         builtins = tuple(capture_hook(tuple(builtins)))
     return (*builtins, default)
@@ -432,18 +417,10 @@ class _SettingsContext:
                     raise ValueError("Cache source projection must return a dictionary")
                 source_state = _owned(source_state)
             elif source_type is InitSettingsSource:
-                from ..settings.base_settings import MountainAshBaseSettings
-
                 source_state = InitSettingsSource(
                     self.key.settings_class,
                     init_kwargs=_copy_for_call(runtime),
-                    nested_model_default_partial_update=(
-                        False
-                        if issubclass(self.key.settings_class, MountainAshBaseSettings)
-                        else self.key.settings_class.model_config.get(
-                            "nested_model_default_partial_update"
-                        )
-                    ),
+                    nested_model_default_partial_update=False,
                 )()
                 source_state = _owned(source_state)
             else:
@@ -463,7 +440,6 @@ class _SettingsContext:
         self, effective_runtime: dict[str, Any], *, reinitialise: bool = False,
     ) -> tuple[dict[str, Any], frozenset[str], frozenset[str]]:
         from ..settings.base_settings import (
-            MountainAshBaseSettings,
             _cache_input_field_names,
             _cache_overlay_fields,
         )
@@ -481,19 +457,6 @@ class _SettingsContext:
         cls = self.key.settings_class
         candidate = _cache_overlay_fields(candidate, carry, cls, logical_fields=True)
         candidate = _cache_overlay_fields(candidate, runtime, cls)
-        if not issubclass(cls, MountainAshBaseSettings) and cls.model_config.get("nested_model_default_partial_update"):
-            defaults = DefaultSettingsSource(cls, nested_model_default_partial_update=True)()
-            # Only enrich supplied nested objects: adding absent defaults would
-            # lose input origin and suppress ordinary default evaluation.
-            defaults = {name: value for name, value in defaults.items() if name in candidate}
-            default_fields = _cache_input_field_names(cls, defaults)
-            resolved_defaults = {
-                name: value.model_dump()
-                for name, value in _copy_for_call(self._resolved_static_defaults).items()
-                if name in default_fields and isinstance(value, BaseModel)
-            }
-            defaults = _cache_overlay_fields(defaults, resolved_defaults, cls, logical_fields=True)
-            candidate = deep_update(defaults, candidate)
         return (
             candidate,
             frozenset(carry)
@@ -501,55 +464,17 @@ class _SettingsContext:
             runtime_sensitive_fields,
         )
 
-    def materialize(self, runtime: dict[str, Any], *, reinitialise: bool = False) -> BaseSettings:
-        from ..settings.base_settings import (
-            MountainAshBaseSettings,
-            _apply_cached_static_defaults,
-            _detach_cached_result,
-        )
+    def materialize(self, runtime: dict[str, Any], *, reinitialise: bool = False) -> MountainAshBaseSettings:
+        from ..settings.base_settings import _detach_cached_result
 
         cls = self.key.settings_class
-        frame: _CacheFrame | None = None
-        result: BaseSettings
-        if issubclass(cls, MountainAshBaseSettings):
-            with cache_materialization_frame(self, reinitialise, runtime) as frame:
-                result = cls(**_copy_for_call(runtime))
-            if not frame.consumed:
-                raise ValueError("Cached MountainAsh constructor did not consume its materialization frame")
-        else:
-            if cls.__init__ is not BaseSettings.__init__:
-                raise ValueError("Cached retrieval requires BaseSettings.__init__ for plain settings classes")
-            candidate, _, runtime_sensitive_fields = self._candidate(runtime, reinitialise=reinitialise)
-            result = cls.__new__(cls)
-            caught_error: Exception | None = None
-            try:
-                BaseModel.__init__(result, **candidate)
-            except Exception as exc:
-                caught_error = exc
-            if caught_error is not None:
-                # MAS-SEC-006 (M7): record the failure and leave the handler
-                # before raising -- Python reattaches whatever exception is
-                # currently being handled into a newly raised error's
-                # __context__ regardless of `from None`, so the sanitizer
-                # must run outside this except block, never inside it. Only
-                # guard when the fields the error actually names overlap
-                # with fields resolved from a reference -- an unrelated
-                # ordinary field failing in the same batch validation call
-                # must keep its real diagnostic, not be mislabeled as a
-                # secret-resolution failure (review finding, 2026-09-25).
-                sensitive_fields = self._source_sensitive_fields | runtime_sensitive_fields
-                from ..resolve import _sanitize_if_implicated
-
-                _sanitize_if_implicated(cls, caught_error, sensitive_fields)
-                raise caught_error
-            _apply_cached_static_defaults(
-                result, candidate, _copy_for_call(self._resolved_static_defaults),
-            )
+        with cache_materialization_frame(self, reinitialise, runtime) as frame:
+            result = cls(**_copy_for_call(runtime))
+        if not frame.consumed:
+            raise ValueError("Cached MountainAsh constructor did not consume its materialization frame")
         _detach_cached_result(result)
         if (
-            isinstance(result, MountainAshBaseSettings)
-            and frame is not None
-            and not reinitialise
+            not reinitialise
             and not runtime
             and not frame.original_runtime
             and not frame.has_runtime_inputs

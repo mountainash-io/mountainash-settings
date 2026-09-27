@@ -84,6 +84,12 @@ def test_installed_api_evidence_proves_clean_break():
     evidence = common.installed_api_evidence()
 
     assert evidence == {
+        "version_0_1_0": True,
+        "profile_shims_absent": True,
+        "descriptor_module_absent": True,
+        "profile_attributes_absent": True,
+        "registry_aliases_absent": True,
+        "canonical_profile_emission": True,
         "registry_module_absent": True,
         "removed_exports_absent": True,
         "secrets_provider_absent": True,

@@ -1,248 +1,96 @@
-# src/mountainash_settings/profiles/registry.py
-"""Per-domain registry of profile specs and settings classes.
-
-Each consumer domain instantiates one :class:`Registry`. The optional
-``spec_type`` and ``profile_type`` keyword arguments lock in a typed
-contract: only specs that subclass ``spec_type`` and classes that subclass
-``profile_type`` can be registered.
-
-Example::
-
-    DATABASES_REGISTRY = Registry(
-        "databases",
-        spec_type=BackendSpec,
-        profile_type=ConnectionProfile,
-    )
-    register = DATABASES_REGISTRY.decorator()
-
-    @register
-    class PostgreSQLAuthSettings(ConnectionProfile):
-        __spec__ = POSTGRESQL_SPEC
-"""
-
+"""Per-domain registry of canonical profile specs and classes."""
 from __future__ import annotations
 
 import typing as t
 
 from .spec import ProfileSpec
 
-# After Task 8, ProfileDescriptor IS ProfileSpec (shim alias), so _SPEC_TYPES
-# only needs ProfileSpec. The widening is retained as a single-element tuple
-# for forward compatibility — decorator() checks isinstance(arg, _SPEC_TYPES).
-_SPEC_TYPES: tuple[type, ...] = (ProfileSpec,)
-
 if t.TYPE_CHECKING:
     from .profile import Profile
 
 __all__ = ["Registry"]
-
-
 T = t.TypeVar("T", bound="Profile")
 
 
 class Registry:
-    """Mutable, name-keyed store of specs + their profile classes."""
+    """Name-keyed profiles with optional stricter spec and profile bases."""
 
     def __init__(
-        self,
-        name: str,
-        *,
-        spec_type: type[ProfileSpec] | None = None,
-        profile_type: type | None = None,
+        self, name: str, *, spec_type: type[ProfileSpec] | None = None,
+        profile_type: type[Profile] | None = None,
     ) -> None:
-        """Construct a Registry with optional type constraints.
+        from .profile import Profile
 
-        Args:
-            name: Registry name (used in error messages and test IDs).
-            spec_type: Required base class for registered specs. When
-                ``None`` (the default), any spec-like object is accepted,
-                preserving backwards compatibility. Passing ``ProfileSpec`` or
-                a stricter subclass enforces an ``isinstance`` check in
-                ``register()``.
-            profile_type: Required base class for registered profile classes.
-                When ``None`` (the default), any class is accepted. Passing
-                ``Profile`` or a stricter subclass enforces an ``issubclass``
-                check in ``register()``.
-        """
         self.name = name
-        self._spec_type = spec_type
-        self._profile_type = profile_type
-        self._descriptors: dict[str, ProfileSpec] = {}
-        self._classes: dict[str, type["Profile"]] = {}
+        self._spec_type = spec_type or ProfileSpec
+        self._profile_type = profile_type or Profile
+        self._specs: dict[str, ProfileSpec] = {}
+        self._classes: dict[str, type[Profile]] = {}
 
     def __len__(self) -> int:
-        return len(self._descriptors)
+        return len(self._specs)
 
     def __contains__(self, name: object) -> bool:
-        return isinstance(name, str) and name in self._descriptors
+        return isinstance(name, str) and name in self._specs
 
     @property
-    def descriptors(self) -> dict[str, ProfileSpec]:
-        """Read-only view of the spec dict.
+    def specs(self) -> dict[str, ProfileSpec]:
+        """Return a defensive copy of registered specs."""
+        return dict(self._specs)
 
-        Named ``descriptors`` for backwards compatibility with the pre-rename
-        ``Registry`` API; returns ``ProfileSpec`` instances.
-        """
-        return dict(self._descriptors)
+    def register(self, spec: ProfileSpec, cls: type[Profile]) -> None:
+        from .profile import Profile
 
-    def register(
-        self,
-        spec: ProfileSpec,
-        cls: type["Profile"],
-    ) -> None:
-        """Register ``cls`` under ``spec.name``.
-
-        Validates ``spec`` against the registry's ``spec_type`` and ``cls``
-        against the registry's ``profile_type``. Sets ``cls.__spec__`` and,
-        during the 26.5.x deprecation window, also mirrors to
-        ``cls.__descriptor__`` so downstream code reading the old attribute
-        continues to work until 26.6.0.
-
-        Raises:
-            TypeError: if ``spec`` is not an instance of ``self._spec_type``
-                or ``cls`` is not a subclass of ``self._profile_type``.
-            ValueError: if ``spec.name`` is already registered.
-        """
-        if self._spec_type is not None and not isinstance(spec, self._spec_type):
-            raise TypeError(
-                f"Registry {self.name!r}: spec_type mismatch — expected "
-                f"{self._spec_type.__name__}, got {type(spec).__name__}"
-            )
-        if self._profile_type is not None and not issubclass(cls, self._profile_type):
-            raise TypeError(
-                f"Registry {self.name!r}: profile_type mismatch — expected "
-                f"a subclass of {self._profile_type.__name__}, got "
-                f"{cls.__name__} (MRO does not include "
-                f"{self._profile_type.__name__})"
-            )
-        if spec.name in self._descriptors:
-            existing = self._classes.get(spec.name)
-            where = (
-                f"{existing.__module__}.{existing.__qualname__}"
-                if existing is not None
-                else "<unknown class>"
-            )
+        if not isinstance(spec, ProfileSpec) or not isinstance(spec, self._spec_type):
+            raise TypeError(f"Registry {self.name!r}: spec_type mismatch")
+        if not isinstance(cls, type) or not issubclass(cls, Profile) or not issubclass(cls, self._profile_type):
+            raise TypeError(f"Registry {self.name!r}: profile_type mismatch")
+        if spec.name in self._specs:
+            existing = self._classes[spec.name]
             raise ValueError(
-                f"Profile {spec.name!r} is already registered "
-                f"in {self.name} registry by {where}"
+                f"Profile {spec.name!r} is already registered in {self.name} registry "
+                f"by {existing.__module__}.{existing.__qualname__}"
             )
-        self._descriptors[spec.name] = spec
+        self._specs[spec.name] = spec
         self._classes[spec.name] = cls
         cls.__spec__ = spec
-        # Deprecation-window mirror: downstream readers of cls.__descriptor__
-        # continue to see the spec until the 26.6.0 removal. Dropped in 26.6.0.
-        cls.__descriptor__ = spec
 
-    def decorator(
-        self,
-    ) -> t.Callable[..., t.Any]:
-        """Return a ``@register`` decorator bound to this registry.
+    def decorator(self) -> t.Callable[[type[T]], type[T]]:
+        """Return a bare class decorator requiring a class-body spec."""
+        from .profile import Profile
 
-        Supports two call shapes:
+        def decorate(cls: type[T]) -> type[T]:
+            if not isinstance(cls, type) or not issubclass(cls, Profile):
+                raise TypeError("Registration requires a Profile subclass")
+            spec = cls.__dict__.get("__spec__")
+            if not isinstance(spec, ProfileSpec):
+                raise TypeError("Registration requires a class-body __spec__: ProfileSpec")
+            self.register(spec, cls)
+            return cls
 
-        - Bare ``@register`` (canonical from 26.5.0): reads ``cls.__spec__``
-          and registers under its name.
-        - ``@register(spec)`` (deprecated): emits ``DeprecationWarning``;
-          validates the argument matches ``cls.__spec__`` if declared.
+        return decorate
 
-        Disambiguation: the bare form is detected by ``isinstance(arg, type)``
-        because Python passes the decorated class directly. The with-spec
-        form is detected by ``isinstance(arg, ProfileSpec)``.
-        """
-        import warnings as _warnings
-
-        def _outer(arg: t.Any) -> t.Any:
-            # With-spec form (deprecated). Accept both ProfileSpec and
-            # ProfileDescriptor (the pre-rename alias) during the 26.5.x window.
-            if isinstance(arg, _SPEC_TYPES):
-                spec = arg
-                _warnings.warn(
-                    "@register(spec) is deprecated. Use '@register' "
-                    "(no argument); the spec will be read from the "
-                    "class's __spec__ attribute. Removed in 26.6.0.",
-                    DeprecationWarning, stacklevel=2,
-                )
-
-                def _wrap(cls: type[T]) -> type[T]:
-                    body_spec = cls.__dict__.get("__spec__")
-                    if body_spec is not None and body_spec is not spec:
-                        raise TypeError(
-                            f"{cls.__name__}: @register(spec) and class-body __spec__ disagree: "
-                            f"decorator has spec.name={spec.name!r}, "
-                            f"class body has spec.name={body_spec.name!r}"
-                        )
-                    self.register(spec, cls)
-                    return cls
-
-                return _wrap
-
-            # Bare form: the decorator was applied without arguments, so
-            # Python passes the class itself as `arg`.
-            elif isinstance(arg, type):
-                cls = arg
-                spec = cls.__dict__.get("__spec__")
-                if spec is None:
-                    raise TypeError(
-                        f"{cls.__name__} has no '__spec__' attribute declared. "
-                        f"Use `@register` only on classes that declare "
-                        f"`__spec__ = <YOUR_SPEC>` in their body."
-                    )
-                self.register(spec, cls)
-                return cls
-
-            else:
-                raise TypeError(
-                    f"@register expected either no arguments (the class) or a "
-                    f"ProfileSpec instance, got {type(arg).__name__}"
-                )
-
-        return _outer
-
-    def get_descriptor(self, name: str) -> ProfileSpec:
-        """Return the spec for ``name``.
-
-        Raises:
-            KeyError: with a hint listing known names.
-        """
+    def get_spec(self, name: str) -> ProfileSpec:
         try:
-            return self._descriptors[name]
+            return self._specs[name]
         except KeyError:
-            known = ", ".join(sorted(self._descriptors)) or "<none>"
-            raise KeyError(
-                f"No profile registered under {name!r} in {self.name} "
-                f"registry. Known: {known}"
-            ) from None
+            known = ", ".join(sorted(self._specs)) or "<none>"
+            raise KeyError(f"No profile registered under {name!r} in {self.name} registry. Known: {known}") from None
 
-    def get_settings_class(self, name: str) -> type["Profile"]:
-        """Return the profile class for ``name``.
-
-        Raises:
-            KeyError: with a hint listing known names.
-        """
+    def get_settings_class(self, name: str) -> type[Profile]:
         try:
             return self._classes[name]
         except KeyError:
             known = ", ".join(sorted(self._classes)) or "<none>"
-            raise KeyError(
-                f"No settings class registered under {name!r} in "
-                f"{self.name} registry. Known: {known}"
-            ) from None
+            raise KeyError(f"No settings class registered under {name!r} in {self.name} registry. Known: {known}") from None
 
-    # --- Test seams ---------------------------------------------------------
-
-    def _snapshot_for_tests(
-        self,
-    ) -> tuple[dict[str, ProfileSpec], dict[str, type["Profile"]]]:
-        """Snapshot for later :meth:`_reset_for_tests` restore."""
-        return self._descriptors.copy(), self._classes.copy()
+    def _snapshot_for_tests(self) -> tuple[dict[str, ProfileSpec], dict[str, type[Profile]]]:
+        return self._specs.copy(), self._classes.copy()
 
     def _reset_for_tests(
-        self,
-        descriptors_snapshot: dict[str, ProfileSpec],
-        classes_snapshot: dict[str, type["Profile"]],
+        self, specs_snapshot: dict[str, ProfileSpec], classes_snapshot: dict[str, type[Profile]],
     ) -> None:
-        """Restore descriptors + classes dicts to snapshots (test-only)."""
-        self._descriptors.clear()
-        self._descriptors.update(descriptors_snapshot)
+        self._specs.clear()
+        self._specs.update(specs_snapshot)
         self._classes.clear()
         self._classes.update(classes_snapshot)

@@ -142,6 +142,7 @@ class FilesystemBackend:
                 with ExitStack() as resources:
                     handle, _ = self._entry(resources, ops, parent, f"{stem}.yaml")
                     return None if handle is None else _decode(ops.read_file(handle))
+        return None
 
     def set(self, key: str, data: SecretRecord) -> None:
         self._invoke(self._set, key, data)
@@ -231,6 +232,7 @@ class FilesystemBackend:
                 with ExitStack() as resources:
                     handle, _ = self._entry(resources, ops, parent, f".{stem}.cleared")
                     return handle is not None
+        return False
 
     def _begin_transaction(self, key: str, resources: ExitStack) -> None:
         try:

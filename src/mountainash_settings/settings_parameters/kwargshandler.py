@@ -1,76 +1,39 @@
-from typing import Optional, Tuple, Dict, Any
+"""Total normalization of settings keyword arguments."""
+
+from collections.abc import Iterable, Mapping
+from typing import Any
+
+KwargItems = tuple[tuple[str, Any], ...]
+KwargInput = Mapping[str, Any] | Iterable[tuple[str, Any]] | None
 
 
 class SettingsKwargsHandler:
-    """Handles validation and separation of configuration files by type"""
-    
-    @classmethod
-    def format_kwargs_dict(cls, 
-                            p_kwargs: None | Dict[str,Any] | Tuple[Any,Any] = None
-                            ) -> Optional[Dict[str,Any]]:
-        
-        """
-        Ensures the kwargs are formatted as a dictionary.
-
-        Args:
-            p_kwargs (dict): The keyword arguments.
-
-        Returns:
-            dict: The keyword arguments as a dictionary, or None if not provided.
-        """
-
-        if p_kwargs is None:
-            return None
-        
-        if isinstance(p_kwargs, dict):
-            p_kwargs = p_kwargs.get("kwargs", p_kwargs)
-            return p_kwargs
-        
-        if isinstance(p_kwargs, tuple):
-            p_kwargs = dict(p_kwargs)
-            p_kwargs = p_kwargs.get("kwargs", p_kwargs)
-            return p_kwargs
-        
-        raise ValueError(f"Invalid p_kwargs: {p_kwargs}")
-
+    """Normalize kwargs and unwrap the optional ``kwargs`` mapping."""
 
     @classmethod
-    def format_kwargs_tuple(cls, 
-                            p_kwargs: None | Dict[str,Any] | Tuple[Any,Any]  = None
-                            ) -> Optional[Tuple[Any,Any]]:
-        
-        """
-        Forces the kwargs to be formatted as a tuple for immutability in the parameters.
+    def format_kwargs_dict(cls, p_kwargs: KwargInput = None) -> dict[str, Any]:
+        """Return a fresh mapping; malformed inputs raise a value-free TypeError."""
+        data = None
+        try:
+            data = {} if p_kwargs is None else dict(p_kwargs)
+        except (TypeError, ValueError):
+            pass
+        if data is None:
+            raise TypeError("Invalid kwargs mapping")
+        nested = data.get("kwargs", data)
+        if not isinstance(nested, Mapping) or any(not isinstance(key, str) for key in nested):
+            raise TypeError("Invalid kwargs mapping")
+        return dict(nested)
 
-        Args:
-            p_kwargs (dict): The keyword arguments.
-
-        Returns:
-            dict: The keyword arguments as a dictionary, or None if not provided.
-        """
-
-        if p_kwargs is None:
-            return tuple()
-        
-        if isinstance(p_kwargs, dict):
-            return tuple(sorted(p_kwargs.items()))
-        
-        if isinstance(p_kwargs, tuple):
-            return p_kwargs
-        
-        raise ValueError(f"Invalid p_kwargs: {p_kwargs}")
+    @classmethod
+    def format_kwargs_tuple(cls, p_kwargs: KwargInput = None) -> KwargItems:
+        """Return normalized items in deterministic key order."""
+        return tuple(sorted(cls.format_kwargs_dict(p_kwargs).items()))
 
     @staticmethod
-    def merge_kwargs(kwargs1: Optional[Dict[str, Any]] = None,
-                     kwargs2: Optional[Dict[str, Any]] = None) -> Optional[Dict[str,Any]]: #Optional[Tuple[Tuple[str, Any], ...]]:
-        
-        if kwargs1 is None and kwargs2 is None:
-            return None
-
-        #TODO: Test the precedence of kwargs
-        resolved_kwargs = dict(kwargs1 or ()) | dict(kwargs2 or ())
-
-        resolved_kwargs = resolved_kwargs.get("kwargs", resolved_kwargs)
-
-        return resolved_kwargs
-        # return tuple(sorted(merged.items()))
+    def merge_kwargs(kwargs1: KwargInput = None, kwargs2: KwargInput = None) -> dict[str, Any]:
+        """Merge normalized inputs with the second input taking precedence."""
+        return {
+            **SettingsKwargsHandler.format_kwargs_dict(kwargs1),
+            **SettingsKwargsHandler.format_kwargs_dict(kwargs2),
+        }
