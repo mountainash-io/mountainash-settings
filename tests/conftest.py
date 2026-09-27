@@ -9,7 +9,7 @@ settings.
 import pytest
 
 # Import all settings classes for test use
-from fixtures.settings_classes import (
+from .fixtures.settings_classes import (
     MockBaseSettings,
     MockSettings,
     TestSettings,
@@ -20,9 +20,9 @@ from fixtures.settings_classes import (
 
 # Import all fixtures from fixture modules
 # Pytest automatically discovers fixtures when imported
-from fixtures.config_files import *
-from fixtures.parameters import *
-from fixtures.instances import *
+from .fixtures.config_files import *
+from .fixtures.parameters import *
+from .fixtures.instances import *
 
 
 # Configure custom pytest markers

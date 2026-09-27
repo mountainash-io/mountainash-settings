@@ -22,7 +22,7 @@ from mountainash_settings import (
     SettingsParameters,
     get_settings,
 )
-from fixtures.settings_classes import TestSettings
+from .fixtures.settings_classes import TestSettings
 
 
 class TemplateSettings(MountainAshBaseSettings):

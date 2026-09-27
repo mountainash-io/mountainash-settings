@@ -18,7 +18,7 @@ from mountainash_settings import (
     SettingsParameters,
     MountainAshBaseSettings,
 )
-from fixtures.settings_classes import TestSettings
+from ..fixtures.settings_classes import TestSettings
 
 
 class SimpleSettings(MountainAshBaseSettings):

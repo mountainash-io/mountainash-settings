@@ -1,0 +1,58 @@
+name: Settings Release Candidate Qualification
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qualify-candidate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Capture Python 3.12 executable
+        shell: bash
+        run: printf 'PYTHON_312=%s\n' "$(python -c 'import sys; print(sys.executable)')" >> "$GITHUB_ENV"
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Capture Python 3.13 executable
+        shell: bash
+        run: printf 'PYTHON_313=%s\n' "$(python -c 'import sys; print(sys.executable)')" >> "$GITHUB_ENV"
+      - name: Provide Linux ACL fixture tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes acl
+      - name: Qualify full installed candidate
+        shell: bash
+        run: >-
+          "$PYTHON_312" -I tools/qualify_release_candidate.py
+          --output "$RUNNER_TEMP/release-candidate-proof/full-suite.json"
+          --python "$PYTHON_312"
+          --python "$PYTHON_313"
+      - name: Qualify two-process lifecycle
+        shell: bash
+        run: >-
+          "$PYTHON_312" -I tools/qualify_lifecycle_receipt.py
+          --output "$RUNNER_TEMP/release-candidate-proof/lifecycle.json"
+          --candidate-receipt "$RUNNER_TEMP/release-candidate-proof/full-suite.json"
+          --python "$PYTHON_312"
+          --python "$PYTHON_313"
+      - name: Retain exact artifacts and receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: settings-release-candidate-${{ runner.os }}
+          path: ${{ runner.temp }}/release-candidate-proof/
+          if-no-files-found: error
+          retention-days: 30

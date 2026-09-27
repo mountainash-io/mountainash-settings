@@ -20,7 +20,7 @@ Tests cover:
 import pytest
 
 from mountainash_settings import SettingsParameters
-from fixtures.settings_classes import TestSettings, MockBaseSettings
+from ..fixtures.settings_classes import TestSettings, MockBaseSettings
 
 
 class TestMergeBasics:

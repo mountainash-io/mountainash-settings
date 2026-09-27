@@ -11,7 +11,7 @@ import pytest
 
 if not (sys.platform.startswith("linux") or sys.platform == "darwin"):
     pytest.skip(
-        "POSIX native adapter is selected only on Linux and Darwin",
+        "optional-native: POSIX native adapter is selected only on Linux and Darwin",
         allow_module_level=True,
     )
 
