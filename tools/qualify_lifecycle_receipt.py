@@ -20,7 +20,8 @@ _UPDATED = "m9-updated-secret"
 def _load_common():
     path = Path(__file__).with_name("_qualification_common.py")
     spec = importlib.util.spec_from_file_location("_qualification_common", path)
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -28,6 +29,7 @@ def _load_common():
 
 
 _common = _load_common()
+confine_to_temp = _common.confine_to_temp
 
 
 def _timestamp() -> str:
@@ -42,7 +44,7 @@ def _clean_environment() -> dict[str, str]:
     }
 
 
-def _resolve_in_child(root: Path, result: Path) -> None:
+def _resolve_in_child(root: Path) -> dict[str, Any]:
     from pydantic import Field
 
     from mountainash_settings import MountainAshBaseSettings  # type: ignore[import-untyped]
@@ -58,72 +60,75 @@ def _resolve_in_child(root: Path, result: Path) -> None:
             token="secret:lifecycle.token",
             secret_store=store,
         )
-    result.write_text(
-        json.dumps(
-            {
-                "pid": os.getpid(),
-                "resolved": settings.token,
-                "root": str(root.resolve()),
-                "timestamp": _timestamp(),
-            }
-        ),
-        encoding="utf-8",
-    )
+    return {
+        "pid": os.getpid(),
+        "resolved": settings.token,
+        "root": str(root.resolve()),
+        "timestamp": _timestamp(),
+    }
 
 
-def _run_child(child_python: Path, root: Path, result: Path) -> dict[str, Any]:
-    completed = subprocess.run(
-        [
-            str(child_python),
-            "-I",
-            str(Path(__file__).resolve()),
-            "--child",
-            str(root),
-            str(result),
-        ],
-        text=True,
-        capture_output=True,
-        check=False,
-        env=_clean_environment(),
-    )
+def _run_child(root: Path, result: Path) -> dict[str, Any]:
+    environment = _clean_environment()
+    environment["M9_LIFECYCLE_ROOT"] = str(root)
+    with result.open("w", encoding="utf-8") as result_stream:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                str(Path(__file__).resolve()),
+                "--child",
+            ],
+            text=True,
+            stdout=result_stream,
+            stderr=subprocess.PIPE,
+            check=False,
+            env=environment,
+        )
     if completed.returncode:
         raise RuntimeError(f"Lifecycle child failed with exit {completed.returncode}")
     return json.loads(result.read_text(encoding="utf-8"))
 
 
-def run_scenario(
-    *,
-    root: Path,
-    results: Path,
-    child_python: Path,
-) -> dict[str, Any]:
+def run_scenario() -> dict[str, Any]:
     """Resolve before and after rotation in two genuine child processes."""
     from mountainash_settings.secrets import (  # type: ignore[import-untyped]
         FilesystemBackend,
     )
 
-    root.mkdir()
-    results.mkdir()
-    with FilesystemBackend(root) as store:
-        store.set("lifecycle", {"token": _ORIGINAL})
-    result_a = results / "process-a.json"
-    result_b = results / "process-b.json"
-    process_a = _run_child(child_python, root, result_a)
-    original_seen = process_a["resolved"] == _ORIGINAL
+    with tempfile.TemporaryDirectory(prefix="settings-m9-scenario-") as work_name:
+        work = confine_to_temp(Path(work_name))
+        root = work / "store"
+        results = work / "results"
+        root.mkdir()
+        results.mkdir()
+        with FilesystemBackend(root) as store:
+            store.set("lifecycle", {"token": _ORIGINAL})
+        result_a = results / "process-a.json"
+        result_b = results / "process-b.json"
+        process_a = _run_child(root, result_a)
+        original_seen = process_a["resolved"] == _ORIGINAL
 
-    with FilesystemBackend(root) as store:
-        store.set("lifecycle", {"token": _UPDATED})
-    preserved_a = json.loads(result_a.read_text(encoding="utf-8"))
-    process_b = _run_child(child_python, root, result_b)
-    updated_seen = process_b["resolved"] == _UPDATED
+        with FilesystemBackend(root) as store:
+            store.set("lifecycle", {"token": _UPDATED})
+        preserved_a = json.loads(result_a.read_text(encoding="utf-8"))
+        process_b = _run_child(root, result_b)
+        updated_seen = process_b["resolved"] == _UPDATED
 
     same_root = (
         process_a["root"] == process_b["root"] == str(root.resolve())
     )
-    assert original_seen and updated_seen
-    assert preserved_a["resolved"] == _ORIGINAL
-    assert same_root
-    assert process_a["pid"] != process_b["pid"] != os.getpid()
+    if not original_seen or not updated_seen:
+        raise RuntimeError("Lifecycle processes did not observe the expected generations")
+    if preserved_a["resolved"] != _ORIGINAL:
+        raise RuntimeError("Process A snapshot changed after rotation")
+    if not same_root:
+        raise RuntimeError("Lifecycle processes did not use the same store root")
+    if process_a["pid"] == process_b["pid"] or os.getpid() in {
+        process_a["pid"],
+        process_b["pid"],
+    }:
+        raise RuntimeError("Lifecycle scenario did not use distinct processes")
     return {
         "orchestrator_pid": os.getpid(),
         "started_at": process_a["timestamp"],
@@ -146,7 +151,7 @@ def run_scenario(
 
 
 def validate_candidate_receipt(
-    receipt: dict[str, Any], revision: str
+    receipt: dict[str, Any], revision: str, artifact_root: Path
 ) -> dict[str, Path]:
     """Bind lifecycle work to a passed, current, hash-verified candidate."""
     if receipt.get("status") != "passed":
@@ -157,11 +162,16 @@ def validate_candidate_receipt(
     if not isinstance(artifacts, dict):
         raise ValueError("Full-suite receipt has no artifacts")
     validated: dict[str, Path] = {}
+    artifact_root = artifact_root.resolve()
     for kind in ("wheel", "sdist-wheel"):
         record = artifacts.get(kind)
         if not isinstance(record, dict):
             raise ValueError(f"Full-suite receipt has no {kind} artifact")
         path = Path(str(record.get("path", ""))).resolve()
+        if not path.is_relative_to((artifact_root / kind).resolve()):
+            raise ValueError(
+                f"Full-suite receipt {kind} artifact is outside the receipt artifact root"
+            )
         if not path.is_file() or _common.sha256(path) != record.get("sha256"):
             raise ValueError(f"Full-suite receipt {kind} hash does not match")
         validated[kind] = path
@@ -185,7 +195,8 @@ def qualify(
 ) -> int:
     """Run the lifecycle scenario for both artifacts and Python versions."""
     repository = Path(__file__).resolve().parents[1]
-    output = output.resolve()
+    output = confine_to_temp(output)
+    candidate_receipt = confine_to_temp(candidate_receipt)
     output.parent.mkdir(parents=True, exist_ok=True)
     report: dict[str, Any] = {
         "status": "failed",
@@ -203,7 +214,9 @@ def qualify(
         ):
             raise RuntimeError("Candidate proof requires committed, clean source inputs")
         candidate_data = json.loads(candidate_receipt.read_text(encoding="utf-8"))
-        artifacts = validate_candidate_receipt(candidate_data, revision)
+        artifacts = validate_candidate_receipt(
+            candidate_data, revision, candidate_receipt.parent / "artifacts"
+        )
         report["artifacts"] = candidate_data["artifacts"]
         identities = [_python_identity(python) for python in pythons]
         versions: list[tuple[int, int]] = [
@@ -240,27 +253,17 @@ def qualify(
                     _common.run(
                         [str(installed_python), "-I", "-m", "pip", "check"]
                     )
-                    destination = (
-                        output.parent
-                        / "results"
-                        / f"python-{version_label}"
-                        / kind
+                    evidence = json.loads(
+                        _common.run(
+                            [
+                                str(installed_python),
+                                "-I",
+                                str(Path(__file__).resolve()),
+                                "--scenario",
+                            ],
+                            cwd=work,
+                        )
                     )
-                    destination.mkdir(parents=True, exist_ok=True)
-                    scenario_path = destination / "scenario.json"
-                    _common.run(
-                        [
-                            str(installed_python),
-                            "-I",
-                            str(Path(__file__).resolve()),
-                            "--scenario",
-                            str(work / f"store-{version_label}-{kind}"),
-                            str(work / f"scenario-{version_label}-{kind}"),
-                            str(scenario_path),
-                        ],
-                        cwd=work,
-                    )
-                    evidence = json.loads(scenario_path.read_text(encoding="utf-8"))
                     distributions = json.loads(
                         _common.run(
                             [
@@ -282,14 +285,16 @@ def qualify(
                             "resolved_distributions": distributions,
                         }
                     )
-            assert (
-                _common.run(["git", "rev-parse", "HEAD"], cwd=repository).strip()
-                == revision
-            )
-            assert not _common.run(
+            final_revision = _common.run(
+                ["git", "rev-parse", "HEAD"], cwd=repository
+            ).strip()
+            if final_revision != revision:
+                raise RuntimeError("Candidate source revision changed during qualification")
+            if _common.run(
                 ["git", "status", "--porcelain", "--untracked-files=normal"],
                 cwd=repository,
-            ), "Candidate source changed during qualification"
+            ):
+                raise RuntimeError("Candidate source changed during qualification")
             report["status"] = "passed"
     except Exception as error:
         report["failure"] = str(error)
@@ -309,25 +314,20 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--output", type=Path)
-    mode.add_argument("--child", nargs=2, metavar=("ROOT", "RESULT"))
-    mode.add_argument(
-        "--scenario", nargs=3, metavar=("ROOT", "RESULTS", "OUTPUT")
-    )
+    mode.add_argument("--child", action="store_true")
+    mode.add_argument("--scenario", action="store_true")
     parser.add_argument("--candidate-receipt", type=Path)
     parser.add_argument("--python", type=Path, action="append", default=[])
     args = parser.parse_args()
-    if args.child is not None:
-        _resolve_in_child(Path(args.child[0]), Path(args.child[1]))
+    if args.child:
+        raw_root = os.environ.get("M9_LIFECYCLE_ROOT")
+        if raw_root is None:
+            parser.error("M9_LIFECYCLE_ROOT is required with --child")
+        root = confine_to_temp(Path(raw_root))
+        print(json.dumps(_resolve_in_child(root), sort_keys=True))
         return 0
-    if args.scenario is not None:
-        evidence = run_scenario(
-            root=Path(args.scenario[0]),
-            results=Path(args.scenario[1]),
-            child_python=Path(sys.executable),
-        )
-        Path(args.scenario[2]).write_text(
-            json.dumps(evidence, indent=2, sort_keys=True), encoding="utf-8"
-        )
+    if args.scenario:
+        print(json.dumps(run_scenario(), sort_keys=True))
         return 0
     if args.candidate_receipt is None:
         parser.error("--candidate-receipt is required with --output")

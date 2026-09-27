@@ -16,6 +16,7 @@ import re
 import subprocess
 import sys
 import tarfile
+import tempfile
 import tomllib
 import venv
 import xml.etree.ElementTree as ET
@@ -180,6 +181,15 @@ def sha256(path: Path) -> str:
 def python_in(environment: Path) -> Path:
     """Return the Python executable inside a virtual environment."""
     return environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+
+
+def confine_to_temp(path: Path) -> Path:
+    """Resolve a qualification path beneath the operating-system temp root."""
+    temp_root = Path(tempfile.gettempdir()).resolve()
+    resolved = path.expanduser().resolve()
+    if not resolved.is_relative_to(temp_root):
+        raise ValueError("Qualification paths must stay in the OS temporary directory")
+    return resolved
 
 
 def create_environment(environment: Path, *, base_python: Path | None = None) -> Path:

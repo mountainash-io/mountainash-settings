@@ -12,7 +12,8 @@ def _lifecycle_module():
     name = "qualify_lifecycle_receipt_under_test"
     path = Path(__file__).resolve().parents[3] / "tools" / "qualify_lifecycle_receipt.py"
     spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
     spec.loader.exec_module(module)
@@ -24,11 +25,7 @@ def test_lifecycle_scenario_uses_two_processes_and_emits_value_free_evidence(
 ):
     lifecycle = _lifecycle_module()
 
-    evidence = lifecycle.run_scenario(
-        root=tmp_path / "store",
-        results=tmp_path / "results",
-        child_python=Path(sys.executable),
-    )
+    evidence = lifecycle.run_scenario()
 
     assert evidence["original_seen_by_a"] is True
     assert evidence["updated_seen_by_b"] is True
@@ -44,8 +41,11 @@ def test_lifecycle_scenario_uses_two_processes_and_emits_value_free_evidence(
 
 def test_candidate_receipt_must_be_passed_current_and_hash_bound(tmp_path: Path):
     lifecycle = _lifecycle_module()
-    wheel = tmp_path / "candidate.whl"
-    rebuilt = tmp_path / "rebuilt.whl"
+    artifact_root = tmp_path / "artifacts"
+    wheel = artifact_root / "wheel" / "candidate.whl"
+    rebuilt = artifact_root / "sdist-wheel" / "rebuilt.whl"
+    wheel.parent.mkdir(parents=True)
+    rebuilt.parent.mkdir(parents=True)
     wheel.write_bytes(b"wheel")
     rebuilt.write_bytes(b"rebuilt")
     receipt = {
@@ -63,14 +63,55 @@ def test_candidate_receipt_must_be_passed_current_and_hash_bound(tmp_path: Path)
         },
     }
 
-    assert lifecycle.validate_candidate_receipt(receipt, "abc123") == {
+    assert lifecycle.validate_candidate_receipt(
+        receipt, "abc123", artifact_root
+    ) == {
         "wheel": wheel,
         "sdist-wheel": rebuilt,
     }
 
     receipt["status"] = "failed"
     with pytest.raises(ValueError, match="passed full-suite receipt"):
-        lifecycle.validate_candidate_receipt(receipt, "abc123")
+        lifecycle.validate_candidate_receipt(receipt, "abc123", artifact_root)
+
+
+def test_candidate_receipt_rejects_artifact_outside_receipt_artifact_root(
+    tmp_path: Path,
+):
+    lifecycle = _lifecycle_module()
+    outside = tmp_path / "outside.whl"
+    outside.write_bytes(b"wheel")
+    receipt = {
+        "status": "passed",
+        "source_revision": "abc123",
+        "artifacts": {
+            "wheel": {
+                "path": str(outside),
+                "sha256": "ba59926159d2aa256eb8739b8da7e2b574b960e1202c6d624cbe981cef996c91",
+            },
+            "sdist-wheel": {
+                "path": str(outside),
+                "sha256": "ba59926159d2aa256eb8739b8da7e2b574b960e1202c6d624cbe981cef996c91",
+            },
+        },
+    }
+
+    with pytest.raises(ValueError, match="outside the receipt artifact root"):
+        lifecycle.validate_candidate_receipt(
+            receipt, "abc123", tmp_path / "artifacts"
+        )
+
+
+def test_receipt_paths_are_confined_to_os_temporary_directory(tmp_path: Path):
+    lifecycle = _lifecycle_module()
+
+    assert lifecycle.confine_to_temp(tmp_path / "receipt.json") == (
+        tmp_path / "receipt.json"
+    ).resolve()
+    with pytest.raises(ValueError, match="OS temporary directory"):
+        lifecycle.confine_to_temp(
+            Path(__file__).resolve().parents[3] / "receipt.json"
+        )
 
 
 def test_lifecycle_qualify_writes_failed_receipt_for_preflight_failure(

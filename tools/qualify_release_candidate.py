@@ -17,7 +17,8 @@ from typing import Any
 def _load_common():
     path = Path(__file__).with_name("_qualification_common.py")
     spec = importlib.util.spec_from_file_location("_qualification_common", path)
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -162,7 +163,7 @@ def _run_installed_suite(
 def qualify(output: Path, pythons: list[Path]) -> int:
     """Build once and test both artifact forms with both required Pythons."""
     repository = Path(__file__).resolve().parents[1]
-    output = output.resolve()
+    output = _common.confine_to_temp(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     report: dict[str, Any] = {
         "status": "failed",
@@ -218,14 +219,16 @@ def qualify(output: Path, pythons: list[Path]) -> int:
                             artifact=artifact,
                         )
                     )
-            assert (
-                _common.run(["git", "rev-parse", "HEAD"], cwd=repository).strip()
-                == revision
-            )
-            assert not _common.run(
+            final_revision = _common.run(
+                ["git", "rev-parse", "HEAD"], cwd=repository
+            ).strip()
+            if final_revision != revision:
+                raise RuntimeError("Candidate source revision changed during qualification")
+            if _common.run(
                 ["git", "status", "--porcelain", "--untracked-files=normal"],
                 cwd=repository,
-            ), "Candidate source changed during qualification"
+            ):
+                raise RuntimeError("Candidate source changed during qualification")
             report["status"] = "passed"
     except Exception as error:
         report["failure"] = str(error)
@@ -242,7 +245,8 @@ def main() -> int:
     parser.add_argument("--python", type=Path, action="append", default=[])
     args = parser.parse_args()
     if args.probe is not None:
-        print(json.dumps(_common.probe(args.probe, check_api=True), sort_keys=True))
+        root = _common.confine_to_temp(args.probe)
+        print(json.dumps(_common.probe(root, check_api=True), sort_keys=True))
         return 0
     return qualify(args.output, args.python)
 
