@@ -71,3 +71,16 @@ def test_candidate_receipt_must_be_passed_current_and_hash_bound(tmp_path: Path)
     receipt["status"] = "failed"
     with pytest.raises(ValueError, match="passed full-suite receipt"):
         lifecycle.validate_candidate_receipt(receipt, "abc123")
+
+
+def test_lifecycle_qualify_writes_failed_receipt_for_preflight_failure(
+    tmp_path: Path,
+):
+    lifecycle = _lifecycle_module()
+    output = tmp_path / "lifecycle.json"
+
+    assert lifecycle.qualify(output, tmp_path / "missing.json", []) == 1
+
+    receipt = json.loads(output.read_text(encoding="utf-8"))
+    assert receipt["status"] == "failed"
+    assert receipt["failure"]

@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any
 
 
 def _load_common():
@@ -32,14 +33,16 @@ _WINDOWS_MARKER_CLOSE = _common.AcceptedSkip(
 _TEST_REQUIREMENTS = ("pytest==8.3.5", "pytest-check==2.5.3")
 
 
-def validate_python_identities(identities: list[dict[str, object]]) -> None:
+def validate_python_identities(identities: list[dict[str, Any]]) -> None:
     """Require exactly one Python 3.12 and one Python 3.13 interpreter."""
-    versions = [tuple(identity["version_info"]) for identity in identities]
+    versions: list[tuple[int, int]] = [
+        tuple(identity["version_info"]) for identity in identities
+    ]
     if sorted(versions) != [(3, 12), (3, 13)]:
         raise ValueError("Qualification requires Python 3.12 and 3.13 exactly once")
 
 
-def _python_identity(python: Path) -> dict[str, object]:
+def _python_identity(python: Path) -> dict[str, Any]:
     source = (
         "import json,platform,sys;"
         "print(json.dumps({'version_info':list(sys.version_info[:2]),"
@@ -74,15 +77,14 @@ def _save_artifacts(candidate, output: Path) -> dict[str, dict[str, str]]:
 
 def _run_installed_suite(
     *,
-    repository: Path,
     work: Path,
     output: Path,
     copied_tests: Path,
     base_python: Path,
-    python_identity: dict[str, object],
+    python_identity: dict[str, Any],
     kind: str,
     artifact: Path,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     version_label = ".".join(str(part) for part in python_identity["version_info"])
     environment = work / f"installed-{version_label}-{kind}"
     installed_python = _common.create_environment(
@@ -162,29 +164,29 @@ def qualify(output: Path, pythons: list[Path]) -> int:
     repository = Path(__file__).resolve().parents[1]
     output = output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
-    revision = _common.run(["git", "rev-parse", "HEAD"], cwd=repository).strip()
-    dirty = _common.run(
-        ["git", "status", "--porcelain", "--untracked-files=normal"],
-        cwd=repository,
-    )
-    if dirty:
-        raise RuntimeError("Candidate proof requires committed, clean source inputs")
-    identities = [_python_identity(python) for python in pythons]
-    validate_python_identities(identities)
-    ordered = sorted(
-        zip(pythons, identities, strict=True),
-        key=lambda item: tuple(item[1]["version_info"]),
-    )
-    report: dict[str, object] = {
+    report: dict[str, Any] = {
         "status": "failed",
-        "source_revision": revision,
-        "python_interpreters": [identity for _, identity in ordered],
         "installed": [],
         "runner_sha256": _common.sha256(Path(__file__)),
         "common_sha256": _common.sha256(Path(_common.__file__)),
         "artifacts": {},
     }
     try:
+        revision = _common.run(["git", "rev-parse", "HEAD"], cwd=repository).strip()
+        report["source_revision"] = revision
+        dirty = _common.run(
+            ["git", "status", "--porcelain", "--untracked-files=normal"],
+            cwd=repository,
+        )
+        if dirty:
+            raise RuntimeError("Candidate proof requires committed, clean source inputs")
+        identities = [_python_identity(python) for python in pythons]
+        validate_python_identities(identities)
+        ordered = sorted(
+            zip(pythons, identities, strict=True),
+            key=lambda item: tuple(item[1]["version_info"]),
+        )
+        report["python_interpreters"] = [identity for _, identity in ordered]
         with tempfile.TemporaryDirectory(prefix="settings-m9-installed-") as work_name:
             work = Path(work_name)
             candidate = _common.build_candidate(
@@ -207,7 +209,6 @@ def qualify(output: Path, pythons: list[Path]) -> int:
                 for kind, artifact in artifacts:
                     report["installed"].append(
                         _run_installed_suite(
-                            repository=repository,
                             work=work,
                             output=output,
                             copied_tests=copied_tests,

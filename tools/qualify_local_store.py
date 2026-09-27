@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any
 
 
 def _load_common():
@@ -43,7 +44,7 @@ def qualify(output: Path) -> int:
     )
     if dirty:
         raise RuntimeError("Candidate proof requires committed, clean source inputs")
-    report: dict[str, object] = {
+    report: dict[str, Any] = {
         "status": "failed", "source_revision": revision, "installed": [],
         "runner_sha256": sha256(Path(__file__)), "artifacts": {},
     }

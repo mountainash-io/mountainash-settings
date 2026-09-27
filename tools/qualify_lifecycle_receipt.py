@@ -11,6 +11,7 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 _ORIGINAL = "m9-original-secret"
 _UPDATED = "m9-updated-secret"
@@ -44,8 +45,10 @@ def _clean_environment() -> dict[str, str]:
 def _resolve_in_child(root: Path, result: Path) -> None:
     from pydantic import Field
 
-    from mountainash_settings import MountainAshBaseSettings
-    from mountainash_settings.secrets import FilesystemBackend
+    from mountainash_settings import MountainAshBaseSettings  # type: ignore[import-untyped]
+    from mountainash_settings.secrets import (  # type: ignore[import-untyped]
+        FilesystemBackend,
+    )
 
     class LifecycleSettings(MountainAshBaseSettings):
         token: str = Field(default="unset")
@@ -68,7 +71,7 @@ def _resolve_in_child(root: Path, result: Path) -> None:
     )
 
 
-def _run_child(child_python: Path, root: Path, result: Path) -> dict[str, object]:
+def _run_child(child_python: Path, root: Path, result: Path) -> dict[str, Any]:
     completed = subprocess.run(
         [
             str(child_python),
@@ -93,9 +96,11 @@ def run_scenario(
     root: Path,
     results: Path,
     child_python: Path,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Resolve before and after rotation in two genuine child processes."""
-    from mountainash_settings.secrets import FilesystemBackend
+    from mountainash_settings.secrets import (  # type: ignore[import-untyped]
+        FilesystemBackend,
+    )
 
     root.mkdir()
     results.mkdir()
@@ -141,7 +146,7 @@ def run_scenario(
 
 
 def validate_candidate_receipt(
-    receipt: dict[str, object], revision: str
+    receipt: dict[str, Any], revision: str
 ) -> dict[str, Path]:
     """Bind lifecycle work to a passed, current, hash-verified candidate."""
     if receipt.get("status") != "passed":
@@ -163,7 +168,7 @@ def validate_candidate_receipt(
     return validated
 
 
-def _python_identity(python: Path) -> dict[str, object]:
+def _python_identity(python: Path) -> dict[str, Any]:
     source = (
         "import json,platform,sys;"
         "print(json.dumps({'version_info':list(sys.version_info[:2]),"
@@ -182,33 +187,35 @@ def qualify(
     repository = Path(__file__).resolve().parents[1]
     output = output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
-    revision = _common.run(["git", "rev-parse", "HEAD"], cwd=repository).strip()
-    if _common.run(
-        ["git", "status", "--porcelain", "--untracked-files=normal"],
-        cwd=repository,
-    ):
-        raise RuntimeError("Candidate proof requires committed, clean source inputs")
-    candidate_data = json.loads(candidate_receipt.read_text(encoding="utf-8"))
-    artifacts = validate_candidate_receipt(candidate_data, revision)
-    identities = [_python_identity(python) for python in pythons]
-    versions = [tuple(identity["version_info"]) for identity in identities]
-    if sorted(versions) != [(3, 12), (3, 13)]:
-        raise ValueError("Qualification requires Python 3.12 and 3.13 exactly once")
-    ordered = sorted(
-        zip(pythons, identities, strict=True),
-        key=lambda item: tuple(item[1]["version_info"]),
-    )
-    report: dict[str, object] = {
+    report: dict[str, Any] = {
         "status": "failed",
-        "source_revision": revision,
         "candidate_receipt": str(candidate_receipt.resolve()),
-        "artifacts": candidate_data["artifacts"],
-        "python_interpreters": [identity for _, identity in ordered],
         "scenarios": [],
         "runner_sha256": _common.sha256(Path(__file__)),
         "common_sha256": _common.sha256(Path(_common.__file__)),
     }
     try:
+        revision = _common.run(["git", "rev-parse", "HEAD"], cwd=repository).strip()
+        report["source_revision"] = revision
+        if _common.run(
+            ["git", "status", "--porcelain", "--untracked-files=normal"],
+            cwd=repository,
+        ):
+            raise RuntimeError("Candidate proof requires committed, clean source inputs")
+        candidate_data = json.loads(candidate_receipt.read_text(encoding="utf-8"))
+        artifacts = validate_candidate_receipt(candidate_data, revision)
+        report["artifacts"] = candidate_data["artifacts"]
+        identities = [_python_identity(python) for python in pythons]
+        versions: list[tuple[int, int]] = [
+            tuple(identity["version_info"]) for identity in identities
+        ]
+        if sorted(versions) != [(3, 12), (3, 13)]:
+            raise ValueError("Qualification requires Python 3.12 and 3.13 exactly once")
+        ordered = sorted(
+            zip(pythons, identities, strict=True),
+            key=lambda item: tuple(item[1]["version_info"]),
+        )
+        report["python_interpreters"] = [identity for _, identity in ordered]
         with tempfile.TemporaryDirectory(prefix="settings-m9-lifecycle-") as work_name:
             work = Path(work_name)
             for base_python, identity in ordered:
@@ -287,7 +294,13 @@ def qualify(
     except Exception as error:
         report["failure"] = str(error)
     rendered = json.dumps(report, indent=2, sort_keys=True)
-    assert _ORIGINAL not in rendered and _UPDATED not in rendered
+    if _ORIGINAL in rendered or _UPDATED in rendered:
+        report = {
+            "status": "failed",
+            "source_revision": report.get("source_revision"),
+            "failure": "Lifecycle receipt contained a forbidden value",
+        }
+        rendered = json.dumps(report, indent=2, sort_keys=True)
     output.write_text(rendered, encoding="utf-8")
     return 0 if report["status"] == "passed" else 1
 

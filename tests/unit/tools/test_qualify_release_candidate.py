@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -48,3 +49,14 @@ def test_validate_python_identities_rejects_additional_versions():
                 {"version_info": [3, 14], "executable": "/python314"},
             ]
         )
+
+
+def test_qualify_writes_failed_receipt_for_preflight_failure(tmp_path: Path):
+    qualifier = _qualifier_module()
+    output = tmp_path / "full-suite.json"
+
+    assert qualifier.qualify(output, []) == 1
+
+    receipt = json.loads(output.read_text(encoding="utf-8"))
+    assert receipt["status"] == "failed"
+    assert receipt["failure"]

@@ -21,6 +21,7 @@ import venv
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, fields
 from pathlib import Path
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -266,9 +267,12 @@ def build_candidate(
 
 def installed_api_evidence() -> dict[str, bool]:
     """Prove retired secrets APIs are absent from the importable candidate."""
-    import mountainash_settings
-    import mountainash_settings.secrets as secrets
-    from mountainash_settings import MountainAshBaseSettings, SettingsParameters
+    import mountainash_settings  # type: ignore[import-untyped]
+    import mountainash_settings.secrets as secrets  # type: ignore[import-untyped]
+    from mountainash_settings import (  # type: ignore[import-untyped]
+        MountainAshBaseSettings,
+        SettingsParameters,
+    )
 
     registry_name = "mountainash_settings.secrets.registry"
     registry_module_absent = importlib.util.find_spec(registry_name) is None
@@ -318,10 +322,12 @@ def installed_api_evidence() -> dict[str, bool]:
     return evidence
 
 
-def probe(root: Path, *, check_api: bool = False) -> dict[str, object]:
+def probe(root: Path, *, check_api: bool = False) -> dict[str, Any]:
     """Exercise an installed local store and bind its runtime environment."""
-    import mountainash_settings
-    from mountainash_settings.secrets import FilesystemBackend
+    import mountainash_settings  # type: ignore[import-untyped]
+    from mountainash_settings.secrets import (  # type: ignore[import-untyped]
+        FilesystemBackend,
+    )
 
     root.mkdir()
     with FilesystemBackend(root) as store:
@@ -333,7 +339,7 @@ def probe(root: Path, *, check_api: bool = False) -> dict[str, object]:
         assert store.is_cleared("receipt")
     prefix = Path(sys.prefix).resolve()
     origins = {
-        name: str(Path(module.__file__).resolve())
+        name: str(Path(str(module.__file__)).resolve())
         for name, module in tuple(sys.modules.items())
         if name.startswith("mountainash_settings")
         and getattr(module, "__file__", None)
@@ -352,7 +358,7 @@ def probe(root: Path, *, check_api: bool = False) -> dict[str, object]:
         )
     )
     assert retired_absent
-    evidence: dict[str, object] = {
+    evidence: dict[str, Any] = {
         "python": sys.version,
         "implementation": platform.python_implementation(),
         "python_floor_exercised": sys.version_info[:2] == (3, 12),
