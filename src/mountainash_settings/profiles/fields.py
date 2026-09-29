@@ -56,7 +56,8 @@ def _profile_options(
     return _ProfileOptions(driver_key, tier, transform, template, supplied)
 
 
-def ProfileField(  # NOSONAR: public field-helper naming follows Pydantic's Field.
+# Public field-helper naming follows Pydantic's Field; keep this API spelling.
+def ProfileField(  # NOSONAR
     default: t.Any = PydanticUndefined, *,
     driver_key: t.Any = _OMITTED, tier: t.Any = _OMITTED,
     transform: t.Any = _OMITTED, template: t.Any = _OMITTED,
