@@ -5,13 +5,17 @@ from __future__ import annotations
 
 
 from .lookup import lookup_class_var
+from .fields import ProfileField
 from .invariants import spec_invariants_for
 from .profile import Adapter, Profile
 from .registry import Registry
-from .spec import MISSING, Missing, ParameterSpec, ProfileSpec
+from .spec import FACTORY_DEFAULT, FactoryDefault, MISSING, Missing, ParameterSpec, ProfileSpec
 
 __all__ = [
     "Adapter",
+    "FACTORY_DEFAULT",
+    "FactoryDefault",
+    "ProfileField",
     "MISSING",
     "Missing",
     "ParameterSpec",

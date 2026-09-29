@@ -39,12 +39,15 @@ class Registry:
         return dict(self._specs)
 
     def register(self, spec: ProfileSpec, cls: type[Profile]) -> None:
-        from .profile import Profile
+        from .profile import Profile, _require_materializable_profile
 
         if not isinstance(spec, ProfileSpec) or not isinstance(spec, self._spec_type):
             raise TypeError(f"Registry {self.name!r}: spec_type mismatch")
         if not isinstance(cls, type) or not issubclass(cls, Profile) or not issubclass(cls, self._profile_type):
             raise TypeError(f"Registry {self.name!r}: profile_type mismatch")
+        _require_materializable_profile(cls)
+        if cls._profile_declaration is not None and spec is not cls.__spec__:
+            raise TypeError(f"Registry {self.name!r}: generated profile requires its published spec")
         if spec.name in self._specs:
             existing = self._classes[spec.name]
             raise ValueError(
@@ -56,12 +59,13 @@ class Registry:
         cls.__spec__ = spec
 
     def decorator(self) -> t.Callable[[type[T]], type[T]]:
-        """Return a bare class decorator requiring a class-body spec."""
-        from .profile import Profile
+        """Return a bare decorator for an own explicit or completed generated spec."""
+        from .profile import Profile, _require_materializable_profile
 
         def decorate(cls: type[T]) -> type[T]:
             if not isinstance(cls, type) or not issubclass(cls, Profile):
                 raise TypeError("Registration requires a Profile subclass")
+            _require_materializable_profile(cls)
             spec = cls.__dict__.get("__spec__")
             if not isinstance(spec, ProfileSpec):
                 raise TypeError("Registration requires a class-body __spec__: ProfileSpec")

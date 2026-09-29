@@ -49,11 +49,14 @@ class _StructuralKey:
     @classmethod
     def from_parameters(cls, parameters: SettingsParameters) -> "_StructuralKey":
         from ..settings.base_settings import MountainAshBaseSettings
+        from ..profiles.profile import Profile, _require_materializable_profile
 
         if parameters.settings_class is None:
             raise ValueError("settings_parameters.settings_class cannot be empty.")
         if not isinstance(parameters.settings_class, type) or not issubclass(parameters.settings_class, MountainAshBaseSettings):
             raise TypeError("Cached retrieval requires a MountainAshBaseSettings subclass")
+        if issubclass(parameters.settings_class, Profile):
+            _require_materializable_profile(parameters.settings_class)
         files = SettingsFileHandler.format_config_file_tuple(parameters.config_files)
         return cls(
             tuple(str(path) for path in files),

@@ -13,7 +13,7 @@ from __future__ import annotations
 import typing as t
 from dataclasses import dataclass, field
 
-__all__ = ["MISSING", "Missing", "ParameterSpec", "ProfileSpec"]
+__all__ = ["FACTORY_DEFAULT", "FactoryDefault", "MISSING", "Missing", "ParameterSpec", "ProfileSpec"]
 
 
 class Missing:
@@ -41,6 +41,26 @@ class Missing:
 MISSING: Missing = Missing()
 
 
+class FactoryDefault:
+    """A generated parameter has a factory on its owning class, not a literal default."""
+
+    _instance: t.ClassVar[FactoryDefault | None] = None
+
+    def __new__(cls) -> FactoryDefault:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __repr__(self) -> str:
+        return "FACTORY_DEFAULT"
+
+    def __reduce__(self) -> tuple[type[FactoryDefault], tuple[()]]:
+        return (FactoryDefault, ())
+
+
+FACTORY_DEFAULT = FactoryDefault()
+
+
 @dataclass(frozen=True, kw_only=True)
 class ParameterSpec:
     """One settings field on a profile.
@@ -49,7 +69,10 @@ class ParameterSpec:
         name: Settings-facing uppercase name (e.g. ``"SSL_CERT"``).
         type: Pydantic-compatible annotation (``str``, ``int | None``, enum, …).
         tier: ``"core"`` or ``"advanced"`` — audit-style severity tier.
-        default: Default value; :data:`MISSING` means the field is required.
+        default: Literal default, :data:`MISSING` for required fields, or
+            :data:`FACTORY_DEFAULT` for generated fields with native factories.
+            Generated specs describe fields; they cannot reconstruct factories,
+            aliases or decorator validators from the owning class.
         description: Optional docstring for generated schemas / help output.
         driver_key: Output-kwarg name for 1:1 mappings. A bare ``str`` (e.g.
             ``"sslcert"``) maps for every target. A ``dict[Hashable, str]``
