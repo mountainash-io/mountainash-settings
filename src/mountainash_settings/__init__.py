@@ -10,6 +10,9 @@ from .settings_cache.sources import CacheableSettingsSource
 
 from .profiles import (
     Adapter,
+    FACTORY_DEFAULT,
+    FactoryDefault,
+    ProfileField,
     MISSING,
     Missing,
     ParameterSpec,
@@ -43,6 +46,9 @@ __all__ = [
 
     # Profiles
     "Adapter",
+    "FACTORY_DEFAULT",
+    "FactoryDefault",
+    "ProfileField",
     "MISSING",
     "Missing",
     "ParameterSpec",

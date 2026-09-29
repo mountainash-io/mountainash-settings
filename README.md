@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue) ![Category](https://img.shields.io/badge/category-core-purple) ![Tests](https://img.shields.io/badge/tests-✓-green) ![Docs](https://img.shields.io/badge/docs-✓-blue)
 
 Typed settings for Python applications, with configuration files, environment variables, cached source snapshots and local secret storage. Connection profiles define fields once and emit keyword arguments for drivers or clients.
-Requires Python 3.12 or later.
+Requires Python 3.12 or later and Pydantic 2.10 or later.
 
 ## Built on Pydantic Settings
 
@@ -22,13 +22,13 @@ The API supports two use cases, each with two patterns:
 | Use case | Pattern | When to use it |
 |---|---|---|
 | Declare configuration | Ordinary fields on `MountainAshBaseSettings` | Application-specific settings and small, explicit driver mappings |
-| Declare configuration | A `ProfileSpec` on a `Profile` subclass | Shared field declarations and driver-emission conventions |
+| Declare configuration | A `Profile` with fields or an explicit `ProfileSpec` | Shared field declarations and driver-emission conventions |
 | Retrieve settings | Direct construction | Read sources afresh for an invocation |
 | Retrieve settings | `SettingsParameters` with `get_settings()` | Reuse a captured source context while obtaining independently owned instances |
 
-Both declaration styles support both retrieval paths. A `ProfileSpec` describes
-fields and emission rules; a `Profile` subclass turns it into a settings class.
-An instance of that class holds the loaded values.
+Both declaration patterns support both retrieval paths. Profiles can generate a
+`ProfileSpec` from native field declarations, or install fields from an explicit
+spec. The spec describes fields and emission rules; an instance holds loaded values.
 
 MountainAsh applies its own defaults: unknown inputs are ignored, field defaults
 are not validated by default, and assignments are validated. Upstream
@@ -391,30 +391,29 @@ through `model_fields`; those capabilities do not require a profile spec.
 If the reporting application grows to support several providers, repeating
 mapping methods can become maintenance work. `ProfileSpec` collects field
 declarations and emission rules so `Profile` can apply one shared mechanism.
-Here is the same connection expressed that way, with the same inputs and output:
+Declare the fields on a `Profile` and let it generate the spec. Here is the same
+connection, with the same inputs and output:
 
 ```python
-# 10. Express the same fields and driver mappings as a reusable spec.
-# Profile installs Pydantic fields; emit() applies the declared mapping rules.
-from mountainash_settings import (
-    Profile, ParameterSpec, ProfileSpec,
-)
+# 10. Keep native fields and let Profile generate their emission spec.
+# Lowercase mapping is opt-in; explicit names and exclusions take precedence.
+from mountainash_settings import Profile, ProfileField
 
-POSTGRESQL_SPEC = ProfileSpec(
+class PostgreSQLSettings(
+    Profile,
     name="postgresql",
     provider_type="postgresql",
-    parameters=[
-        ParameterSpec(name="HOST",     type=str, tier="core",     driver_key="host"),
-        ParameterSpec(name="PORT",     type=int, tier="core",     driver_key="port",   default=5432),
-        ParameterSpec(name="DATABASE", type=str, tier="core",     driver_key="dbname"),
-        ParameterSpec(name="USERNAME", type=str, tier="core",     driver_key="user"),
-        ParameterSpec(name="PASSWORD", type=str, tier="core",     driver_key="password",
-                      secret=True),
-    ],
-)
+    driver_keys="lower",
+):
+    HOST: str
+    PORT: int = ProfileField(default=5432, ge=1, le=65535)
+    DATABASE: str = ProfileField(driver_key="dbname")
+    USERNAME: str = ProfileField(driver_key="user")
+    PASSWORD: SecretStr
+    LOCAL_NOTE: str | None = ProfileField(default=None, driver_key=None)
 
-class PostgreSQLSettings(Profile):
-    __spec__ = POSTGRESQL_SPEC
+POSTGRESQL_SPEC = PostgreSQLSettings.__spec__
+assert POSTGRESQL_SPEC is not None
 
 database_params = SettingsParameters.create(
     settings_class=PostgreSQLSettings,
@@ -439,17 +438,25 @@ assert isinstance(database, MountainAshBaseSettings)
 Pass `driver_kwargs` to the database client when opening a connection. Emission
 unwraps the password for the driver, so keep that dictionary out of logs.
 
-The spec version has the same source-loading and retrieval behavior as the
-ordinary class. Its benefit is a convention for emission: `driver_key` renames
-fields, `secret=True` wraps strings and unwraps them on emission, `transform`
-converts output values, and `None` values are omitted. Specs can also declare
-validators and templates. For multiple target shapes, scoped `driver_key`
-mappings and `__adapters__` support explicit `emit(target)` calls.
-
-This costs extra indirection. Fields are installed dynamically, which gives
-static tooling less visibility and ties the implementation to Pydantic's model
-internals. For a small application, the ordinary class above may remain clearer.
+The profile has the same source-loading and retrieval behavior as the ordinary
+class. `driver_key` renames fields, `transform` converts output values, and
+`SecretStr` values are unwrapped at emission. `None` values are omitted.
+`ProfileField(template="...")` uses the existing template mechanism; aliases,
+constraints, factories and validators remain native Pydantic declarations.
 A registry is not needed to construct or emit a profile.
+
+Generated application field names must be uppercase. Untouched inherited fields
+retain their metadata; redeclaring a field follows Pydantic's normal replacement
+rules. For example, `PORT: int = 6432` discards the constraints above. Repeat
+required constraints and `ProfileField` options when redeclaring. An unannotated
+`PORT = 6432` override is rejected by Pydantic.
+
+Concrete subclasses declare their own `name` and `provider_type`. A subclass
+declaring neither is intermediate and cannot instantiate or register. Intermediate
+and unresolved classes expose `__spec__ = None`. Resolve forward references with
+`model_rebuild()` before use; `defer_build=True` also requires explicit rebuilding.
+A no-change rebuild preserves the completed spec object. Dynamic declaration
+mutation is unsupported.
 
 ### Inspect the spec without loading values
 
@@ -472,6 +479,16 @@ assert secret_fields == ["PASSWORD"]
 `ProfileSpec` is a frozen dataclass, but its parameter list and metadata
 dictionary are still mutable. Treat a declared spec as fixed. This example
 inspects spec metadata; it does not depend on JSON Schema generation.
+
+For a generated parameter, `default is MISSING` means required; `FACTORY_DEFAULT`
+means the owning field has a factory. Factories are not evaluated to generate
+specs. Inspect `model_fields` for the factory itself. Generated specs cannot fully
+reconstruct aliases, factories or decorator validators, and must not be fed back
+into the explicit-spec installer.
+
+Annotated attributes retain their static types. With the pinned mypy 1.10.1,
+missing required `ProfileField` constructor arguments and invalid class headers
+can escape static checks; runtime validation remains authoritative.
 
 ### Add registration when callers choose a provider by name
 
@@ -525,6 +542,82 @@ profile declaration before generating the test class. New profile registrations
 present when the test class is generated are covered automatically. These checks
 verify spec conventions, including parameter and driver-key uniqueness. Keep
 separate tests for whether emitted arguments work with the actual driver.
+
+### Explicit specs for data-driven declarations
+
+Explicit specs remain useful when field lists are assembled as data. In this
+form the spec installs the fields; the class does not generate it:
+
+```python
+# 14. An explicitly authored spec is the alternative profile declaration form.
+# This emits the same database kwargs as the native-field declaration above.
+from mountainash_settings import ParameterSpec, ProfileSpec
+
+EXPLICIT_POSTGRESQL_SPEC = ProfileSpec(
+    name="explicit_postgresql",
+    provider_type="postgresql",
+    parameters=[
+        ParameterSpec(name="HOST", type=str, tier="core", driver_key="host"),
+        ParameterSpec(name="PORT", type=int, tier="core", driver_key="port", default=5432),
+        ParameterSpec(name="DATABASE", type=str, tier="core", driver_key="dbname"),
+        ParameterSpec(name="USERNAME", type=str, tier="core", driver_key="user"),
+        ParameterSpec(name="PASSWORD", type=str, tier="core", driver_key="password", secret=True),
+    ],
+)
+
+class ExplicitPostgreSQLSettings(Profile):
+    __spec__ = EXPLICIT_POSTGRESQL_SPEC
+
+assert ExplicitPostgreSQLSettings(
+    secret_store=report_records, **connection_values,
+).emit() == driver_kwargs
+```
+
+Do not combine an own `__spec__` with generated-mode headers. When a generated
+child extends an explicit-spec parent, untouched installed fields retain their
+mappings and exclusions. Additional body fields also enter the generated spec;
+under `driver_keys="lower"` they emit unless explicitly excluded.
+
+### Domain metadata and target adapters
+
+A domain can select its own `ProfileSpec` dataclass subtype with `spec_type=`.
+Its typed metadata is supplied in the class header and validated strictly;
+unknown options and coercible-but-incorrect types fail at declaration time.
+Metadata inherits by key, with supplied dictionaries replacing inherited ones.
+Put Pydantic settings options in `model_config`, not in the header.
+
+```python
+# 15. A domain base selects its real spec type; adapters receive merged kwargs.
+from dataclasses import dataclass
+
+@dataclass(frozen=True, kw_only=True)
+class BackendSpec(ProfileSpec):
+    default_port: int = 5432
+
+class SQLProfile(PostgreSQLSettings, spec_type=BackendSpec):
+    pass
+
+def connection_options(profile, kwargs):
+    return {**kwargs, "connect_timeout": profile.CONNECT_TIMEOUT}
+
+class ReportingDriver(
+    SQLProfile, name="reporting_driver", provider_type="postgresql", default_port=5432,
+):
+    CONNECT_TIMEOUT: int = ProfileField(default=5, driver_key=None)
+    __adapters__ = {"driver": connection_options}
+
+assert isinstance(ReportingDriver.__spec__, BackendSpec)
+assert ReportingDriver.__spec__.default_port == 5432
+assert ReportingDriver(secret_store=report_records, **connection_values).emit(
+    "driver", base={"application_name": "reports"},
+) == {**driver_kwargs, "application_name": "reports", "connect_timeout": 5}
+```
+
+Target-scoped mappings use `driver_key={target: "output_name"}`. Targeted profiles
+require `emit(target)` and reject unknown targets. Adapters receive the profile
+and merged kwargs; they must copy nested containers before modifying caller-owned
+base values. Generated declarations support one profile ancestry chain plus
+ordinary behavior mixins, and reject competing profile bases.
 
 ## Documentation
 

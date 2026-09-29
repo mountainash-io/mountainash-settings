@@ -61,7 +61,9 @@ dependencies = [
 ]
 [envs.test_github.scripts]
 test = "pytest"
-test-cov = "pytest --cov --junitxml=junit.xml -o junit_family=legacy  --cov-report=xml"
+# Subprocesses change cwd; an explicit config lets pytest-cov propagate the
+# same branch/source settings instead of rediscovering defaults in the child.
+test-cov = "pytest --cov --cov-config={root}/pyproject.toml --junitxml=junit.xml -o junit_family=legacy  --cov-report=xml"
 
 
 #================
@@ -97,7 +99,7 @@ dependencies = [
 # ===========================================
 
 test = [
-    "pytest --cov --junitxml=junit.xml",
+    "pytest --cov --cov-config={root}/pyproject.toml --junitxml=junit.xml",
     "coverage json --pretty-print",
     "coverage xml",
     "coverage html",

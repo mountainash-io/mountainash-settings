@@ -11,6 +11,9 @@ def test_clean_break_version():
 @pytest.mark.unit
 def test_profiles_surface_imports():
     from mountainash_settings import (
+        FACTORY_DEFAULT,
+        FactoryDefault,
+        ProfileField,
         MISSING,
         Missing,
         ParameterSpec,
@@ -21,9 +24,14 @@ def test_profiles_surface_imports():
         spec_invariants_for,
     )
     assert all(obj is not None for obj in (
+        FACTORY_DEFAULT, FactoryDefault, ProfileField,
         MISSING, Missing, ParameterSpec,
         Profile, ProfileSpec, Registry, lookup_class_var, spec_invariants_for,
     ))
+    from mountainash_settings import profiles
+    assert profiles.ProfileField is ProfileField
+    assert profiles.FactoryDefault is FactoryDefault
+    assert profiles.FACTORY_DEFAULT is FACTORY_DEFAULT
 
 
 

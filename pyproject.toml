@@ -21,7 +21,7 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-    "pydantic>=2.9.2",
+    "pydantic>=2.10.0",
     # Exact pin: settings-source behavior is application-visible. 2.15.0 adds
     # structured-file deep merge. MountainAsh preserves its legacy unprefixed
     # dotenv fallback through explicit source wiring and regression tests.

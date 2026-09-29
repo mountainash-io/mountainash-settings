@@ -1,9 +1,8 @@
 # src/mountainash_settings/profiles/profile.py
 """Generic Profile base for declarative settings profiles.
 
-A subclass declares ``__spec__`` (a :class:`ProfileSpec`); this base uses
-pydantic v2's ``__pydantic_init_subclass__`` hook to materialize the spec
-into pydantic fields.
+A subclass either declares ``__spec__`` for field installation, or uses profile
+class headers and native Pydantic fields to generate a descriptive spec.
 
 """
 
@@ -17,7 +16,11 @@ from pydantic.fields import FieldInfo
 from mountainash_settings import MountainAshBaseSettings
 
 from .lookup import lookup_class_var
-from .spec import MISSING, ProfileSpec
+from ._declaration import _Declaration, build_spec
+from ._metaclass import _ProfileMetaclass
+from ._projection import project_parameters
+from .fields import _ProfileOptions
+from .spec import FACTORY_DEFAULT, MISSING, ProfileSpec
 
 __all__ = ["Adapter", "Profile"]
 
@@ -39,8 +42,8 @@ def _resolve_spec(cls: type) -> ProfileSpec | None:
     return spec
 
 
-class Profile(MountainAshBaseSettings):
-    """Declarative settings base — subclasses set ``__spec__`` only.
+class Profile(MountainAshBaseSettings, metaclass=_ProfileMetaclass):
+    """Settings profiles with explicit specs or class-declared native fields.
 
     Public contract:
         - :attr:`profile_name` — spec name.
@@ -51,7 +54,8 @@ class Profile(MountainAshBaseSettings):
         - ``__adapters__`` — per-target adapter map (``{target: Adapter}``).
     """
 
-    __spec__: t.ClassVar[ProfileSpec]
+    __spec__: t.ClassVar[ProfileSpec | None] = None
+    _profile_declaration: t.ClassVar[_Declaration | None] = None
     __adapters__: t.ClassVar[dict[t.Hashable, "Adapter"]] = {}
 
     # MAS-SEC-005 (M6 review follow-up, 2026-09-25): field names -- never
@@ -65,10 +69,32 @@ class Profile(MountainAshBaseSettings):
     # M6 plan doc).
     _profile_derived_field_names: frozenset[str] = PrivateAttr(default=frozenset())
 
+    def __new__(cls, *args: t.Any, **kwargs: t.Any) -> t.Self:
+        _require_materializable_profile(cls)
+        return t.cast(t.Self, super().__new__(cls, *args, **kwargs))
+
+    @classmethod
+    def model_rebuild(
+        cls, *, force: bool = False, raise_errors: bool = True,
+        _parent_namespace_depth: int = 2,
+        _types_namespace: t.Mapping[str, t.Any] | None = None,
+    ) -> bool | None:
+        """Complete delayed fields and publish their generated spec once."""
+        result = super().model_rebuild(
+            force=force, raise_errors=raise_errors,
+            _parent_namespace_depth=_parent_namespace_depth + 1 if _parent_namespace_depth > 0 else 0,
+            _types_namespace=_types_namespace,
+        )
+        _complete_generated_profile(cls)
+        return result
+
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: t.Any) -> None:
         """Install fields described by ``__spec__`` on the subclass."""
         super().__pydantic_init_subclass__(**kwargs)
+        if cls._profile_declaration is not None:
+            _complete_generated_profile(cls)
+            return
         spec = _resolve_spec(cls)
         if spec is None:
             return  # intermediate subclass without its own spec
@@ -77,6 +103,11 @@ class Profile(MountainAshBaseSettings):
 
         # 1. Spec parameters → pydantic fields
         for param in spec.parameters:
+            if param.default is FACTORY_DEFAULT:
+                raise TypeError(
+                    f"{cls.__name__}.{param.name}: FACTORY_DEFAULT describes a native factory; "
+                    "declare its default_factory on the owning class"
+                )
             ptype: t.Any = SecretStr if param.secret else param.type
             if param.validator is not None:
                 ptype = t.Annotated[ptype, AfterValidator(param.validator)]
@@ -92,6 +123,14 @@ class Profile(MountainAshBaseSettings):
                     default=param.default,
                     description=param.description,
                 )
+            # Explicit specs retain their existing admission semantics. The
+            # marker records provenance, without imposing generated validation.
+            info.metadata.append(_ProfileOptions(
+                driver_key=tuple(param.driver_key.items()) if isinstance(param.driver_key, dict) else param.driver_key,
+                tier=param.tier,
+                transform=param.transform, template=param.template,
+                supplied=frozenset({"driver_key", "tier", "transform", "template"}),
+            ))
             new_fields[param.name] = (ptype, info)
 
         for name, (annotation, info) in new_fields.items():
@@ -104,10 +143,12 @@ class Profile(MountainAshBaseSettings):
 
     @property
     def profile_name(self) -> str:
+        assert self.__spec__ is not None
         return self.__spec__.name
 
     @property
     def provider_type(self) -> t.Any:
+        assert self.__spec__ is not None
         return self.__spec__.provider_type
 
     # --- Template wiring -----------------------------------------------------
@@ -257,6 +298,7 @@ class Profile(MountainAshBaseSettings):
         - Applies ``ParameterSpec.transform`` if set.
         """
         out: dict[str, t.Any] = {}
+        assert self.__spec__ is not None
         for param in self.__spec__.parameters:
             key = self._resolve_driver_key(param.driver_key, target)
             if key is None:
@@ -280,6 +322,7 @@ class Profile(MountainAshBaseSettings):
         dict-scoped ``driver_key``)."""
         if type(self).__adapters__:
             return True
+        assert self.__spec__ is not None
         return any(
             isinstance(p.driver_key, dict) for p in self.__spec__.parameters
         )
@@ -288,6 +331,7 @@ class Profile(MountainAshBaseSettings):
         """Every target this profile can emit for: adapter keys ∪ dict
         driver_key keys."""
         targets: set[t.Hashable] = set(type(self).__adapters__)
+        assert self.__spec__ is not None
         for param in self.__spec__.parameters:
             if isinstance(param.driver_key, dict):
                 targets.update(param.driver_key)
@@ -342,3 +386,25 @@ class Profile(MountainAshBaseSettings):
         if adapter is not None:
             return adapter(self, merged)
         return merged
+
+
+_FRAMEWORK_FIELDS = frozenset(MountainAshBaseSettings.model_fields) | frozenset(Profile.model_fields)
+
+
+def _complete_generated_profile(cls: type[Profile]) -> None:
+    declaration = cls._profile_declaration
+    if declaration is None or declaration.name is None or not cls.__pydantic_complete__:
+        return
+    if cls.__dict__.get("__spec__") is not None:
+        return  # Completed declarations are immutable; rebuilding preserves identity.
+    cls.__spec__ = build_spec(declaration, project_parameters(cls, declaration, _FRAMEWORK_FIELDS))
+
+
+def _require_materializable_profile(cls: type[Profile]) -> None:
+    declaration = cls._profile_declaration
+    if declaration is None:
+        return
+    if declaration.name is None:
+        raise TypeError(f"{cls.__name__}: intermediate profile; declare name and provider_type on a concrete subclass")
+    if not cls.__pydantic_complete__ or cls.__spec__ is None:
+        raise TypeError(f"{cls.__name__}: incomplete profile; call model_rebuild() after defining referenced types")
