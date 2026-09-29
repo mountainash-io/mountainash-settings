@@ -198,6 +198,13 @@ def qualify(output: Path, pythons: list[Path]) -> int:
             copied_tests = work / "tests"
             shutil.copytree(repository / "tests", copied_tests)
             shutil.copytree(repository / "tools", work / "tools")
+            shutil.copy2(repository / "README.md", work / "README.md")
+            shutil.copytree(repository / "examples", work / "examples")
+            report["example_inputs"] = {
+                str(path.relative_to(work)): _common.sha256(path)
+                for path in [work / "README.md", *sorted((work / "examples").rglob("*"))]
+                if path.is_file()
+            }
             report["test_inputs"] = {
                 str(path.relative_to(copied_tests)): _common.sha256(path)
                 for path in copied_tests.rglob("*.py")

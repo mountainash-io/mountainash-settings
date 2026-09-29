@@ -153,8 +153,12 @@ Native operations use standard-library facilities only: POSIX descriptors,
 `flock` and Linux `libacl`/macOS libSystem ACL calls; Windows NT handles, DACLs
 and `LockFileEx`. Python ≥ 3.12. Linux, macOS and Windows are targeted.
 
-Qualification status is tracked in the planning records. At the time of the M3
-merge, Linux and macOS installed-candidate proofs passed; Windows had one known
-diagnostic defect (a post-commit marker-close failure reports `unavailable`
-instead of `write_committed_cleanup_failed`) held as a strict `xfail`.
+The 0.1.0 source at commit `2f40607` passed installed-candidate qualification on
+Linux, macOS and Windows with Python 3.12 and 3.13. Both wheel and sdist-rebuilt
+wheel runs passed the full suite and two-process lifecycle checks, with no
+failures or required skips. The earlier Windows marker-close diagnostic defect
+is resolved; no xfail was accepted. See
+[qualification run 36536362000](https://github.com/mountainash-io/mountainash-settings/actions/runs/36536362000).
 
+That receipt identifies the tested artifacts. Subsequent README changes affect
+package build inputs and require renewed qualification before release.
