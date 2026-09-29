@@ -146,27 +146,25 @@ plain_kwargs = plain_database.driver_kwargs()
 assert plain_kwargs["dbname"] == "reports"
 assert plain_kwargs["password"] == "example-password"
 
-# 10. Express the same fields and driver mappings as a reusable spec.
-# Profile installs Pydantic fields; emit() applies the declared mapping rules.
-from mountainash_settings import (
-    Profile, ParameterSpec, ProfileSpec,
-)
+# 10. Keep native fields and let Profile generate their emission spec.
+# Lowercase mapping is opt-in; explicit names and exclusions take precedence.
+from mountainash_settings import Profile, ProfileField
 
-POSTGRESQL_SPEC = ProfileSpec(
+class PostgreSQLSettings(
+    Profile,
     name="postgresql",
     provider_type="postgresql",
-    parameters=[
-        ParameterSpec(name="HOST",     type=str, tier="core",     driver_key="host"),
-        ParameterSpec(name="PORT",     type=int, tier="core",     driver_key="port",   default=5432),
-        ParameterSpec(name="DATABASE", type=str, tier="core",     driver_key="dbname"),
-        ParameterSpec(name="USERNAME", type=str, tier="core",     driver_key="user"),
-        ParameterSpec(name="PASSWORD", type=str, tier="core",     driver_key="password",
-                      secret=True),
-    ],
-)
+    driver_keys="lower",
+):
+    HOST: str
+    PORT: int = ProfileField(default=5432, ge=1, le=65535)
+    DATABASE: str = ProfileField(driver_key="dbname")
+    USERNAME: str = ProfileField(driver_key="user")
+    PASSWORD: SecretStr
+    LOCAL_NOTE: str | None = ProfileField(default=None, driver_key=None)
 
-class PostgreSQLSettings(Profile):
-    __spec__ = POSTGRESQL_SPEC
+POSTGRESQL_SPEC = PostgreSQLSettings.__spec__
+assert POSTGRESQL_SPEC is not None
 
 database_params = SettingsParameters.create(
     settings_class=PostgreSQLSettings,
@@ -219,3 +217,51 @@ assert get_settings(settings_parameters=selected_params).emit() == driver_kwargs
 from mountainash_settings import spec_invariants_for
 
 TestDatabaseInvariants = spec_invariants_for(DATABASES)
+
+# 14. An explicitly authored spec is the alternative profile declaration form.
+# This emits the same database kwargs as the native-field declaration above.
+from mountainash_settings import ParameterSpec, ProfileSpec
+
+EXPLICIT_POSTGRESQL_SPEC = ProfileSpec(
+    name="explicit_postgresql",
+    provider_type="postgresql",
+    parameters=[
+        ParameterSpec(name="HOST", type=str, tier="core", driver_key="host"),
+        ParameterSpec(name="PORT", type=int, tier="core", driver_key="port", default=5432),
+        ParameterSpec(name="DATABASE", type=str, tier="core", driver_key="dbname"),
+        ParameterSpec(name="USERNAME", type=str, tier="core", driver_key="user"),
+        ParameterSpec(name="PASSWORD", type=str, tier="core", driver_key="password", secret=True),
+    ],
+)
+
+class ExplicitPostgreSQLSettings(Profile):
+    __spec__ = EXPLICIT_POSTGRESQL_SPEC
+
+assert ExplicitPostgreSQLSettings(
+    secret_store=report_records, **connection_values,
+).emit() == driver_kwargs
+
+# 15. A domain base selects its real spec type; adapters receive merged kwargs.
+from dataclasses import dataclass
+
+@dataclass(frozen=True, kw_only=True)
+class BackendSpec(ProfileSpec):
+    default_port: int = 5432
+
+class SQLProfile(PostgreSQLSettings, spec_type=BackendSpec):
+    pass
+
+def connection_options(profile, kwargs):
+    return {**kwargs, "connect_timeout": profile.CONNECT_TIMEOUT}
+
+class ReportingDriver(
+    SQLProfile, name="reporting_driver", provider_type="postgresql", default_port=5432,
+):
+    CONNECT_TIMEOUT: int = ProfileField(default=5, driver_key=None)
+    __adapters__ = {"driver": connection_options}
+
+assert isinstance(ReportingDriver.__spec__, BackendSpec)
+assert ReportingDriver.__spec__.default_port == 5432
+assert ReportingDriver(secret_store=report_records, **connection_values).emit(
+    "driver", base={"application_name": "reports"},
+) == {**driver_kwargs, "application_name": "reports", "connect_timeout": 5}

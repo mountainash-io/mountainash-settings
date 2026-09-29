@@ -11,10 +11,12 @@ construction, then adds files and a derived log path. It introduces
 retrieving independent instances with local overrides.
 
 The connection examples use the same values twice: first in an ordinary settings
-class with an explicit driver mapping, then in a `Profile` whose `ProfileSpec`
-declares the mapping. An assertion checks that both produce the same arguments.
+class with an explicit driver mapping, then in a `Profile` with native Pydantic
+fields and a generated spec. An assertion checks that both produce the same arguments.
 Spec inspection, optional name-based registration and invariant tests follow as
-separate steps. A profile needs no registry to load settings or emit arguments.
+separate steps. The final examples show the explicit-spec alternative and a
+typed domain spec with a target adapter. Native field overrides replace metadata
+according to Pydantic's rules. A profile needs no registry to load settings or emit arguments.
 
 With Python 3.12 or later, install the checkout and pytest in your environment.
 From the repository root:
