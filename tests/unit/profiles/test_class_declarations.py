@@ -369,10 +369,12 @@ def test_generated_fields_require_uppercase_and_native_override_annotations():
     ({"http": "port"}, {"http": "port"}),
 ])
 def test_duplicate_emission_keys_rejected(first, second):
+    first_field = ProfileField(default=1, driver_key=first)
+    second_field = ProfileField(default=2, driver_key=second)
     with pytest.raises(TypeError, match="Collision.*(FIRST|SECOND).*(key|mapping)"):
         class Collision(Profile, name="collision", provider_type="db"):
-            FIRST: int = ProfileField(default=1, driver_key=first)
-            SECOND: int = ProfileField(default=2, driver_key=second)
+            FIRST: int = first_field
+            SECOND: int = second_field
 
 
 def test_disjoint_target_keys_and_mapping_ownership():

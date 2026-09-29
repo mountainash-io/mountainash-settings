@@ -1,5 +1,7 @@
 """Generated specs become admissible only after concrete model completion."""
 
+from functools import partial
+
 import pytest
 from pydantic import BaseModel
 from pydantic_settings import SettingsConfigDict
@@ -34,15 +36,17 @@ def test_incomplete_profile_rejected_before_source_capture(state, route, isolate
     assert lookup_class_var(Child, "__spec__") is None
     params = SettingsParameters.create(settings_class=Child)
     message = "intermediate" if state == "intermediate" else "incomplete"
+    if route == "direct":
+        invoke = Child
+    elif route == "public":
+        invoke = partial(get_settings, settings_parameters=params)
+    elif route == "manager":
+        invoke = partial(isolated_cache.get_or_create_settings, params)
+    else:
+        register = Registry("incomplete").decorator()
+        invoke = partial(register, Child)
     with pytest.raises(TypeError, match=f"Child.*{message}"):
-        if route == "direct":
-            Child()
-        elif route == "public":
-            get_settings(settings_parameters=params)
-        elif route == "manager":
-            isolated_cache.get_or_create_settings(params)
-        else:
-            Registry("incomplete").decorator()(Child)
+        invoke()
     assert not isolated_cache.is_initialised(params)
 
 
@@ -60,7 +64,8 @@ def test_forward_completion_publishes_owned_spec_and_preserves_identity(isolated
 
     assert Child.model_rebuild(_types_namespace={"PayloadForCompletionProbe": PayloadForCompletionProbe}) is True
     spec = Child.__spec__
-    assert spec is not None and spec is not Parent.__spec__
+    assert spec is not None
+    assert spec is not Parent.__spec__
     assert lookup_class_var(Child, "__spec__") is spec
     assert [p.name for p in spec.parameters] == ["HOST", "PAYLOAD"]
     Child.model_rebuild(force=True)
@@ -73,8 +78,10 @@ def test_forward_completion_publishes_owned_spec_and_preserves_identity(isolated
     assert Child(PAYLOAD={"VALUE": 1}).emit() == {"server": "localhost"}
     params = SettingsParameters.create(settings_class=Child, PAYLOAD={"VALUE": 2})
     assert isolated_cache.get_or_create_settings(params).PAYLOAD.VALUE == 2
+    wrong_registry = Registry("wrong")
+    other_spec = ProfileSpec(name="other", provider_type="example", parameters=[])
     with pytest.raises(TypeError, match="published"):
-        Registry("wrong").register(ProfileSpec(name="other", provider_type="example", parameters=[]), Child)
+        wrong_registry.register(other_spec, Child)
 
 
 def test_deferred_generated_profile_requires_explicit_rebuild():

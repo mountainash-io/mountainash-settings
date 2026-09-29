@@ -48,8 +48,9 @@ def test_database_domain_metadata_transforms_and_optional_secrets():
     assert Concrete(PASSWORD="example").emit() == Explicit(PASSWORD="example").emit() == {
         "host": "localhost", "path": "database", "password": "example",
     }
+    register_storage = Registry("storage", spec_type=StorageSpec).decorator()
     with pytest.raises(TypeError, match="spec_type"):
-        Registry("storage", spec_type=StorageSpec).decorator()(Concrete)
+        register_storage(Concrete)
 
 
 def test_storage_target_adapter_receives_mapped_values_and_excluded_credentials():

@@ -67,6 +67,33 @@ def _validate_metadata(class_name: str, option: str, annotation: t.Any, value: t
         raise TypeError(f"{class_name}: invalid metadata type for {option}")
 
 
+def _validate_identity(class_name: str, header: t.Mapping[str, t.Any]) -> str | None:
+    if ("name" in header) != ("provider_type" in header) or (
+        "name" in header and (header["name"] is None or header["provider_type"] is None)
+    ):
+        raise TypeError(f"{class_name}: identity requires both name and non-None provider_type")
+    name = header.get("name")
+    if name is not None and (not isinstance(name, str) or not name or name != name.lower()):
+        raise TypeError(f"{class_name}: name must be a nonempty lowercase string")
+    return name
+
+
+def _metadata_keywords(
+    class_name: str, spec_type: type[ProfileSpec], header: t.Mapping[str, t.Any],
+    config_keys: frozenset[str],
+) -> set[str]:
+    reserved = config_keys | _CONTROLS | {"model_config", "parameters"}
+    metadata_fields = {f.name for f in fields(spec_type) if f.name not in _GENERATED}
+    collisions = metadata_fields & reserved
+    if collisions:
+        raise TypeError(f"{class_name}: reserved metadata option {min(collisions)}")
+    accepted = {f.name for f in fields(spec_type) if f.init} - _GENERATED
+    unknown = set(header) - _CONTROLS - accepted
+    if unknown:
+        raise TypeError(f"{class_name}: unsupported header option {min(unknown)}")
+    return accepted
+
+
 def prepare_declaration(
     class_name: str, bases: tuple[type, ...], namespace: t.Mapping[str, t.Any],
     header: t.Mapping[str, t.Any], *, config_keys: frozenset[str],
@@ -85,22 +112,8 @@ def prepare_declaration(
     spec_type = header.get("spec_type", parent.spec_type if parent else ProfileSpec)
     if not isinstance(spec_type, type) or not issubclass(spec_type, ProfileSpec):
         raise TypeError(f"{class_name}: spec_type must be a ProfileSpec dataclass subclass")
-    reserved = config_keys | _CONTROLS | {"model_config", "parameters"}
-    metadata_fields = {f.name for f in fields(spec_type) if f.name not in _GENERATED}
-    collisions = metadata_fields & reserved
-    if collisions:
-        raise TypeError(f"{class_name}: reserved metadata option {sorted(collisions)[0]}")
-    accepted = {f.name for f in fields(spec_type) if f.init} - _GENERATED
-    unknown = set(header) - _CONTROLS - accepted
-    if unknown:
-        raise TypeError(f"{class_name}: unsupported header option {sorted(unknown)[0]}")
-    if ("name" in header) != ("provider_type" in header) or (
-        "name" in header and (header["name"] is None or header["provider_type"] is None)
-    ):
-        raise TypeError(f"{class_name}: identity requires both name and non-None provider_type")
-    name = header.get("name")
-    if name is not None and (not isinstance(name, str) or not name or name != name.lower()):
-        raise TypeError(f"{class_name}: name must be a nonempty lowercase string")
+    accepted = _metadata_keywords(class_name, spec_type, header, config_keys)
+    name = _validate_identity(class_name, header)
     driver_keys = header.get("driver_keys", parent.driver_keys if parent else None)
     if driver_keys not in (None, "lower"):
         raise TypeError(f"{class_name}: driver_keys must be lower or None")

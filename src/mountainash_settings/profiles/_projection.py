@@ -6,6 +6,7 @@ import types
 import typing as t
 
 from pydantic import SecretStr
+from pydantic.fields import FieldInfo
 
 from mountainash_settings.settings.base_settings import MountainAshBaseSettings
 
@@ -22,6 +23,31 @@ def _is_secret(annotation: t.Any) -> bool:
     return isinstance(annotation, type) and issubclass(annotation, SecretStr)
 
 
+def _project_field(
+    name: str, info: FieldInfo, options: _ProfileOptions,
+    driver_keys: t.Literal["lower"] | None,
+) -> ParameterSpec:
+    driver_key: str | dict[t.Hashable, str] | None
+    if options.driver_key is _OMITTED:
+        driver_key = name.lower() if driver_keys == "lower" else None
+    elif isinstance(options.driver_key, tuple):
+        driver_key = dict(options.driver_key)
+    else:
+        driver_key = options.driver_key
+    default: t.Any
+    if info.default_factory is not None:
+        default = FACTORY_DEFAULT
+    elif info.is_required():
+        default = MISSING
+    else:
+        default = info.default
+    return ParameterSpec(
+        name=name, type=info.rebuild_annotation(), tier=options.tier,
+        default=default, description=info.description or "", driver_key=driver_key,
+        secret=_is_secret(info.annotation), transform=options.transform, template=options.template,
+    )
+
+
 def project_parameters(
     cls: type[MountainAshBaseSettings], declaration: _Declaration,
     framework_names: frozenset[str],
@@ -34,25 +60,19 @@ def project_parameters(
         options = markers[0] if markers else _profile_options()
         if name in framework_names:
             if options.supplied:
-                raise TypeError(f"{cls.__name__}.{name}: profile option {sorted(options.supplied)[0]} on framework field")
+                raise TypeError(f"{cls.__name__}.{name}: profile option {min(options.supplied)} on framework field")
             continue
         if name != name.upper():
             raise TypeError(f"{cls.__name__}.{name}: application fields must be uppercase")
-        driver_key: str | dict[t.Hashable, str] | None
-        if options.driver_key is _OMITTED:
-            driver_key = name.lower() if declaration.driver_keys == "lower" else None
-        elif isinstance(options.driver_key, tuple):
-            driver_key = dict(options.driver_key)
-        else:
-            driver_key = options.driver_key
-        default = FACTORY_DEFAULT if info.default_factory is not None else MISSING if info.is_required() else info.default
-        parameters.append(ParameterSpec(
-            name=name, type=info.rebuild_annotation(), tier=options.tier,
-            default=default, description=info.description or "", driver_key=driver_key,
-            secret=_is_secret(info.annotation), transform=options.transform, template=options.template,
-        ))
+        parameters.append(_project_field(name, info, options, declaration.driver_keys))
     _validate_output_keys(cls.__name__, parameters)
     return parameters
+
+
+def _record_output_key(keys: dict[str, str], key: str, field_name: str, error: str) -> None:
+    if key in keys:
+        raise TypeError(error)
+    keys[key] = field_name
 
 
 def _validate_output_keys(class_name: str, parameters: list[ParameterSpec]) -> None:
@@ -61,15 +81,11 @@ def _validate_output_keys(class_name: str, parameters: list[ParameterSpec]) -> N
     for param in parameters:
         mapping = param.driver_key
         if isinstance(mapping, str):
-            if mapping in bare:
-                raise TypeError(f"{class_name}.{param.name}: duplicate output key")
-            bare[mapping] = param.name
+            _record_output_key(bare, mapping, param.name, f"{class_name}.{param.name}: duplicate output key")
         elif isinstance(mapping, dict):
             for target, key in mapping.items():
                 keys = targeted.setdefault(target, {})
-                if key in keys:
-                    raise TypeError(f"{class_name}.{param.name}: duplicate target output key")
-                keys[key] = param.name
+                _record_output_key(keys, key, param.name, f"{class_name}.{param.name}: duplicate target output key")
     for keys in targeted.values():
         for key, name in keys.items():
             if key in bare:
