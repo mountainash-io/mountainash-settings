@@ -22,6 +22,10 @@ settings = AppSettings()
 assert settings.APP_NAME == "reports"
 assert settings.DEBUG is False
 
+# Field declarations and validation still come from Pydantic.
+one_report = AppSettings(DEBUG="true")
+assert one_report.DEBUG is True
+
 # 2. Load the same application for production, using the supplied files.
 # Keep these paths together so later examples reuse the same configuration.
 config_files = [
@@ -63,6 +67,9 @@ report_params = SettingsParameters.create(
     config_files=config_files,
     env_prefix="REPORT_",
 )
+
+# Application startup captures the known configuration before accepting work.
+get_settings(settings_parameters=report_params)
 
 def report_destination(params: SettingsParameters) -> str:
     # Rehydrate from the cached source context at the point of use.
@@ -108,10 +115,41 @@ report_records = NamespacedSecretStore(store, "reports")
 with report_records.transaction("database"):
     report_records.set("database", {"password": "example-password"})
 
-# 9. Describe the report's database connection and resolve its stored password.
-# The spec maps application-facing field names to database-driver arguments.
+# 9. Start with an ordinary settings class for the report's one database.
+# A short method handles the driver's naming and password-unwrapping rules.
+from pydantic import SecretStr
+
+class DatabaseSettings(MountainAshBaseSettings):
+    HOST: str
+    PORT: int = 5432
+    DATABASE: str
+    USERNAME: str
+    PASSWORD: SecretStr
+
+    def driver_kwargs(self) -> dict[str, object]:
+        return {
+            "host": self.HOST,
+            "port": self.PORT,
+            "dbname": self.DATABASE,
+            "user": self.USERNAME,
+            "password": self.PASSWORD.get_secret_value(),
+        }
+
+connection_values = {
+    "HOST": "prod-db.example.com",
+    "DATABASE": report_destination(report_params),
+    "USERNAME": "report_user",
+    "PASSWORD": "secret:database.password",
+}
+plain_database = DatabaseSettings(secret_store=report_records, **connection_values)
+plain_kwargs = plain_database.driver_kwargs()
+assert plain_kwargs["dbname"] == "reports"
+assert plain_kwargs["password"] == "example-password"
+
+# 10. Express the same fields and driver mappings as a reusable spec.
+# Profile installs Pydantic fields; emit() applies the declared mapping rules.
 from mountainash_settings import (
-    Profile, ParameterSpec, ProfileSpec, Registry,
+    Profile, ParameterSpec, ProfileSpec,
 )
 
 POSTGRESQL_SPEC = ProfileSpec(
@@ -123,24 +161,17 @@ POSTGRESQL_SPEC = ProfileSpec(
         ParameterSpec(name="DATABASE", type=str, tier="core",     driver_key="dbname"),
         ParameterSpec(name="USERNAME", type=str, tier="core",     driver_key="user"),
         ParameterSpec(name="PASSWORD", type=str, tier="core",     driver_key="password",
-                      secret=True, default=None),
+                      secret=True),
     ],
 )
 
-DATABASES = Registry("databases")
-register = DATABASES.decorator()
-
-@register
 class PostgreSQLSettings(Profile):
     __spec__ = POSTGRESQL_SPEC
 
 database_params = SettingsParameters.create(
     settings_class=PostgreSQLSettings,
     secret_store=report_records,
-    HOST="prod-db.example.com",
-    DATABASE=report_destination(report_params),
-    USERNAME="report_user",
-    PASSWORD="secret:database.password",  # record "database", field "password"
+    **connection_values,
 )
 
 database = get_settings(settings_parameters=database_params)
@@ -153,8 +184,37 @@ assert driver_kwargs == {
     "user": "report_user",
     "password": "example-password",
 }
+assert driver_kwargs == plain_kwargs
+assert isinstance(database, MountainAshBaseSettings)
 
-# 10. Turn the registered profile specs into pytest invariant checks.
+# 11. Inspect configuration metadata without constructing another instance.
+driver_keys = {
+    parameter.name: parameter.driver_key
+    for parameter in POSTGRESQL_SPEC.parameters
+}
+secret_fields = [
+    parameter.name for parameter in POSTGRESQL_SPEC.parameters if parameter.secret
+]
+assert driver_keys["DATABASE"] == "dbname"
+assert secret_fields == ["PASSWORD"]
+
+# 12. Add name-based discovery only when the caller needs it.
+# Registration does not create a connection or a new settings cache.
+from mountainash_settings import Registry
+
+DATABASES = Registry("databases")
+DATABASES.register(POSTGRESQL_SPEC, PostgreSQLSettings)
+
+selected_class = DATABASES.get_settings_class("postgresql")
+assert selected_class is PostgreSQLSettings
+selected_params = SettingsParameters.create(
+    settings_class=selected_class,
+    secret_store=report_records,
+    **connection_values,
+)
+assert get_settings(settings_parameters=selected_params).emit() == driver_kwargs
+
+# 13. Turn the registered profile specs into pytest invariant checks.
 # Run `python -m pytest reporting.py -q` to collect and execute this class.
 from mountainash_settings import spec_invariants_for
 

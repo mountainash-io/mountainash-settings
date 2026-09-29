@@ -5,6 +5,39 @@
 Typed settings for Python applications, with configuration files, environment variables, cached source snapshots and local secret storage. Connection profiles define fields once and emit keyword arguments for drivers or clients.
 Requires Python 3.12 or later.
 
+## Built on Pydantic Settings
+
+`MountainAshBaseSettings` extends `pydantic_settings.BaseSettings`. Pydantic
+provides field types, validation, aliases and model introspection. Pydantic
+Settings provides environment, dotenv and secret-directory loading, plus
+YAML/TOML/JSON source classes and configurable source ordering.
+
+MountainAsh composes those sources through per-invocation `config_files`, adds
+template helpers and selected-store `secret:` references, and provides cached
+source snapshots with independently owned results. Optional profiles describe
+how configuration becomes driver arguments.
+
+The API supports two use cases, each with two patterns:
+
+| Use case | Pattern | When to use it |
+|---|---|---|
+| Declare configuration | Ordinary fields on `MountainAshBaseSettings` | Application-specific settings and small, explicit driver mappings |
+| Declare configuration | A `ProfileSpec` on a `Profile` subclass | Shared field declarations and driver-emission conventions |
+| Retrieve settings | Direct construction | Read sources afresh for an invocation |
+| Retrieve settings | `SettingsParameters` with `get_settings()` | Reuse a captured source context while obtaining independently owned instances |
+
+Both declaration styles support both retrieval paths. A `ProfileSpec` describes
+fields and emission rules; a `Profile` subclass turns it into a settings class.
+An instance of that class holds the loaded values.
+
+MountainAsh applies its own defaults: unknown inputs are ignored, field defaults
+are not validated by default, and assignments are validated. Upstream
+`BaseSettings` forbids extra inputs and validates defaults by default. Set model
+configuration deliberately when those differences matter. Per-call source
+selection uses `config_files`, `env_prefix` and `secrets_dir`; underscore-prefixed
+controls such as `_env_file` are rejected. For upstream behavior, see
+[Pydantic Settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/).
+
 Version 0.1.0 uses SemVer and removes the legacy APIs. See the
 [0.1 migration guide](docs/migration-0.1.md) for profile, adapter, registry,
 cached-settings and selected-store changes.
@@ -51,9 +84,14 @@ class AppSettings(MountainAshBaseSettings):
 settings = AppSettings()
 assert settings.APP_NAME == "reports"
 assert settings.DEBUG is False
+
+# Field declarations and validation still come from Pydantic.
+one_report = AppSettings(DEBUG="true")
+assert one_report.DEBUG is True
 ```
 
-Constructor arguments take precedence over environment variables, configuration files and field defaults, in that order.
+These calls construct settings directly and read sources for each instance.
+They do not populate MountainAsh's source cache.
 
 See [docs/quickstart.md](docs/quickstart.md) for a step-by-step introduction.
 
@@ -98,9 +136,11 @@ assert settings.ENV == "production"
 assert settings.DATABASE == "reports"
 ```
 
-JSON files are also supported. When layering files of the same format, later
-files override earlier values. See the quickstart for source precedence across
-formats.
+Source priority, highest first: constructor values, OS environment, prefixed
+dotenv, unprefixed dotenv fallback, YAML, TOML, JSON, Pydantic secret files, then
+field defaults. Across formats this order is fixed, regardless of path order.
+Within one format, later files recursively merge mappings and replace lists or
+scalars. The formats above set different fields to keep this example simple.
 
 ### Template-driven derived fields
 
@@ -152,6 +192,9 @@ report_params = SettingsParameters.create(
     env_prefix="REPORT_",
 )
 
+# Application startup captures the known configuration before accepting work.
+get_settings(settings_parameters=report_params)
+
 def report_destination(params: SettingsParameters) -> str:
     # Rehydrate from the cached source context at the point of use.
     local = get_settings(settings_parameters=params)
@@ -160,15 +203,17 @@ def report_destination(params: SettingsParameters) -> str:
 assert report_destination(report_params) == "reports"
 ```
 
-`SettingsParameters` supplies the cache key. Its equality and hash use
+The manager derives a structural cache key from `SettingsParameters`. Its selectors are
 `config_files`, `settings_class`, `env_prefix`, `secrets_dir` and the bound
-`secret_store` object's identity. Runtime field overrides are excluded.
+`secret_store` object's identity. Runtime field overrides are excluded from both
+that key and parameter equality/hash.
 
 The first cached retrieval captures the source context. Subsequent retrievals
 with the same key rehydrate and validate a fresh settings instance from that
 context. Files and environment values stay pinned to the captured snapshot;
-changes to them are not a live reload. Defaults and default factories still run
-for each materialization.
+changes to them are not a live reload. Defaults and default factories remain
+per-instance behavior. Retrieval still performs validation and ownership work;
+the cache saves repeated baseline source reads.
 
 ```python
 # 5. The same cache key reuses captured sources, not a mutable settings object.
@@ -180,6 +225,16 @@ assert first.DATABASE == second.DATABASE == "reports"
 
 Cached retrieval requires a `MountainAshBaseSettings` subclass. Construct plain
 Pydantic `BaseSettings` classes directly.
+
+Each structural configuration initializes separately, even if several classes
+use the same files. Initialize known configurations during application startup
+when they should observe stable deployment inputs. The cache is process-local;
+it does not coordinate snapshots across processes.
+
+Treat parameters as trusted application wiring. They may contain literal
+credentials in runtime kwargs, and are not inherently safe to serialize or log.
+For custom sources, cached retrieval requires `settings_capture_sources` and a
+capture/project implementation that can reuse owned data without further I/O.
 
 ### Locally scoped overrides
 
@@ -219,6 +274,11 @@ remain pinned. See the [cache lifecycle and compatibility
 boundaries](docs/advanced-usage.md#cache-contexts-and-runtime-materialization)
 for source capture and derived-field recomputation rules.
 
+`reinitialise=True` requests derived-field recomputation for the invocation; it
+does not reload sources. Cached retrieval also rejects state it cannot safely
+isolate, such as unsupported live resources. Settings describe connections;
+the application owns the actual clients and their lifetimes.
+
 ### Local record storage
 
 The report's database password can come from a selected record store. Use an
@@ -243,6 +303,9 @@ has been provisioned by the deployment. It does not create or repair that root.
 Keep the backend open for all settings operations that use it, then close it
 after work has finished. Ordinary environment, configuration-file and Pydantic
 secret inputs do not require a record store.
+
+<details>
+<summary>Filesystem storage, record validation and lifetime</summary>
 
 Local records are exact JSON-native mappings: dictionaries with string keys,
 lists, strings, integers, finite floats, booleans and null; `{}` is valid.
@@ -272,22 +335,69 @@ OS library/package builds; native prerequisites and their licensing are reviewed
 against the approved native-dependency record. Generic imports do not load the
 irrelevant platform's libraries.
 
+</details>
+
 Pass a store object through `secret_store=` when constructing settings or creating
 `SettingsParameters`. The named secrets-provider registry has been removed.
 See [the secrets README](docs/README_SECRETS.md) for reference syntax and store selection.
 
-### Declarative connection profiles
+## Choosing how to declare a connection
 
-The report now needs PostgreSQL connection arguments. `ProfileSpec` describes
-connection fields, defaults and driver keyword mappings.
-A `Profile` subclass installs those fields, validates supplied values and emits
-driver arguments. A `Registry` provides lookup by name.
+### A normal settings class is enough for one connection
+
+The report needs PostgreSQL connection arguments. A regular settings subclass
+can declare the connection fields and map them explicitly. It already supports
+the selected store, validation and the same caching API used above:
 
 ```python
-# 9. Describe the report's database connection and resolve its stored password.
-# The spec maps application-facing field names to database-driver arguments.
+# 9. Start with an ordinary settings class for the report's one database.
+# A short method handles the driver's naming and password-unwrapping rules.
+from pydantic import SecretStr
+
+class DatabaseSettings(MountainAshBaseSettings):
+    HOST: str
+    PORT: int = 5432
+    DATABASE: str
+    USERNAME: str
+    PASSWORD: SecretStr
+
+    def driver_kwargs(self) -> dict[str, object]:
+        return {
+            "host": self.HOST,
+            "port": self.PORT,
+            "dbname": self.DATABASE,
+            "user": self.USERNAME,
+            "password": self.PASSWORD.get_secret_value(),
+        }
+
+connection_values = {
+    "HOST": "prod-db.example.com",
+    "DATABASE": report_destination(report_params),
+    "USERNAME": "report_user",
+    "PASSWORD": "secret:database.password",
+}
+plain_database = DatabaseSettings(secret_store=report_records, **connection_values)
+plain_kwargs = plain_database.driver_kwargs()
+assert plain_kwargs["dbname"] == "reports"
+assert plain_kwargs["password"] == "example-password"
+```
+
+This keeps the fields visible to readers, IDEs and type checkers. Ordinary
+Pydantic classes also support aliases, custom field metadata and inspection
+through `model_fields`; those capabilities do not require a profile spec.
+
+### Use a profile when mapping conventions become reusable
+
+If the reporting application grows to support several providers, repeating
+mapping methods can become maintenance work. `ProfileSpec` collects field
+declarations and emission rules so `Profile` can apply one shared mechanism.
+Here is the same connection expressed that way, with the same inputs and output:
+
+```python
+# 10. Express the same fields and driver mappings as a reusable spec.
+# Profile installs Pydantic fields; emit() applies the declared mapping rules.
 from mountainash_settings import (
-    Profile, ParameterSpec, ProfileSpec, Registry,
+    Profile, ParameterSpec, ProfileSpec,
 )
 
 POSTGRESQL_SPEC = ProfileSpec(
@@ -299,24 +409,17 @@ POSTGRESQL_SPEC = ProfileSpec(
         ParameterSpec(name="DATABASE", type=str, tier="core",     driver_key="dbname"),
         ParameterSpec(name="USERNAME", type=str, tier="core",     driver_key="user"),
         ParameterSpec(name="PASSWORD", type=str, tier="core",     driver_key="password",
-                      secret=True, default=None),
+                      secret=True),
     ],
 )
 
-DATABASES = Registry("databases")
-register = DATABASES.decorator()
-
-@register
 class PostgreSQLSettings(Profile):
     __spec__ = POSTGRESQL_SPEC
 
 database_params = SettingsParameters.create(
     settings_class=PostgreSQLSettings,
     secret_store=report_records,
-    HOST="prod-db.example.com",
-    DATABASE=report_destination(report_params),
-    USERNAME="report_user",
-    PASSWORD="secret:database.password",  # record "database", field "password"
+    **connection_values,
 )
 
 database = get_settings(settings_parameters=database_params)
@@ -329,12 +432,74 @@ assert driver_kwargs == {
     "user": "report_user",
     "password": "example-password",
 }
+assert driver_kwargs == plain_kwargs
+assert isinstance(database, MountainAshBaseSettings)
 ```
 
 Pass `driver_kwargs` to the database client when opening a connection. Emission
 unwraps the password for the driver, so keep that dictionary out of logs.
 
-See [docs/profile-spec-pattern.md](docs/profile-spec-pattern.md) for an explanation of when and why to use this pattern over a plain subclass.
+The spec version has the same source-loading and retrieval behavior as the
+ordinary class. Its benefit is a convention for emission: `driver_key` renames
+fields, `secret=True` wraps strings and unwraps them on emission, `transform`
+converts output values, and `None` values are omitted. Specs can also declare
+validators and templates. For multiple target shapes, scoped `driver_key`
+mappings and `__adapters__` support explicit `emit(target)` calls.
+
+This costs extra indirection. Fields are installed dynamically, which gives
+static tooling less visibility and ties the implementation to Pydantic's model
+internals. For a small application, the ordinary class above may remain clearer.
+A registry is not needed to construct or emit a profile.
+
+### Inspect the spec without loading values
+
+A spec is useful when tooling needs the domain's declared fields and mappings
+without loading configuration or resolving passwords:
+
+```python
+# 11. Inspect configuration metadata without constructing another instance.
+driver_keys = {
+    parameter.name: parameter.driver_key
+    for parameter in POSTGRESQL_SPEC.parameters
+}
+secret_fields = [
+    parameter.name for parameter in POSTGRESQL_SPEC.parameters if parameter.secret
+]
+assert driver_keys["DATABASE"] == "dbname"
+assert secret_fields == ["PASSWORD"]
+```
+
+`ProfileSpec` is a frozen dataclass, but its parameter list and metadata
+dictionary are still mutable. Treat a declared spec as fixed. This example
+inspects spec metadata; it does not depend on JSON Schema generation.
+
+### Add registration when callers choose a provider by name
+
+A registry is an optional discovery layer. Register the existing class when
+configuration selects a provider by name, or when a provider library needs a
+catalogue with duplicate-name protection:
+
+```python
+# 12. Add name-based discovery only when the caller needs it.
+# Registration does not create a connection or a new settings cache.
+from mountainash_settings import Registry
+
+DATABASES = Registry("databases")
+DATABASES.register(POSTGRESQL_SPEC, PostgreSQLSettings)
+
+selected_class = DATABASES.get_settings_class("postgresql")
+assert selected_class is PostgreSQLSettings
+selected_params = SettingsParameters.create(
+    settings_class=selected_class,
+    secret_store=report_records,
+    **connection_values,
+)
+assert get_settings(settings_parameters=selected_params).emit() == driver_kwargs
+```
+
+For declarations that should register immediately, the equivalent decorator is
+`register = DATABASES.decorator()` followed by bare `@register` on a class with
+its own `__spec__`. Register a name only once.
 
 ### Authentication
 
@@ -348,7 +513,7 @@ Generate pytest checks for the `DATABASES` registry defined above, including
 naming conventions and parameter uniqueness:
 
 ```python
-# 10. Turn the registered profile specs into pytest invariant checks.
+# 13. Turn the registered profile specs into pytest invariant checks.
 # Run `python -m pytest reporting.py -q` to collect and execute this class.
 from mountainash_settings import spec_invariants_for
 
@@ -357,7 +522,9 @@ TestDatabaseInvariants = spec_invariants_for(DATABASES)
 
 In a separate test module, import `DATABASES` from the module containing the
 profile declaration before generating the test class. New profile registrations
-are covered automatically.
+present when the test class is generated are covered automatically. These checks
+verify spec conventions, including parameter and driver-key uniqueness. Keep
+separate tests for whether emitted arguments work with the actual driver.
 
 ## Documentation
 
@@ -365,7 +532,7 @@ are covered automatically.
 |---|---|
 | [docs/quickstart.md](docs/quickstart.md) | Introduction to settings classes, files, templates, caching, secrets and profiles |
 | [docs/advanced-usage.md](docs/advanced-usage.md) | SettingsParameters merging, auth modes reference, invariant tests, dynamic resolution |
-| [docs/profile-spec-pattern.md](docs/profile-spec-pattern.md) | When and why to use ProfileSpec vs a plain subclass |
+| [Choosing a connection declaration](#choosing-how-to-declare-a-connection) | Ordinary settings, optional profile emission, inspection and registration |
 
 ## Textbook
 

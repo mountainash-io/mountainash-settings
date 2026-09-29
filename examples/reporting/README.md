@@ -5,6 +5,17 @@ in reading order, separated by one blank line. The configuration files match its
 YAML, TOML and dotenv blocks. The script uses an in-memory password store and
 prepares PostgreSQL connection arguments without opening a database connection.
 
+The walkthrough starts with ordinary Pydantic field declarations and direct
+construction, then adds files and a derived log path. It introduces
+`SettingsParameters` after those basics, capturing sources at startup and
+retrieving independent instances with local overrides.
+
+The connection examples use the same values twice: first in an ordinary settings
+class with an explicit driver mapping, then in a `Profile` whose `ProfileSpec`
+declares the mapping. An assertion checks that both produce the same arguments.
+Spec inspection, optional name-based registration and invariant tests follow as
+separate steps. A profile needs no registry to load settings or emit arguments.
+
 With Python 3.12 or later, install the checkout and pytest in your environment.
 From the repository root:
 
