@@ -2,14 +2,14 @@
 
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue) ![Category](https://img.shields.io/badge/category-core-purple) ![Tests](https://img.shields.io/badge/tests-✓-green) ![Docs](https://img.shields.io/badge/docs-✓-blue)
 
-Advanced configuration management for Python applications — typed settings with smart caching, multi-format file loading, template-driven derived fields, a pluggable secrets layer, and a declarative system for building typed connection profiles.
+Typed settings for Python applications, with configuration files, environment variables, cached source snapshots and local secret storage. Connection profiles define fields once and emit keyword arguments for drivers or clients.
 Requires Python 3.12 or later.
 
-The next release is **0.1.0 (SemVer)**, a clean API break. See the
+Version 0.1.0 uses SemVer and removes the legacy APIs. See the
 [0.1 migration guide](docs/migration-0.1.md) for profile, adapter, registry,
 cached-settings and selected-store changes.
 
-> Public PyPI publication is not confirmed by these source changes. Treat builds as unpublished candidates until the public confirmation stage succeeds; the install command below describes the published distribution. See [RELEASE.md](RELEASE.md) for candidate verification and separately authorized publishing.
+> Version 0.1.0 is an unpublished candidate. Release authorization is pending. The installation command below applies once the package is published. See [RELEASE.md](RELEASE.md) for the release procedure.
 
 ## Installation
 
@@ -19,54 +19,105 @@ pip install mountainash-settings
 
 ## Quick start
 
-Subclass `MountainAshBaseSettings`, declare fields with pydantic `Field()`, and load from config files, environment variables, or kwargs:
+Start with settings for a reporting application. The Python examples below build
+on each other and can be run in order in the same script. The first example needs
+no configuration files.
+
+The complete walkthrough and its configuration files are in
+[examples/reporting/](examples/reporting/). Automated tests check that the files
+match the snippets below and that the walkthrough runs successfully.
 
 ```python
+"""Build a reporting application's configuration, one step at a time.
+
+Run from examples/reporting/ with the package and pytest installed:
+    python reporting.py
+
+The accompanying config/ files and .env supply the deployment values.
+Assertions show the expected behavior; success produces no output.
+The database connection is described but never opened.
+"""
+
+# 1. Start with defaults so the application can run without config files.
 from pydantic import Field
 from mountainash_settings import MountainAshBaseSettings
 
 class AppSettings(MountainAshBaseSettings):
-    APP_NAME: str = Field(default="MyApp")
+    APP_NAME: str = Field(default="reports")
+    ENV: str = Field(default="development")
     DEBUG: bool = Field(default=False)
-    DATABASE_URL: str = Field(default="sqlite:///app.db")
+    DATABASE: str = Field(default="reports")
 
-settings = AppSettings(config_files=["config/production.yaml"])
-print(settings.APP_NAME)   # value from YAML, env var, or default
+settings = AppSettings()
+assert settings.APP_NAME == "reports"
+assert settings.DEBUG is False
 ```
 
-Priority order (highest wins): **kwargs → environment variables → config files → Field defaults**.
+Constructor arguments take precedence over environment variables, configuration files and field defaults, in that order.
 
 See [docs/quickstart.md](docs/quickstart.md) for a step-by-step introduction.
 
-## Key features
+## Configuration
 
 ### Multi-format configuration files
 
-Pass YAML, TOML, JSON, and `.env` files in any combination. Files are detected by extension and merged in order:
+The reporting service now needs deployment-specific configuration. Create
+`config/base.yaml`:
+
+```yaml
+APP_NAME: reports
+DATABASE: reports
+```
+
+Set the deployment environment in `config/production.toml`:
+
+```toml
+ENV = "production"
+```
+
+Use a `.env` file for environment-style values:
+
+```dotenv
+REPORT_DEBUG=false
+```
+
+Load those files together. The `REPORT_` prefix applies to environment and dotenv
+values; YAML and TOML use the model's field names. These examples assume no
+conflicting environment variables are set.
 
 ```python
-settings = AppSettings(config_files=[
+# 2. Load the same application for production, using the supplied files.
+# Keep these paths together so later examples reuse the same configuration.
+config_files = [
     "config/base.yaml",
     "config/production.toml",
-    ".env.production",
-])
+    ".env",
+]
+settings = AppSettings(config_files=config_files, env_prefix="REPORT_")
+assert settings.ENV == "production"
+assert settings.DATABASE == "reports"
 ```
+
+JSON files are also supported. When layering files of the same format, later
+files override earlier values. See the quickstart for source precedence across
+formats.
 
 ### Template-driven derived fields
 
-Derive fields from other fields using `{FIELD_NAME}` placeholders, resolved in `post_init()`:
+Add a log path to the reporting settings. Extend the existing class so its
+database and debug fields remain available. The template is resolved in
+`post_init()` after the configuration has loaded:
 
 ```python
+# 3. Extend the existing settings with a log path derived from loaded values.
+# Inheriting AppSettings keeps its database and debug fields available.
 from upath import UPath
 
-class AppSettings(MountainAshBaseSettings):
-    APP_NAME: str = Field(default="myapp")
-    ENV: str = Field(default="dev")
-
+class ReportingSettings(AppSettings):
     LOG_PATH_TEMPLATE: str = Field(
         default=str(UPath("~") / "logs" / "{APP_NAME}" / "{ENV}.log")
     )
-    LOG_PATH: str = Field(default=None)
+    LOG_PATH: str | None = Field(default=None)
 
     def post_init(self, reinitialise: bool = False):
         super().post_init(reinitialise=reinitialise)
@@ -75,71 +126,123 @@ class AppSettings(MountainAshBaseSettings):
             current_value=self.LOG_PATH,
             reinitialise=reinitialise,
         )
+
+settings = ReportingSettings(config_files=config_files, env_prefix="REPORT_")
+assert settings.LOG_PATH == str(UPath("~") / "logs" / "reports" / "production.log")
 ```
 
-Use `UPath`'s `/` operator to build cross-platform path templates — no platform-specific separators needed.
+Use `UPath`'s `/` operator to build cross-platform path templates.
 
-### Smart caching
+### Reusing configuration where it is needed
 
-`get_settings()` reuses captured sources for the same structural parameters:
-`config_files`, `settings_class`, `env_prefix`, `secrets_dir`, and the bound
-`secret_store`'s object identity. Each call validates a complete invocation and returns an
-independently owned settings object:
+As the application grows, its functions can accept `SettingsParameters` and
+retrieve settings when they run. This avoids passing a settings instance through
+every layer of the application.
+
+Define the reporting configuration once:
 
 ```python
-from mountainash_settings import get_settings
+# 4. Pass a configuration description to application code.
+# Each function retrieves a settings instance only when it needs one.
+from mountainash_settings import SettingsParameters, get_settings
 
-settings = get_settings(
-    settings_class=AppSettings,
-    config_files=["config/production.yaml"],
+report_params = SettingsParameters.create(
+    settings_class=ReportingSettings,
+    config_files=config_files,
+    env_prefix="REPORT_",
 )
+
+def report_destination(params: SettingsParameters) -> str:
+    # Rehydrate from the cached source context at the point of use.
+    local = get_settings(settings_parameters=params)
+    return local.DATABASE
+
+assert report_destination(report_params) == "reports"
 ```
 
-Runtime overrides never become shared baseline values, and mutating a returned
-object cannot change another retrieval. Defaults and default factories remain
-per-materialization behavior. Explicit runtime secret references resolve fresh;
-baseline source values remain pinned. See the [cache lifecycle and compatibility
-boundaries](docs/advanced-usage.md#cache-contexts-and-runtime-materialization).
+`SettingsParameters` supplies the cache key. Its equality and hash use
+`config_files`, `settings_class`, `env_prefix`, `secrets_dir` and the bound
+`secret_store` object's identity. Runtime field overrides are excluded.
 
-### SettingsParameters for reusable and composable configuration
-
-`SettingsParameters` captures a full configuration identity as an immutable, hashable value. Build one and pass it around, merge two together, or store them in a service registry:
+The first cached retrieval captures the source context. Subsequent retrievals
+with the same key rehydrate and validate a fresh settings instance from that
+context. Files and environment values stay pinned to the captured snapshot;
+changes to them are not a live reload. Defaults and default factories still run
+for each materialization.
 
 ```python
-from mountainash_settings import SettingsParameters
-
-base = SettingsParameters.create(
-    settings_class=AppSettings,
-    config_files=["config/base.yaml", "config/production.yaml"],
-    env_prefix="APP_",
-)
-
-# Merge with runtime overrides — base config files are preserved
-merged = SettingsParameters.merge(
-    base,
-    SettingsParameters.create(settings_class=AppSettings, TENANT_ID="acme"),
-)
-
-settings = get_settings(settings_parameters=merged)
+# 5. The same cache key reuses captured sources, not a mutable settings object.
+first = get_settings(settings_parameters=report_params)
+second = get_settings(settings_parameters=report_params)
+assert first is not second
+assert first.DATABASE == second.DATABASE == "reports"
 ```
+
+Cached retrieval requires a `MountainAshBaseSettings` subclass. Construct plain
+Pydantic `BaseSettings` classes directly.
+
+### Locally scoped overrides
+
+A diagnostic report can enable debugging for its own invocation. The override
+does not change the shared source context or another caller's settings:
+
+```python
+# 6. Enable debugging for one report without changing another caller's settings.
+diagnostic = get_settings(settings_parameters=report_params, DEBUG=True)
+ordinary = get_settings(settings_parameters=report_params)
+assert diagnostic.DEBUG is True
+assert ordinary.DEBUG is False
+
+# Even direct mutation stays local to the returned instance.
+diagnostic.DATABASE = "scratch_reports"
+assert get_settings(settings_parameters=report_params).DATABASE == "reports"
+```
+
+If several calls need the same override, merge it into a reusable parameter set:
+
+```python
+# 7. Package a recurring override into its own parameter set.
+# DEBUG is a runtime value, so both parameter sets use the same source cache key.
+diagnostic_params = SettingsParameters.merge(
+    report_params,
+    SettingsParameters.create(settings_class=ReportingSettings, DEBUG=True),
+)
+
+assert diagnostic_params == report_params  # same structural cache key
+assert hash(diagnostic_params) == hash(report_params)
+assert get_settings(settings_parameters=diagnostic_params).DEBUG is True
+assert get_settings(settings_parameters=report_params).DEBUG is False
+```
+
+Explicit runtime secret references resolve on each call; baseline source values
+remain pinned. See the [cache lifecycle and compatibility
+boundaries](docs/advanced-usage.md#cache-contexts-and-runtime-materialization)
+for source capture and derived-field recomputation rules.
 
 ### Local record storage
 
-The settings-owned storage surface lives in `mountainash_settings.secrets`.
-Ordinary environment/configuration/Pydantic secret inputs do not require a local store.
+The report's database password can come from a selected record store. Use an
+in-memory store for this runnable example, with a namespace for the application:
 
 ```python
-from pathlib import Path
-from mountainash_settings.secrets import FilesystemBackend, NamespacedSecretStore
+# 8. Give the reporting application a namespaced password record.
+# Memory storage keeps this example self-contained and makes no disk writes.
+from mountainash_settings.secrets import MemorySecretStore, NamespacedSecretStore
 
-# Application/deployment provisions this directory and its access policy.
-root = Path("/path/to/provisioned/private-records")
-with FilesystemBackend(root) as store:
-    records = NamespacedSecretStore(store, "application")
-    with records.transaction("account"):
-        records.set("account", {"token": "dummy-token"})
-        assert records.get("account") == {"token": "dummy-token"}
+store = MemorySecretStore()
+report_records = NamespacedSecretStore(store, "reports")
+with report_records.transaction("database"):
+    report_records.set("database", {"password": "example-password"})
 ```
+
+The next example reads that password through `secret:database.password`: record
+`database`, field `password`, within the `reports` namespace.
+
+For on-disk storage, use `FilesystemBackend` with a directory whose access policy
+has been provisioned by the deployment. It does not create or repair that root.
+Keep the backend open for all settings operations that use it, then close it
+after work has finished. Ordinary environment, configuration-file and Pydantic
+secret inputs do not require a record store.
 
 Local records are exact JSON-native mappings: dictionaries with string keys,
 lists, strings, integers, finite floats, booleans and null; `{}` is valid.
@@ -148,7 +251,7 @@ rejected before mutation. Invalid existing YAML/UTF-8/record shapes raise
 `SecretStoreUnavailableError`, not absence. Catch its stable `.reason`, not its
 message. Invalid caller keys/payloads raise value-free `ValueError`.
 
-The application owns store lifetime and must stop new work and finish every
+For `FilesystemBackend`, the application owns store lifetime and must stop new work and finish every
 operation/entered transaction before `close()`. Close is terminal and idempotent;
 borrowed namespace views do not own the store. Wrap compound writes in an explicit
 transaction, or otherwise ensure exclusive writer ownership. No implicit locking
@@ -169,18 +272,22 @@ OS library/package builds; native prerequisites and their licensing are reviewed
 against the approved native-dependency record. Generic imports do not load the
 irrelevant platform's libraries.
 
-This M3 candidate is not a package-release or consumer-cutover claim. Existing
-settings registry/provider integration remains until coordinated M4 migration;
-do not infer that `secret_store=` integration or OAuth migration is already delivered.
+Pass a store object through `secret_store=` when constructing settings or creating
+`SettingsParameters`. The named secrets-provider registry has been removed.
+See [the secrets README](docs/README_SECRETS.md) for reference syntax and store selection.
 
 ### Declarative connection profiles
 
-For database and service connections, the `Profile` + `ProfileSpec` system provides typed, inspectable, driver-ready settings with automatic field installation, auth mode validation, and runtime lookup by name:
+The report now needs PostgreSQL connection arguments. `ProfileSpec` describes
+connection fields, defaults and driver keyword mappings.
+A `Profile` subclass installs those fields, validates supplied values and emits
+driver arguments. A `Registry` provides lookup by name.
 
 ```python
+# 9. Describe the report's database connection and resolve its stored password.
+# The spec maps application-facing field names to database-driver arguments.
 from mountainash_settings import (
-    Profile, MISSING, ParameterSpec, ProfileSpec,
-    Registry, NoAuth, PasswordAuth,
+    Profile, ParameterSpec, ProfileSpec, Registry,
 )
 
 POSTGRESQL_SPEC = ProfileSpec(
@@ -190,10 +297,10 @@ POSTGRESQL_SPEC = ProfileSpec(
         ParameterSpec(name="HOST",     type=str, tier="core",     driver_key="host"),
         ParameterSpec(name="PORT",     type=int, tier="core",     driver_key="port",   default=5432),
         ParameterSpec(name="DATABASE", type=str, tier="core",     driver_key="dbname"),
+        ParameterSpec(name="USERNAME", type=str, tier="core",     driver_key="user"),
         ParameterSpec(name="PASSWORD", type=str, tier="core",     driver_key="password",
                       secret=True, default=None),
     ],
-    auth_modes=[NoAuth, PasswordAuth],
 )
 
 DATABASES = Registry("databases")
@@ -203,60 +310,62 @@ register = DATABASES.decorator()
 class PostgreSQLSettings(Profile):
     __spec__ = POSTGRESQL_SPEC
 
-settings = PostgreSQLSettings(
+database_params = SettingsParameters.create(
+    settings_class=PostgreSQLSettings,
+    secret_store=report_records,
     HOST="prod-db.example.com",
-    DATABASE="myapp",
-    auth=PasswordAuth(username="app_user", password="s3cr3t"),
+    DATABASE=report_destination(report_params),
+    USERNAME="report_user",
+    PASSWORD="secret:database.password",  # record "database", field "password"
 )
 
-driver_kwargs = {**settings._default_kwargs(), **settings._auth_kwargs()}
-# {"host": "prod-db.example.com", "port": 5432, "dbname": "myapp",
-#  "user": "app_user", "password": "s3cr3t"}
+database = get_settings(settings_parameters=database_params)
+# Emission unwraps the password for the driver. Do not log this dictionary.
+driver_kwargs = database.emit()
+assert driver_kwargs == {
+    "host": "prod-db.example.com",
+    "port": 5432,
+    "dbname": "reports",
+    "user": "report_user",
+    "password": "example-password",
+}
 ```
+
+Pass `driver_kwargs` to the database client when opening a connection. Emission
+unwraps the password for the driver, so keep that dictionary out of logs.
 
 See [docs/profile-spec-pattern.md](docs/profile-spec-pattern.md) for an explanation of when and why to use this pattern over a plain subclass.
 
-### 13 typed auth modes
+### Authentication
 
-All authentication modes are validated pydantic models with `SecretStr` protection for credentials:
-
-| Mode | Use for |
-|---|---|
-| `NoAuth` | SQLite, local DuckDB, PySpark |
-| `PasswordAuth` | PostgreSQL, MySQL, most databases |
-| `TokenAuth` | MotherDuck, PyIceberg REST, simple APIs |
-| `JWTAuth` | Trino |
-| `OAuth2Auth` | Snowflake, Trino, REST APIs |
-| `OAuth2AuthCodeAuth` | Interactive OAuth2 / token refresh flows |
-| `IAMAuth` | AWS Redshift, S3, Athena (explicit or ambient credentials) |
-| `AzureADAuth` | MSSQL, Azure services |
-| `WindowsAuth` | On-prem MSSQL (integrated Windows auth) |
-| `KerberosAuth` | Trino on Kerberos, PostgreSQL via GSS |
-| `CertificateAuth` | Snowflake JWT |
-| `ServiceAccountAuth` | BigQuery, GCS |
-| `OAuth1Auth` | OAuth 1.0a services |
+Authentication models and OAuth flows belong to `mountainash-auth-client`.
+Settings provides the profile framework and selected local stores that consumers
+can use for configuration and persistence.
 
 ### Profile invariant tests
 
-Drop one line into a test module to get parametrised pytest coverage for every descriptor in a registry — name conventions, field uniqueness, valid auth modes, and more:
+Generate pytest checks for the `DATABASES` registry defined above, including
+naming conventions and parameter uniqueness:
 
 ```python
+# 10. Turn the registered profile specs into pytest invariant checks.
+# Run `python -m pytest reporting.py -q` to collect and execute this class.
 from mountainash_settings import spec_invariants_for
-from my_package.settings import DATABASES
 
 TestDatabaseInvariants = spec_invariants_for(DATABASES)
 ```
 
-New profile registrations are covered automatically.
+In a separate test module, import `DATABASES` from the module containing the
+profile declaration before generating the test class. New profile registrations
+are covered automatically.
 
 ## Documentation
 
 | Document | Contents |
 |---|---|
-| [docs/quickstart.md](docs/quickstart.md) | Step-by-step introduction — settings class, config files, templates, caching, secrets, profiles |
+| [docs/quickstart.md](docs/quickstart.md) | Introduction to settings classes, files, templates, caching, secrets and profiles |
 | [docs/advanced-usage.md](docs/advanced-usage.md) | SettingsParameters merging, auth modes reference, invariant tests, dynamic resolution |
 | [docs/profile-spec-pattern.md](docs/profile-spec-pattern.md) | When and why to use ProfileSpec vs a plain subclass |
-| [examples/](examples/) | Working code: basic usage, path templating, smart merging, dynamic resolution |
 
 ## Textbook
 
@@ -292,21 +401,19 @@ Do not regenerate content merely to publish it or advance source baselines on
 a directory move. Preserve the existing FAQ format; the marker-only FAQ
 exporter does not support it and must not overwrite its JSON.
 
-A strict build currently reports two pre-existing content gaps, inherited
-from the source content and unrelated to this relocation: five
-`learning-graph/` pages (`concept-list.md`, `concept-taxonomy.md`, `faq.md`,
-`quality-metrics.md`, `taxonomy-distribution.md`) exist but are not wired
-into the site nav, and `learning-graph/index.md` links to a
-`course-description.md` that lives at the docs root rather than alongside
-it. Neither is fixed here.
+The docs site has its own content-refresh workflow. Strict builds of the qualified
+0.1.0 source passed under both production and development URL settings.
 
 ## Development
 
 ### Testing
 
+The local test environment expects a sibling `mountainash-auth-client` checkout.
+Use the `test_github` environment to run the settings suite without that dependency.
+
 ```bash
-hatch run test:test        # run all tests
-hatch run test:cov         # with coverage
+hatch run test:test        # run all tests with coverage reports
+hatch run test_github:test # settings-only suite, without a sibling checkout
 pytest tests/path/to/test_file.py::TestClass::test_method -v  # single test
 ```
 
@@ -334,10 +441,11 @@ hatch build
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT License. See [LICENSE](LICENSE) for details.
 
 ## Mountain Ash ecosystem
 
-This package is part of the [Mountain Ash](https://github.com/mountainash-io) ecosystem of Python packages for building production-ready data applications.
+This package is part of the [Mountain Ash](https://github.com/mountainash-io) Python ecosystem.
 
-Related packages: **mountainash-core** · **mountainash-data** · **mountainash-auth** · **mountainash-api**
+Consumers include `mountainash-auth-client`, `mountainash-transport`,
+`mountainash-files`, `mountainash-data` and `mountainash`.
