@@ -42,7 +42,8 @@ def test_reporting_walkthrough_and_invariants_run(tmp_path: Path) -> None:
         key: value for key, value in os.environ.items()
         if key.upper() not in {
             "APP_NAME", "ENV", "DEBUG", "DATABASE", "LOG_PATH", "LOG_PATH_TEMPLATE",
-            "HOST", "PORT", "USERNAME", "PASSWORD", "PYTHONPATH", "PYTHONHOME",
+            "HOST", "PORT", "USERNAME", "PASSWORD", "LOCAL_NOTE", "CONNECT_TIMEOUT",
+            "PYTHONPATH", "PYTHONHOME",
             "PYTHONOPTIMIZE", "PYTEST_ADDOPTS", "PYTEST_PLUGINS",
         } and not key.upper().startswith("REPORT_")
     }
