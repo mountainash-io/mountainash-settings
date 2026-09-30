@@ -10,6 +10,30 @@ import pytest
 from mountainash_settings.secrets import _native_windows as native
 
 
+def link_on_handle(
+    handle: native.HANDLE, destination_parent: native.HANDLE, destination_name: str
+) -> None:
+    """Create a real hostile hard-link fixture using the existing native handle."""
+    file_link_information = 11
+    encoded = destination_name.encode("utf-16-le")
+    size = native.FILE_RENAME_INFORMATION_FIXED.FileName.offset + len(encoded)
+    buffer = c.create_string_buffer(size)
+    fixed = c.cast(buffer, c.POINTER(native.FILE_RENAME_INFORMATION_FIXED)).contents
+    fixed.ReplaceIfExists = 0
+    fixed.RootDirectory = destination_parent
+    fixed.FileNameLength = len(encoded)
+    c.memmove(
+        c.addressof(buffer) + native.FILE_RENAME_INFORMATION_FIXED.FileName.offset,
+        encoded,
+        len(encoded),
+    )
+    iosb = native.IO_STATUS_BLOCK()
+    status = native._api().NtSetInformationFile(
+        handle, c.byref(iosb), buffer, size, file_link_information
+    )
+    native._check_status(status, "NtSetInformationFile(FileLinkInformation)")
+
+
 def make_junction(link: Path, target: Path) -> None:
     completed = subprocess.run(
         ["cmd.exe", "/d", "/c", "mklink", "/J", str(link), str(target)],

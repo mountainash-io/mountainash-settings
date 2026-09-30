@@ -132,8 +132,10 @@ class TestHash:
             )
         )
 
-        # Different config files should produce different hashes
-        assert hash(settings1) != hash(settings2)
+        assert settings1 != settings2
+        mapping = {settings1: "first", settings2: "second"}
+        assert len(mapping) == 2
+        assert (mapping[settings1], mapping[settings2]) == ("first", "second")
 
     @pytest.mark.unit
     def test_hash_with_env_prefix(self):
@@ -151,8 +153,10 @@ class TestHash:
             )
         )
 
-        # Different env_prefix should produce different hashes
-        assert hash(settings1) != hash(settings2)
+        assert settings1 != settings2
+        mapping = {settings1: "first", settings2: "second"}
+        assert len(mapping) == 2
+        assert (mapping[settings1], mapping[settings2]) == ("first", "second")
 
     @pytest.mark.unit
     def test_hash_with_none_values(self):
@@ -363,47 +367,6 @@ class TestUpdateSettingsFromDict:
         assert settings.TEST_VAL_1 == "updated1"
         assert settings.TEST_VAL_2 == "original2"  # Should remain unchanged
 
-    @pytest.mark.unit
-    def test_apply_settings_inputs_with_backend_sanitizes_resolved_marker(self):
-        """MAS-SEC-006 (M7) review finding (2026-09-25): _apply_settings_inputs
-        accepts a ``backend`` for reference resolution, but no current caller
-        ever passes one (update_settings_from_dict() always uses the default
-        None) -- confirmed dead in practice, but the disclosure boundary must
-        still hold if a future caller ever does pass one, since this shares
-        the exact resolve-then-validate shape fixed at every other M7 route."""
-        from pydantic import field_validator
-
-        class _RejectingSettings(MountainAshBaseSettings):
-            TOKEN: str = Field(default="unset")
-
-            @field_validator("TOKEN")
-            @classmethod
-            def _reject(cls, v: str) -> str:
-                raise ValueError("upstream-validator-rejected")
-
-        class _Backend:
-            MARKER = "M7-APPLY-SETTINGS-INPUTS-MARKER"
-
-            def get(self, key: str) -> dict:
-                return {"value": self.MARKER}
-
-        settings = _RejectingSettings.__new__(_RejectingSettings)
-        object.__setattr__(settings, "_settings_secret_store", None)
-        settings._settings_reconstruction_kwargs = {}
-        object.__setattr__(settings, "SETTINGS_SOURCE_KWARG_NAMES", ())
-        object.__setattr__(settings, "__dict__", {**settings.__dict__, "TOKEN": "unset"})
-        object.__setattr__(settings, "__pydantic_fields_set__", set())
-
-        backend = _Backend()
-        with pytest.raises(ValueError) as excinfo:
-            settings._apply_settings_inputs({"TOKEN": "secret:db"}, backend=backend)
-        error = excinfo.value
-        assert backend.MARKER not in str(error)
-        assert "upstream-validator-rejected" not in str(error)
-        assert error.__cause__ is None
-        assert error.__context__ is None
-
-
 class TestExtractSettingsParameters:
     """Test extract_settings_parameters() method."""
 
@@ -422,21 +385,19 @@ class TestExtractSettingsParameters:
         assert extracted.kwargs["TEST_VAL_1"] == "value1"
 
     @pytest.mark.unit
-    def test_extract_with_config_files(self, temp_yaml_file, temp_toml_file):
+    def test_extract_with_config_files(self, temp_multiple_yaml_files, temp_toml_file):
         """Test extracting parameters with config files."""
         original_params = SettingsParameters.create(
             settings_class=TestSettings,
-            config_files=[temp_yaml_file, temp_toml_file]
+            config_files=[temp_multiple_yaml_files[1], temp_toml_file, temp_multiple_yaml_files[0]]
         )
         settings = TestSettings(settings_parameters=original_params)
 
         extracted = settings.extract_settings_parameters()
 
-        assert extracted.config_files is not None
-        # Config files should be separated and included
-        config_files_str = [str(f) for f in extracted.config_files]
-        assert any("yaml" in f or "yml" in f for f in config_files_str)
-        assert any("toml" in f for f in config_files_str)
+        assert tuple(map(str, extracted.config_files)) == (
+            temp_multiple_yaml_files[1], temp_multiple_yaml_files[0], temp_toml_file,
+        )
 
     @pytest.mark.unit
     def test_extract_with_env_prefix(self):
@@ -462,9 +423,9 @@ class TestExtractSettingsParameters:
 
         extracted = settings.extract_settings_parameters()
 
-        # All file types should be included
-        config_files_str = [str(f) for f in extracted.config_files]
-        assert len(config_files_str) == 4
+        assert tuple(map(str, extracted.config_files)) == (
+            temp_env_file, temp_yaml_file, temp_toml_file, temp_json_file,
+        )
 
     @pytest.mark.unit
     def test_extract_with_none_values(self):

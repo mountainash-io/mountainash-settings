@@ -1,7 +1,6 @@
 """AppSettings-specific declarations and deterministic clock setup."""
 
 from datetime import datetime
-from unittest.mock import patch
 
 import pytest
 from pydantic import Field
@@ -20,9 +19,11 @@ def pandas_app_settings():
     return PandasAppSettings()
 
 
-@pytest.fixture(autouse=True)
-def fixed_app_datetime():
-    """Keep AppSettings clock fields predictable within this directory."""
-    with patch("mountainash_settings.settings.app.app_settings.datetime") as clock:
-        clock.now.return_value = datetime(2024, 1, 15, 14, 30, 45)
-        yield clock
+@pytest.fixture
+def app_clock(monkeypatch):
+    """Control the live clock; each construction samples its current instant."""
+    from mountainash_settings.settings.app import _timestamps
+
+    moments = [datetime(2031, 12, 31, 23, 59, 59)]
+    monkeypatch.setattr(_timestamps, "_now", lambda: moments.pop(0) if len(moments) > 1 else moments[0])
+    return moments

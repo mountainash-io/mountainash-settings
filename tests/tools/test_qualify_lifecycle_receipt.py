@@ -39,8 +39,8 @@ def test_lifecycle_scenario_uses_two_processes_and_emits_value_free_evidence(
     assert "m9-updated-secret" not in rendered
 
 
-def test_candidate_receipt_must_be_passed_current_and_hash_bound(tmp_path: Path):
-    lifecycle = _lifecycle_module()
+@pytest.fixture
+def valid_candidate_receipt(tmp_path: Path):
     artifact_root = tmp_path / "artifacts"
     wheel = artifact_root / "wheel" / "candidate.whl"
     rebuilt = artifact_root / "sdist-wheel" / "rebuilt.whl"
@@ -62,16 +62,39 @@ def test_candidate_receipt_must_be_passed_current_and_hash_bound(tmp_path: Path)
             },
         },
     }
+    return receipt, artifact_root, {"wheel": wheel, "sdist-wheel": rebuilt}
+
+
+def test_candidate_receipt_must_be_passed_current_and_hash_bound(valid_candidate_receipt):
+    lifecycle = _lifecycle_module()
+    receipt, artifact_root, artifacts = valid_candidate_receipt
 
     assert lifecycle.validate_candidate_receipt(
         receipt, "abc123", artifact_root
-    ) == {
-        "wheel": wheel,
-        "sdist-wheel": rebuilt,
-    }
+    ) == artifacts
 
     receipt["status"] = "failed"
     with pytest.raises(ValueError, match="passed full-suite receipt"):
+        lifecycle.validate_candidate_receipt(receipt, "abc123", artifact_root)
+
+
+@pytest.mark.parametrize("defect", [
+    "revision", "wheel-bytes", "sdist-wheel-bytes", "wheel-digest", "sdist-wheel-digest",
+])
+def test_candidate_receipt_rejects_independent_binding_defects(valid_candidate_receipt, defect):
+    lifecycle = _lifecycle_module()
+    receipt, artifact_root, artifacts = valid_candidate_receipt
+    if defect == "revision":
+        receipt["source_revision"] = "older-revision"
+        diagnostic = "source revision does not match HEAD"
+    else:
+        kind, change = defect.rsplit("-", 1)
+        if change == "bytes":
+            artifacts[kind].write_bytes(b"changed")
+        else:
+            receipt["artifacts"][kind]["sha256"] = "0" * 64
+        diagnostic = f"{kind} hash does not match"
+    with pytest.raises(ValueError, match=diagnostic):
         lifecycle.validate_candidate_receipt(receipt, "abc123", artifact_root)
 
 

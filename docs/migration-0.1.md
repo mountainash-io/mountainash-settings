@@ -74,6 +74,10 @@ scratch in the adapter discards the caller's base configuration.
 
 ## Inputs and cached settings
 
+AppSettings timestamp defaults now capture at initialization rather than import.
+The inherited `RUN_TIMESTAMP_SCOPE` class policy selects context scope (default)
+or lazy process scope. See [run timestamp lifetimes and precedence](app-settings.md).
+
 Kwargs helpers return `{}` or `()` for absent values. They accept mappings and
 iterables of key/value pairs; a nested `kwargs` must be a mapping. Malformed
 kwargs raise `TypeError`; the second merge input wins.

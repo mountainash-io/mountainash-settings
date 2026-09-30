@@ -17,6 +17,7 @@ from mountainash_settings.secrets.errors import _Failure  # noqa: E402
 from ._windows_fixtures import (  # noqa: E402
     close_quietly,
     file_id,
+    link_on_handle,
     make_junction,
     make_symbolic_link,
     open_descendant_without_component_guard,
@@ -168,7 +169,7 @@ def test_hardlink_cleanup_substitution_and_create_collision_preserve_intruder(tm
             native.close(current)
         linked = _private(parent, "linked.yaml", b"private")
         try:
-            native._link_on_handle(
+            link_on_handle(
                 native.HANDLE(linked), native.HANDLE(parent), "linked-alias.yaml"
             )
         finally:

@@ -294,18 +294,6 @@ class SettingsParameters():
 
         return settings_kwarg_names
 
-    def _get_valid_kwarg_names(self,
-                          settings_class:    type[MountainAshBaseSettings] | None = None
-                          ) -> set[str]:
-
-        if settings_class is None:
-            settings_class = self.settings_class
-        if settings_class is None:
-            return set()
-
-        return self._get_settings_kwarg_names(settings_class)
-
-
     def get_attribute_settings_kwargs(self,
                                         settings_class: type[MountainAshBaseSettings] | None = None
                                         ) -> Dict[str, Any]:
@@ -328,6 +316,16 @@ class SettingsParameters():
 
         settings_class = settings_class or self.settings_class
         field_names = self._get_settings_kwarg_names(settings_class)
+        input_names = set(field_names)
+        if settings_class is not None:
+            from mountainash_settings.resolve import _validation_paths
+
+            input_names.update(
+                path[0]
+                for name, field in settings_class.model_fields.items()
+                for path in _validation_paths(name, field)
+                if isinstance(path[0], str)
+            )
 
         result: Dict[str, Any] = {}
         for key, value in self.kwargs.items():
@@ -336,7 +334,7 @@ class SettingsParameters():
                     f"Unsupported schema control kwarg: {key!r}. "
                     "Configure this on the settings class's model_config instead."
                 )
-            if key in field_names:
+            if key in input_names:
                 result[key] = value
 
         return result

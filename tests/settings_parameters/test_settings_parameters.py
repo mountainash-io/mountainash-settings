@@ -48,11 +48,14 @@ class TestSettingsParameters:
 
         assert hash(params1) == hash(params2)
 
-    def test_hash_different_for_different_params(self):
+    def test_different_params_are_distinct_dictionary_keys(self):
         params1 = SettingsParameters(env_prefix="PREFIX1_")
         params2 = SettingsParameters(env_prefix="PREFIX2_")
 
-        assert hash(params1) != hash(params2)
+        assert params1 != params2
+        mapping = {params1: "first", params2: "second"}
+        assert len(mapping) == 2
+        assert (mapping[params1], mapping[params2]) == ("first", "second")
 
     def test_create_with_all_parameters_succeeds(self):
         params = SettingsParameters.create(
@@ -133,18 +136,6 @@ class TestSettingsParameters:
         expected_fields = {"field1", "field2", "field3"}
         assert result == expected_fields
 
-    def test_get_valid_kwarg_names_only_includes_declared_fields(self):
-        """M5 (MAS-SEC-004): only declared fields are valid attribute kwargs;
-        underscore source-control names are no longer treated as valid."""
-        params = SettingsParameters(settings_class=MockSettings)
-        result = params._get_valid_kwarg_names()
-
-        assert "field1" in result
-        assert "field2" in result
-        assert "field3" in result
-        assert "_case_sensitive" not in result
-        assert "_env_prefix" not in result
-
     def test_get_attribute_settings_kwargs_filters_correctly(self):
         kwargs = {
             "field1": "value1",
@@ -155,9 +146,7 @@ class TestSettingsParameters:
         params = SettingsParameters(settings_class=MockSettings, kwargs=kwargs)
         result = params.get_attribute_settings_kwargs()
 
-        assert "field1" in result
-        assert "field2" in result
-        assert "invalid_field" not in result
+        assert result == {"field1": "value1", "field2": 100}
 
     def test_get_attribute_settings_kwargs_rejects_underscore_source_control(self):
         """M5 (MAS-SEC-004): every underscore-prefixed kwarg fails value-free
