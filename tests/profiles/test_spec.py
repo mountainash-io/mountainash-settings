@@ -1,4 +1,4 @@
-# tests/unit/profiles/test_spec.py
+# tests/profiles/test_spec.py
 """Unit tests for ProfileSpec, ParameterSpec, Missing, and MISSING."""
 
 import pytest

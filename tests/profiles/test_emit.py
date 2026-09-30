@@ -1,4 +1,4 @@
-# tests/unit/profiles/test_emit.py
+# tests/profiles/test_emit.py
 """Unit tests for target-aware driver_key, __adapters__, and Profile.emit()."""
 
 from __future__ import annotations

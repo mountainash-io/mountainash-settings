@@ -10,7 +10,7 @@ import pytest
 
 def _qualifier_module():
     name = "qualify_release_candidate_under_test"
-    path = Path(__file__).resolve().parents[3] / "tools" / "qualify_release_candidate.py"
+    path = Path(__file__).resolve().parents[2] / "tools" / "qualify_release_candidate.py"
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None
     assert spec.loader is not None

@@ -494,4 +494,3 @@ def test_compatible_shared_alias_patch_reconstructs_both_requested_fields():
     rebuilt = Aliased(settings_parameters=instance.extract_settings_parameters())
     assert rebuilt.first.get_secret_value() == "new-value"
     assert rebuilt.second.get_secret_value() == "new-value"
-

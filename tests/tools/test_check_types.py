@@ -8,7 +8,7 @@ import pytest
 
 @pytest.mark.parametrize("failed_pass", [None, 0, 1, 2, 3])
 def test_all_passes_run_and_failures_propagate(monkeypatch, failed_pass):
-    path = Path(__file__).resolve().parents[3] / "tools" / "check_types.py"
+    path = Path(__file__).resolve().parents[2] / "tools" / "check_types.py"
     spec = importlib.util.spec_from_file_location("check_types", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)

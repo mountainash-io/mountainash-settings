@@ -1,4 +1,4 @@
-# tests/unit/profiles/test_profile.py
+# tests/profiles/test_profile.py
 """Unit tests for the generic Profile base."""
 
 from __future__ import annotations

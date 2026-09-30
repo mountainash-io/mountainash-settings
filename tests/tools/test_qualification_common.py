@@ -10,7 +10,7 @@ def _common() -> ModuleType:
     name = "_qualification_common_under_test"
     if name in sys.modules:
         return sys.modules[name]
-    path = Path(__file__).resolve().parents[3] / "tools" / "_qualification_common.py"
+    path = Path(__file__).resolve().parents[2] / "tools" / "_qualification_common.py"
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None
     assert spec.loader is not None

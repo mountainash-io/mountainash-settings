@@ -5,7 +5,7 @@ import re
 import subprocess
 import sys
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_readme_quickstart_runs(tmp_path: Path, example_environment: dict[str, str]) -> None:

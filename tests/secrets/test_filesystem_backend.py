@@ -84,4 +84,3 @@ class TestFilesystemBackendTransaction:
             data["token"] = "new"
             backend.set("wearables.strava.default", data)
         assert backend.get("wearables.strava.default") == {"token": "new"}
-

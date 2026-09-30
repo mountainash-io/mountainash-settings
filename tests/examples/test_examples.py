@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = ROOT / "examples"
 RECIPES = sorted(EXAMPLES.glob("*/example.py"))
 assert RECIPES, "No runnable configuration recipes found"

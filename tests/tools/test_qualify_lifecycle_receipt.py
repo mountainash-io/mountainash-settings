@@ -10,7 +10,7 @@ import pytest
 
 def _lifecycle_module():
     name = "qualify_lifecycle_receipt_under_test"
-    path = Path(__file__).resolve().parents[3] / "tools" / "qualify_lifecycle_receipt.py"
+    path = Path(__file__).resolve().parents[2] / "tools" / "qualify_lifecycle_receipt.py"
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None
     assert spec.loader is not None

@@ -1,4 +1,4 @@
-# tests/unit/profiles/test_invariants.py
+# tests/profiles/test_invariants.py
 """Exercise spec_invariants_for against a fake registry."""
 
 import pytest
