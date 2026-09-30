@@ -1,0 +1,8 @@
+DATABASE: reports
+OPTIONS:
+  export:
+    format: csv
+    batch_size: 100
+  recipients:
+    - daily
+    - weekly

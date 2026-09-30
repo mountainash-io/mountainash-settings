@@ -1,273 +1,67 @@
-# Quickstart: mountainash-settings
-
-Get from zero to a working, cached, typed settings class in five minutes.
-
-## Installation
-
-```bash
-pip install mountainash-settings
-```
-
-## 1. Define a settings class
-
-Subclass `MountainAshBaseSettings` and declare fields with pydantic `Field()`. Every field is typed, validated, and autocomplete-friendly.
-
-```python
-from pydantic import Field
-from mountainash_settings import MountainAshBaseSettings
-
-class AppSettings(MountainAshBaseSettings):
-    APP_NAME: str = Field(default="MyApp")
-    DEBUG: bool = Field(default=False)
-    PORT: int = Field(default=8000)
-    DATABASE_URL: str = Field(default="sqlite:///app.db")
-    DATABASE: dict[str, str] = Field(default_factory=dict)
-```
-
-Instantiate directly and your settings are ready:
-
-```python
-settings = AppSettings()
-print(settings.APP_NAME)   # "MyApp"
-print(settings.PORT)       # 8000
-```
-
-Pass keyword arguments to override any field at construction time:
-
-```python
-settings = AppSettings(DEBUG=True, PORT=9000)
-```
-
-Environment variables are loaded automatically — set `APP_NAME=prod` in your shell and it will be picked up without any extra configuration.
-
-## 2. Load from configuration files
-
-Pass one or more config files via `config_files`. YAML, TOML, JSON, and `.env` files are all supported and are detected by extension.
-
-```python
-settings = AppSettings(config_files=["config/base.yaml", "config/production.yaml"])
-```
-
-Files of one structured format use caller order. Later mappings merge recursively.
-Later lists and scalar values replace earlier values. Lists do not concatenate.
-
-**`config/base.yaml`:**
-
-```yaml
-APP_NAME: MyApp
-PORT: 8000
-DATABASE:
-  HOST: db.internal
-```
-
-**`config/production.yaml`:**
-
-```yaml
-PORT: 443
-DATABASE_URL: postgresql://prod-db.example.com/myapp
-DATABASE:
-  PORT: "5432"
-```
-
-The resulting `DATABASE` value keeps `HOST` from the base file and adds `PORT` from the production file.
-
-The source priority, from highest to lowest, is:
-
-1. init values
-2. environment variables
-3. dotenv files
-4. YAML files
-5. TOML files
-6. JSON files
-7. Pydantic secret files
-8. field defaults
-
-A dotenv file is read twice. The first read uses the configured `env_prefix`.
-The second read uses no prefix and fills values that the first read does not set.
-A prefixed key wins when both forms exist. Environment variables have higher priority than both dotenv reads.
-
-### Using SettingsParameters for reusable config
-
-When you need to share a configuration across multiple callsites, build a `SettingsParameters` object and pass it around:
-
-```python
-from mountainash_settings import SettingsParameters
-
-params = SettingsParameters.create(
-    settings_class=AppSettings,
-    config_files=["config/production.yaml"],
-    env_prefix="APP_",
-)
-
-settings = AppSettings(settings_parameters=params)
-```
-
-## 3. Derive fields from other fields (templates)
-
-Fields can be automatically derived from other fields using `{FIELD_NAME}` placeholders. Override `post_init()` and call `init_setting_from_template()`:
-
-```python
-from pydantic import Field
-from upath import UPath
-from mountainash_settings import MountainAshBaseSettings
-
-class AppSettings(MountainAshBaseSettings):
-    APP_NAME: str = Field(default="myapp")
-    ENVIRONMENT: str = Field(default="dev")
-    RUNDATE: str = Field(default="20260513")
-
-    # Template: build the path with UPath, convert to string for storage
-    LOG_PATH_TEMPLATE: str = Field(
-        default=str(UPath("~") / "logs" / "{APP_NAME}" / "{ENVIRONMENT}" / "{RUNDATE}.log")
-    )
-
-    LOG_PATH: str = Field(default=None)
-
-    def post_init(self, reinitialise: bool = False):
-        super().post_init(reinitialise=reinitialise)
-        self.LOG_PATH = self.init_setting_from_template(
-            template_str=self.LOG_PATH_TEMPLATE,
-            current_value=self.LOG_PATH,
-            reinitialise=reinitialise,
-        )
-```
-
-```python
-settings = AppSettings(APP_NAME="analytics", ENVIRONMENT="production")
-print(settings.LOG_PATH)
-# ~/logs/analytics/production/20260513.log
-```
-
-`init_setting_from_template()` is a no-op if `current_value` is already set — explicit values always win over templates.
-
-> **Cross-platform paths:** Always use `UPath`'s `/` operator to build path templates rather than string concatenation. UPath handles POSIX and Windows separators automatically.
-
-## 4. Get cached settings with `get_settings()`
-
-`get_settings()` pins selected source inputs for each structural context, then returns a fresh independently owned settings object on every call. Calls with the same structural selectors reuse the captured source baseline, not a returned instance.
-
-```python
-from mountainash_settings import get_settings
-
-def process_batch():
-    settings = get_settings(
-        settings_class=AppSettings,
-        config_files=["config/production.yaml"],
-    )
-    print(settings.DATABASE_URL)
-```
-
-You can also call `get_settings()` as a classmethod on your settings class:
-
-```python
-settings = AppSettings.get_settings(config_files=["config/production.yaml"])
-```
-
-### Runtime overrides
-
-Pass extra keyword arguments as invocation-local runtime values. They are validated together with the pinned baseline, never enter the retained context, and every result has its own mutable state.
-```python
-settings_a = get_settings(settings_class=AppSettings, PORT=8001)
-settings_b = get_settings(settings_class=AppSettings, PORT=8002)
-```
-
-## 5. Resolve secrets automatically
-
-Select a `secret_store` — a `SecretReader` object — when constructing settings that
-reference external secrets:
-
-```python
-from mountainash_settings.secrets import FilesystemBackend
-
-store = FilesystemBackend("/path/to/provisioned/private-records")
-```
-
-Then reference secrets with the `secret:` prefix in your YAML config or as kwargs:
-
-```yaml
-# config/production.yaml
-DATABASE_URL: "secret:db.production.url"
-```
-
-```python
-settings = AppSettings(
-    config_files=["config/production.yaml"],
-    secret_store=store,
-)
-# settings.DATABASE_URL is now the resolved value from the store
-```
-
-A `secret:` reference with no bound `secret_store` raises a value-free
-`SecretCapabilityError` — it is never left as literal unresolved text.
-
-The prefix is stripped before the store is queried. It receives `"db.production.url"`, not `"secret:db.production.url"`.
-
-References resolve inside declared string (`str`) and `SecretStr` fields, nested Pydantic models, dictionaries, lists, and tuple values.
-Tuple values resolve when they come from init values or runtime overrides.
-A resolved `SecretStr` remains wrapped as `SecretStr`.
-Nested model validation aliases remain supported, including `AliasChoices` and `AliasPath`.
-The resolver creates new dictionaries, lists, and tuples. It does not mutate input dictionaries or containers.
-
-The same source priority applies when references come from settings sources.
-Init values have the highest priority, followed by environment variables, dotenv files, YAML, TOML, JSON, Pydantic secret files, and field defaults.
-
-## 6. Build typed connection profiles
-
-For database or service connections, use the declarative profile system to define once and reuse across your codebase.
-
-```python
-from mountainash_settings import (
-    Profile,
-    MISSING,
-    ParameterSpec,
-    ProfileSpec,
-    Registry,
-    NoAuth,
-    PasswordAuth,
-)
-
-# 1. Describe the connection
-POSTGRESQL_SPEC = ProfileSpec(
-    name="postgresql",
-    provider_type="postgresql",
-    parameters=[
-        ParameterSpec(name="HOST",     type=str, tier="core",     driver_key="host"),
-        ParameterSpec(name="PORT",     type=int, tier="core",     driver_key="port",   default=5432),
-        ParameterSpec(name="DATABASE", type=str, tier="core",     driver_key="dbname"),
-        ParameterSpec(name="PASSWORD", type=str, tier="core",     driver_key="password",
-                      secret=True, default=None),
-    ],
-    auth_modes=[NoAuth, PasswordAuth],
-)
-
-# 2. Create a registry for your domain
-DATABASES = Registry("databases")
-register = DATABASES.decorator()
-
-# 3. Define the settings class
-@register
-class PostgreSQLSettings(Profile):
-    __spec__ = POSTGRESQL_SPEC
-```
-
-Pydantic fields, type validation, and SecretStr wrapping are installed automatically from the descriptor. No boilerplate.
-
-```python
-settings = PostgreSQLSettings(
-    HOST="prod-db.example.com",
-    DATABASE="myapp",
-    auth=PasswordAuth(username="app_user", password="s3cr3t"),
-)
-
-# Get driver kwargs for psycopg2, asyncpg, etc.
-kwargs = {**settings._default_kwargs(), **settings._auth_kwargs()}
-# {"host": "prod-db.example.com", "port": 5432, "dbname": "myapp",
-#  "user": "app_user", "password": "s3cr3t"}
-```
+# Getting started with mountainash-settings
+
+Start with the [README quick start](../README.md#quick-start) to install the
+current checkout and load a reporting configuration. Then choose a route through
+the [runnable reporting recipes](../examples/reporting/). Each recipe contains its
+own declarations, run command, expected result and explanation.
+
+## Application settings
+
+1. [Declare fields and validate inputs](../examples/reporting/basic_settings/).
+2. [Load configuration files](../examples/reporting/configuration_files/), then
+   [understand precedence and merging](../examples/reporting/source_precedence/).
+3. [Derive a log path](../examples/reporting/templates/) from loaded values.
+
+These examples use direct construction. Each call reads its sources afresh.
+
+## Retrieval in a growing application
+
+1. [Capture source snapshots](../examples/reporting/cached_sources/) and pass
+   `SettingsParameters` to functions that retrieve settings when they run.
+2. [Override one invocation](../examples/reporting/local_overrides/) without
+   changing another caller's settings.
+3. [Merge reusable parameter sets](../examples/reporting/parameter_merging/) or
+   [request derived-value recomputation](../examples/reporting/recomputation/).
+
+Each cached retrieval validates a fresh instance from pinned source inputs.
+Initialize known configurations during startup when they should share stable
+deployment inputs. See [cache lifecycle](advanced-usage.md#cache-contexts-and-runtime-materialization).
+
+## Optional stores and profiles
+
+- Use [namespaced records](../examples/reporting/namespaced_records/) and
+  [secret references](../examples/reporting/secret_references/) when configuration
+  refers to values in a selected store. Ordinary file/env inputs need no store.
+- [Persist a local record explicitly](../examples/reporting/settings_persistence/)
+  when the application needs to write configuration.
+- Compare [handwritten connection mapping](../examples/reporting/driver_mapping/)
+  with [native profile emission](../examples/reporting/profile_emission/).
+  Choose [explicit specs](../examples/reporting/explicit_specs/) for data-driven field lists.
+- Add [inspection, discovery or domain extensions](../examples/reporting/#profile-extensions)
+  when a consumer needs them. A profile requires no registry to construct or emit.
+
+## Relationship to Pydantic Settings
+
+`MountainAshBaseSettings` extends `pydantic_settings.BaseSettings`. Pydantic owns
+field types, constraints, validators, aliases and model introspection. Pydantic
+Settings supplies the source primitives; MountainAsh composes them through
+per-invocation selectors and adds its retrieval, template, record and profile APIs.
+
+MountainAsh ignores unknown inputs, does not validate defaults by default, and
+validates assignments. Upstream `BaseSettings` forbids extra inputs and validates
+defaults by default. Set `model_config` deliberately when those differences matter.
+Use `config_files`, `env_prefix` and `secrets_dir` for per-invocation source
+selection; underscore-prefixed source controls such as `_env_file` are rejected.
+
+Declaration and retrieval are independent: ordinary settings or profiles can
+both be constructed directly or retrieved through the cache API. Profile
+spec inspection and `model_fields` work without loading settings, but inherited
+bookkeeping currently prevents general `model_json_schema()` generation.
 
 ## What's next
 
-- **Multiple config files and merging** — `SettingsParameters.merge()` for combining base and environment-specific parameters
-- **Auth modes reference** — 13 typed auth modes: `PasswordAuth`, `TokenAuth`, `JWTAuth`, `OAuth2Auth`, `OAuth1Auth`, `OAuth2AuthCodeAuth`, `IAMAuth`, `AzureADAuth`, `WindowsAuth`, `KerberosAuth`, `CertificateAuth`, `ServiceAccountAuth`, `NoAuth`
-- **Profile invariant tests** — `spec_invariants_for(REGISTRY)` gives automatic pytest coverage for every registered profile
-- **Examples** — `examples/` directory contains working code for path templating, smart merging, and comprehensive patterns
+- [Advanced usage](advanced-usage.md): parameter merging, ownership and custom sources.
+- [Profile reference](profile-spec-pattern.md): inheritance, typing and emission contracts.
+- [Secrets reference](README_SECRETS.md): storage, reference syntax and lifecycle.
+- [0.1 migration](migration-0.1.md): breaking changes from the earlier API.
+- [Pydantic Settings documentation](https://docs.pydantic.dev/latest/concepts/pydantic_settings/).

@@ -13,6 +13,7 @@ Pydantic Settings inputs — environment variables, configuration files and
 
 - [Secret references](#secret-references)
 - [Local record storage](#local-record-storage)
+- [Settings persistence](#settings-persistence)
 - [Records and keys](#records-and-keys)
 - [Errors](#errors)
 - [Lifetime and concurrency](#lifetime-and-concurrency)
@@ -39,14 +40,16 @@ A `secret_store` is selected directly — a `SecretReader` (or `SecretWriter` fo
 from mountainash_settings import SettingsParameters, get_settings
 from mountainash_settings.secrets import FilesystemBackend
 
-store = FilesystemBackend("/path/to/provisioned/private-records")
-params = SettingsParameters.create(
-    settings_class=AppSettings,
-    config_files=["config.yaml"],
-    secret_store=store,
-)
-settings = get_settings(settings_parameters=params)
-settings.persist({"TOKEN": "new"})  # requires a SecretWriter
+# AppSettings is your application's declared settings class.
+with FilesystemBackend("/path/to/provisioned/private-records") as store:
+    params = SettingsParameters.create(
+        settings_class=AppSettings,
+        config_files=["config.yaml"],
+        secret_store=store,
+    )
+    settings = get_settings(settings_parameters=params)
+    with store.transaction(settings.persist_key()):
+        settings.persist({"TOKEN": "new"})  # requires a SecretWriter
 ```
 
 A `secret:` reference with no bound store raises a value-free
@@ -56,6 +59,10 @@ A `secret:` reference with no bound store raises a value-free
 context — cache identity includes the store's object identity, not its
 content. Passing the same store object reuses the cached context; `None`
 never detaches an already-bound store during a merge (last non-`None` wins).
+
+Run the [secret-reference recipe](../examples/reporting/secret_references/) for
+a complete example with a locally owned in-memory store. Baseline references in
+cached sources remain pinned; explicit runtime references resolve for each invocation.
 
 ## Local record storage
 
@@ -89,6 +96,27 @@ points, hard links, special files) and private-access violations before touching
 outside data, and writes through private exclusive temporaries with complete
 replacement. `delete()` is marker-first: it records a clear marker, then removes
 the record.
+
+## Settings persistence
+
+`settings.persist(data, key=...)` replaces a complete record through the selected
+`SecretWriter`, then updates fields on that settings instance. Without an explicit
+key, `persist_key()` derives one from the lowercased class name and configured
+environment prefix (with trailing underscores removed).
+
+Strict JSON-native record validation happens before the write. Field assignment
+happens afterward: a field-validation failure can leave the new record committed
+and earlier assignments applied. A transaction coordinates writers, not rollback
+across storage and model updates. Do not assume any exception means nothing changed.
+
+Persistence does not rewrite configuration files or update a captured source
+snapshot. Future settings are not automatically loaded from the saved record.
+Use an explicit reference or read the record deliberately where needed.
+
+The [persistence recipe](../examples/reporting/settings_persistence/) provisions
+a temporary root, saves a non-secret record, closes the store and verifies it
+through a newly opened backend. For namespace views, see
+[namespaced records](../examples/reporting/namespaced_records/).
 
 ## Records and keys
 
@@ -152,6 +180,13 @@ state belongs to the authentication consumer, not this raw record API.
 Native operations use standard-library facilities only: POSIX descriptors,
 `flock` and Linux `libacl`/macOS libSystem ACL calls; Windows NT handles, DACLs
 and `LockFileEx`. Python ≥ 3.12. Linux, macOS and Windows are targeted.
+
+Linux requires `libacl.so.1`; macOS uses libSystem ACL operations. Windows uses
+kernel32/advapi32/ntdll APIs. No native binaries or additional Python bindings are
+vendored, and generic imports do not load irrelevant platforms' libraries.
+The application provisions and secures store directories; the backend neither
+creates nor repairs the selected root. Native dependency and licensing evidence
+belongs to the release qualification records.
 
 The 0.1.0 source at commit `2f40607` passed installed-candidate qualification on
 Linux, macOS and Windows with Python 3.12 and 3.13. Both wheel and sdist-rebuilt
