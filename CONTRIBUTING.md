@@ -89,7 +89,7 @@ Use the settings-only environment without a sibling checkout:
 ```bash
 hatch run test_github:test
 hatch run test_github:test-cov
-hatch run test_github:pytest tests/test_readme_examples.py tests/test_reporting_examples.py -q
+hatch run test_github:pytest tests/test_readme_examples.py tests/test_examples.py -q
 hatch run test_github:pytest tests/test_base_settings.py -v
 ```
 
@@ -114,8 +114,8 @@ Linux POSIX, macOS POSIX and Windows-native passes.
 ## Documentation
 
 - Keep the README concise: purpose, capability map, one working quick start and navigation.
-- Add focused recipes to [examples/reporting](examples/reporting/) with a question,
-  run command, expected result and short explanation. Use the same reporting data;
+- Add focused recipes to [examples](examples/) with a question,
+  run command, expected result and short explanation. Use consistent sample data;
   each recipe must run independently and teach one primary concept.
 - Verify the actual README snippet and example scripts with the commands above.
   The README is not a concatenation of the examples.

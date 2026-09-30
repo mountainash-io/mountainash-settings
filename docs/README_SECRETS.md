@@ -60,7 +60,7 @@ context — cache identity includes the store's object identity, not its
 content. Passing the same store object reuses the cached context; `None`
 never detaches an already-bound store during a merge (last non-`None` wins).
 
-Run the [secret-reference recipe](../examples/reporting/secret_references/) for
+Run the [secret-reference recipe](../examples/secret_references/) for
 a complete example with a locally owned in-memory store. Baseline references in
 cached sources remain pinned; explicit runtime references resolve for each invocation.
 
@@ -113,10 +113,10 @@ Persistence does not rewrite configuration files or update a captured source
 snapshot. Future settings are not automatically loaded from the saved record.
 Use an explicit reference or read the record deliberately where needed.
 
-The [persistence recipe](../examples/reporting/settings_persistence/) provisions
+The [persistence recipe](../examples/settings_persistence/) provisions
 a temporary root, saves a non-secret record, closes the store and verifies it
 through a newly opened backend. For namespace views, see
-[namespaced records](../examples/reporting/namespaced_records/).
+[namespaced records](../examples/namespaced_records/).
 
 ## Records and keys
 

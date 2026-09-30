@@ -1,6 +1,6 @@
 # Advanced Usage: mountainash-settings
 
-Use the [reporting recipes](../examples/reporting/) for independently runnable
+Use the [configuration recipes](../examples/) for independently runnable
 examples. This reference covers:
 
 - [Merging settings parameters](#merging-settings-parameters)
@@ -53,7 +53,7 @@ The source priority, from highest to lowest, is:
 The prefixed dotenv source and unprefixed fallback share source state. A prefixed
 key wins when both forms exist. Cross-format priority is fixed regardless of path
 order; caller order applies inside one format. See the
-[source precedence recipe](../examples/reporting/source_precedence/).
+[source precedence recipe](../examples/source_precedence/).
 
 ### Layered configuration example
 
@@ -244,7 +244,7 @@ It is neither a source reload nor a cache refresh and is not part of structural
 identity. Profiles recompute eligible derived fields from effective invocation
 inputs while preserving explicitly supplied values. Without the flag, changing
 a dependency may leave an already-derived value unchanged. See the
-[recomputation recipe](../examples/reporting/recomputation/).
+[recomputation recipe](../examples/recomputation/).
 
 Capture known configurations during application startup when they should observe
 stable deployment inputs. Each structural configuration initializes separately,
@@ -344,7 +344,7 @@ TestMyInvariants = spec_invariants_for(MY_REGISTRY)
 Pytest collects the returned class. Registrations present when
 `spec_invariants_for()` is called are included. Import the application's registry
 before generating the class. For a complete runnable module, see
-[the invariant-check recipe](../examples/reporting/invariant_checks/).
+[the invariant-check recipe](../examples/invariant_checks/).
 
 ### What is checked
 

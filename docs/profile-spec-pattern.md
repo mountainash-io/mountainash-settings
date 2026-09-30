@@ -8,13 +8,13 @@ stores and direct/cached retrieval paths as an ordinary settings class.
 
 | Need | Start with |
 |---|---|
-| Application fields or a short explicit driver mapping | [Ordinary settings](../examples/reporting/driver_mapping/) |
-| Visible typed fields with reusable emission conventions | [Native profile fields](../examples/reporting/profile_emission/) |
-| Field lists assembled as data | [Explicit specs](../examples/reporting/explicit_specs/) |
-| Metadata inspection without loading values | [Spec inspection](../examples/reporting/spec_inspection/) |
-| Caller selection by name | [Optional registry](../examples/reporting/registry_discovery/) |
-| Domain-specific declaration metadata | [Typed spec subclass](../examples/reporting/domain_metadata/) |
-| Several driver/client argument shapes | [Target mappings and adapters](../examples/reporting/target_adapters/) |
+| Application fields or a short explicit driver mapping | [Ordinary settings](../examples/driver_mapping/) |
+| Visible typed fields with reusable emission conventions | [Native profile fields](../examples/profile_emission/) |
+| Field lists assembled as data | [Explicit specs](../examples/explicit_specs/) |
+| Metadata inspection without loading values | [Spec inspection](../examples/spec_inspection/) |
+| Caller selection by name | [Optional registry](../examples/registry_discovery/) |
+| Domain-specific declaration metadata | [Typed spec subclass](../examples/domain_metadata/) |
+| Several driver/client argument shapes | [Target mappings and adapters](../examples/target_adapters/) |
 
 Ordinary Pydantic classes already support inheritance, aliases, validators, custom
 metadata and `model_fields` inspection. Profiles give these consumers a common
@@ -45,7 +45,7 @@ Pydantic fields; the generated spec describes them for profile consumers.
 An authored `ProfileSpec` assigned to a class's own `__spec__` installs its fields.
 Each `ParameterSpec` supplies the field's name, type and tier, plus optional
 default, description, mapping, secret, validator, transform and template settings.
-The [explicit-spec recipe](../examples/reporting/explicit_specs/) emits the same
+The [explicit-spec recipe](../examples/explicit_specs/) emits the same
 database arguments as the native declaration.
 
 Do not combine an own `__spec__` with generated-mode headers on one class.
@@ -100,7 +100,7 @@ key; supplied dictionaries replace inherited dictionaries. Metadata does not
 automatically set the defaults of application fields.
 
 Put Pydantic settings options in `model_config`. The
-[domain recipe](../examples/reporting/domain_metadata/) keeps header metadata
+[domain recipe](../examples/domain_metadata/) keeps header metadata
 and field defaults explicit.
 
 ## Extending emission
@@ -118,7 +118,7 @@ Declare plural `__adapters__ = {target: callable}` on the profile. An adapter
 receives `(profile, merged_kwargs)` and returns the final dictionary. Emitted
 field values override same-named `base` values before the adapter runs.
 Only a shallow copy of `base` is taken, so adapters must copy nested containers
-before modifying them. See the [runnable adapter recipe](../examples/reporting/target_adapters/).
+before modifying them. See the [runnable adapter recipe](../examples/target_adapters/).
 
 Profiles with target-scoped mappings or adapters require `emit(target)` and reject
 unknown targets. No target is needed for a profile with only bare mappings and
@@ -127,7 +127,7 @@ no adapters.
 `ProfileField(template=...)` derives values after loading. With cached retrieval,
 `reinitialise=True` recomputes eligible derived values from current invocation
 inputs while preserving explicit values. It does not reload sources. See
-[recomputation](../examples/reporting/recomputation/).
+[recomputation](../examples/recomputation/).
 
 ## Registration and invariant checks
 
@@ -137,7 +137,7 @@ Register a name only once. Generated classes register their own published spec.
 Registry lookup selects a class, not an instance or a settings cache.
 
 `spec_invariants_for(registry)` creates pytest checks for registrations present
-when called. See [the executable invariant module](../examples/reporting/invariant_checks/).
+when called. See [the executable invariant module](../examples/invariant_checks/).
 Keep separate tests for compatibility with the actual driver.
 
 ## Authentication

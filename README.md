@@ -19,12 +19,12 @@ adds retrieval, derivation, storage and profile conventions:
 
 | Area | Capabilities | Explore |
 |---|---|---|
-| Configuration loading | YAML, TOML, JSON, dotenv and environment inputs; source precedence and recursive file merging | [Loading](examples/reporting/#loading) |
-| Derived configuration | Brace templates, portable path construction and explicit recomputation | [Derivation](examples/reporting/#derivation) |
-| Settings retrieval | Direct loading or cached source snapshots; independently owned instances, local overrides and reusable parameter sets | [Retrieval](examples/reporting/#retrieval) |
-| Secrets and persistence | Selected stores, namespaced records, secret-reference resolution and explicit local persistence | [Secrets](examples/reporting/#secrets-and-persistence) |
-| Connection profiles | Native fields or explicit specs; driver-key mappings, value transformations and target adapters | [Connections](examples/reporting/#connections) |
-| Inspection and extension | Inspectable specs, typed domain metadata, registry discovery and generated invariant checks | [Profile extensions](examples/reporting/#profile-extensions) |
+| Configuration loading | YAML, TOML, JSON, dotenv and environment inputs; source precedence and recursive file merging | [Loading](examples/#loading) |
+| Derived configuration | Brace templates, portable path construction and explicit recomputation | [Derivation](examples/#derivation) |
+| Settings retrieval | Direct loading or cached source snapshots; independently owned instances, local overrides and reusable parameter sets | [Retrieval](examples/#retrieval) |
+| Secrets and persistence | Selected stores, namespaced records, secret-reference resolution and explicit local persistence | [Secrets](examples/#secrets-and-persistence) |
+| Connection profiles | Native fields or explicit specs; driver-key mappings, value transformations and target adapters | [Connections](examples/#connections) |
+| Inspection and extension | Inspectable specs, typed domain metadata, registry discovery and generated invariant checks | [Profile extensions](examples/#profile-extensions) |
 
 ## Installation
 
@@ -41,7 +41,7 @@ python -m pip install -e .
 
 ## Quick start
 
-Configure a reporting application. Save this as `report.yaml`:
+Configure a Python application. Save this as `report.yaml`:
 
 ```yaml
 APP_NAME: reports
@@ -76,8 +76,9 @@ file values. Run without conflicting variables to reproduce this output.
 
 ## Learn more
 
-The [reporting recipes](examples/reporting/) share one application and its data.
-Each demonstrates one concept and can be run independently.
+Explore [configuration recipes](examples/) for loading, retrieval, templates,
+secrets and connection profiles. Each runs independently, using consistent
+application and database settings so you can compare approaches.
 
 | Guide | Contents |
 |---|---|
