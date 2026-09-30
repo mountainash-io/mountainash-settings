@@ -1,0 +1,6 @@
+DATABASE: production_reports
+OPTIONS:
+  export:
+    batch_size: 250
+  recipients:
+    - monthly

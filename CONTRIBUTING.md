@@ -1,4 +1,4 @@
-# Contributing to Mountain Ash Data Contracts
+# Contributing to mountainash-settings
 
 This document outlines the process for contributing to the project and provides guidelines to ensure a smooth collaboration.
 
@@ -16,9 +16,16 @@ This document outlines the process for contributing to the project and provides 
 ## Getting Started
 
 1. Fork the repository on GitHub.
-2. Clone your fork locally: `git clone https://github.com/your-username/mountainash-datacontracts.git`
-3. Add the original repository as a remote: `git remote add upstream https://github.com/mountainash-io/mountainash-datacontracts.git`
+2. Clone your fork locally: `git clone https://github.com/your-username/mountainash-settings.git`
+3. Add the original repository as a remote: `git remote add upstream https://github.com/mountainash-io/mountainash-settings.git`
 4. Create a new branch for your contribution (see [Branching Strategy](#branching-strategy)).
+
+Use Python 3.12+ and Hatch. `pyproject.toml` and `hatch.toml` own dependency and
+environment configuration. For an editable installation:
+
+```bash
+python -m pip install -e .
+```
 
 ## Branching Strategy
 
@@ -28,6 +35,7 @@ We follow a git-flow branching methodology. The following branch naming conventi
 - `develop`: The main development branch
 - `feature/*`: For new features
 - `chore/*`: For maintenance tasks
+- `docs/*`: For documentation and examples
 - `release/*`: For release preparation
 - `hotfix/*`: For critical bug fixes in production
 - `bugfix/*`: For non-critical bug fixes
@@ -76,16 +84,42 @@ The following branches are strictly protected and require code owner review and 
 
 ## Testing
 
-- Write unit tests for all new functionality.
-- Ensure all existing tests pass before submitting a pull request.
-- Aim for high test coverage, especially for critical parts of the codebase.
-- Use pytest for writing and running tests.
-- For detailed information on how to run tests and our testing procedures, please refer to our TESTING.md file.
+Use the settings-only environment without a sibling checkout:
+
+```bash
+hatch run test_github:test
+hatch run test_github:test-cov
+hatch run test_github:pytest tests/test_readme_examples.py tests/test_examples.py -q
+hatch run test_github:pytest tests/test_base_settings.py -v
+```
+
+`hatch run test:test` includes coverage and expects a sibling
+`mountainash-auth-client` checkout. There is no `test:cov` script. Add tests for
+observable contracts and credible regressions; avoid duplicating stronger
+integration coverage or asserting implementation details.
+
+## Linting, typing and build
+
+```bash
+hatch run ruff:check
+hatch run ruff:fix
+hatch run mypy:check
+hatch build
+```
+
+Ruff's configured check covers `src`. Mypy remains pinned to 1.10.1 with existing
+rules and test exclusions; do not enable `--strict`. The typing tool runs common,
+Linux POSIX, macOS POSIX and Windows-native passes.
 
 ## Documentation
 
-- Update the README.md file if your changes affect the project's setup or usage.
-- Document new features or changes in behavior in the appropriate documentation files.
-- Keep docstrings up-to-date for all public functions, classes, and modules.
+- Keep the README concise: purpose, capability map, one working quick start and navigation.
+- Add focused recipes to [examples](examples/) with a question,
+  run command, expected result and short explanation. Use consistent sample data;
+  each recipe must run independently and teach one primary concept.
+- Verify the actual README snippet and example scripts with the commands above.
+  The README is not a concatenation of the examples.
+- Put detailed contracts in `docs/`, and keep public docstrings current.
+- Follow [the textbook workflow](docs-site/README.md) for site refreshes and publishing.
 
-Thank you for contributing to Mountain Ash Data Contracts!
+See [RELEASE.md](RELEASE.md) for qualification and release work.

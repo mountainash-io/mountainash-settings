@@ -1,8 +1,10 @@
 # Advanced Usage: mountainash-settings
 
-This guide covers the topics listed in the quickstart's "What's next" section:
+Use the [configuration recipes](../examples/) for independently runnable
+examples. This reference covers:
 
 - [Merging settings parameters](#merging-settings-parameters)
+- [Cache contexts and runtime materialization](#cache-contexts-and-runtime-materialization)
 - [Container secret references](#container-secret-references)
 - [Auth modes reference](#auth-modes-reference)
 - [Profile invariant tests](#profile-invariant-tests)
@@ -23,10 +25,13 @@ This guide covers the topics listed in the quickstart's "What's next" section:
 | `env_prefix` | `other` wins | `base` wins |
 | `secrets_dir` | `other` wins | `base` wins |
 | `secret_store` | `other` wins if non-`None` (never truthiness) | `base` wins if non-`None` |
-| `kwargs` | Dict merge — `other` overwrites duplicate keys | `base` value kept for duplicate keys |
+| `kwargs` | Dict merge — `other` overwrites duplicate keys | The complete base kwargs dictionary wins when nonempty |
 
 `config_files` keeps the first occurrence of each path. The merge does not sort paths.
 With `prioritise_base=True`, the base file list stays in place when it is not empty.
+The same option selects the complete nonempty base kwargs dictionary; new keys
+from `other` are not added in that case. Environment-prefix and secrets-directory
+selectors use the winning nonempty value; the store uses non-`None` identity.
 
 ### Structured config file merge
 
@@ -37,16 +42,18 @@ The source priority, from highest to lowest, is:
 
 1. init values
 2. environment variables
-3. dotenv files
-4. YAML files
-5. TOML files
-6. JSON files
-7. Pydantic secret files
-8. field defaults
+3. configured-prefix dotenv
+4. unprefixed dotenv fallback
+5. YAML files
+6. TOML files
+7. JSON files
+8. Pydantic secret files
+9. field defaults
 
-A dotenv file is read twice. The first read uses the configured `env_prefix`.
-The second read uses no prefix and fills values that the first read does not set.
-A prefixed key wins when both forms exist. Environment variables have higher priority than both dotenv reads.
+The prefixed dotenv source and unprefixed fallback share source state. A prefixed
+key wins when both forms exist. Cross-format priority is fixed regardless of path
+order; caller order applies inside one format. See the
+[source precedence recipe](../examples/source_precedence/).
 
 ### Layered configuration example
 
@@ -86,25 +93,28 @@ settings = get_settings(settings_parameters=merged)
 Pass `prioritise_base=True` when the base values must not be overridden by the second set — useful when a base set encodes security or compliance constraints:
 
 ```python
-# Compliance base: secret_store must not be overridden
-compliance_store = FilesystemBackend("/path/to/compliance/records")
+# Illustrative selected objects; no filesystem lifetime to manage here.
+from mountainash_settings.secrets import MemorySecretStore
+
+compliance_store = MemorySecretStore()
 compliance_base = SettingsParameters.create(
     settings_class=AppSettings,
     config_files=["config/compliance.yaml"],
     secret_store=compliance_store,
+    LOG_LEVEL="INFO",
 )
 
 # Caller-supplied params — secret_store is ignored when base wins
-caller_store = FilesystemBackend("/path/to/local/records")
+caller_store = MemorySecretStore()
 caller_params = SettingsParameters.create(
     settings_class=AppSettings,
     secret_store=caller_store,   # would normally win
-    TENANT_ID="acme",            # new key — merged in regardless
+    TENANT_ID="acme",            # omitted when nonempty base kwargs win
 )
 
 locked = SettingsParameters.merge(compliance_base, caller_params, prioritise_base=True)
 # locked.secret_store is compliance_store  (base wins, by object identity)
-# locked.kwargs["TENANT_ID"] == "acme"  (new key, always merged)
+# locked.kwargs == {"LOG_LEVEL": "INFO"}  (the complete nonempty base dict wins)
 ```
 
 ### Controlled reconstruction from a live instance
@@ -230,12 +240,18 @@ settings = get_settings(
 )
 ```
 
-It is neither a source reload nor a cache refresh and is not part of
-structural identity. The later Profile origin/template integration is
-MAS-SEC-005 work; this control does not claim that integration here. Source
-control/direct-constructor framing remains MAS-SEC-004, shared cached error
-handling remains MAS-SEC-006, and provider/context refresh belongs to the
-separate lifecycle work.
+It is neither a source reload nor a cache refresh and is not part of structural
+identity. Profiles recompute eligible derived fields from effective invocation
+inputs while preserving explicitly supplied values. Without the flag, changing
+a dependency may leave an already-derived value unchanged. See the
+[recomputation recipe](../examples/recomputation/).
+
+Capture known configurations during application startup when they should observe
+stable deployment inputs. Each structural configuration initializes separately,
+even when classes share file paths. Snapshots are process-local; new processes
+load current deployment inputs. The cache saves source reads but still performs
+validation and ownership work on retrieval. Applications own live clients and
+their lifetimes; settings describe those connections.
 
 ### Cacheable custom sources
 
@@ -305,151 +321,18 @@ Pydantic validation runs during that rebuild.
 
 ## Auth modes reference
 
-All auth modes are pydantic models. They validate on construction, reject unknown fields (`extra="forbid"`), and are immutable (`frozen=True`). `SecretStr` fields protect credentials from appearing in logs and `repr()` output.
-
-Import any auth mode from the package root:
-
-```python
-from mountainash_settings import PasswordAuth, TokenAuth, IAMAuth  # etc.
-```
-
-### Available modes
-
-| Class | `kind` | Required fields | Optional fields | Default dispatch |
-|---|---|---|---|---|
-| `NoAuth` | `none` | — | — | `{}` |
-| `PasswordAuth` | `password` | `username`, `password` | — | `{"user": ..., "password": ...}` |
-| `TokenAuth` | `token` | `token` | — | `{"token": ...}` |
-| `JWTAuth` | `jwt` | `token` | — | `{"token": ...}` |
-| `OAuth2Auth` | `oauth2` | — | `client_id`, `client_secret`, `token`, `refresh_token`, `server_uri`, `scope` | token or `client_id:client_secret` |
-| `OAuth1Auth` | `oauth1` | `consumer_key`, `consumer_secret` | `access_token`, `access_token_secret` | none — adapter handles |
-| `OAuth2AuthCodeAuth` | `oauth2_authcode` | `client_id`, `client_secret` | `access_token`, `refresh_token`, `token_expires_at`, `scope` | none — adapter handles |
-| `IAMAuth` | `iam` | — | `role_arn`, `access_key_id`, `secret_access_key`, `session_token`, `profile_name` | ambient credentials if all None |
-| `AzureADAuth` | `azure_ad` | — | `tenant_id`, `client_id`, `client_secret`, `managed_identity`, `msi_endpoint` | none — adapter handles |
-| `WindowsAuth` | `windows` | — | `username`, `domain` | none — adapter handles |
-| `KerberosAuth` | `kerberos` | — | `principal`, `keytab`; `service_name` defaults to `"postgres"` | none — adapter handles |
-| `CertificateAuth` | `certificate` | — | `private_key`, `private_key_path`, `passphrase` | none — adapter handles |
-| `ServiceAccountAuth` | `service_account` | — | `info` (dict), `file` (Path) | none — adapter handles |
-
-### Choosing an auth mode
-
-- **No credentials needed** (SQLite, local DuckDB, PySpark): `NoAuth`
-- **Username + password** (PostgreSQL, MySQL, most databases): `PasswordAuth`
-- **Bearer token** (MotherDuck, PyIceberg REST, simple APIs): `TokenAuth`
-- **JWT** (Trino): `JWTAuth`
-- **OAuth2 client credentials or pre-issued token** (Snowflake, Trino, REST APIs): `OAuth2Auth`
-- **OAuth2 authorization code** (interactive user flows, token refresh scenarios): `OAuth2AuthCodeAuth`
-- **AWS IAM** (Redshift, S3, Athena): `IAMAuth` — leave all fields None for ambient credentials
-- **Azure AD** (MSSQL, Azure services): `AzureADAuth`
-- **Windows integrated** (on-prem MSSQL): `WindowsAuth`
-- **Kerberos/GSSAPI** (Trino on Kerberos, PostgreSQL via GSS): `KerberosAuth`
-- **Private key / certificate** (Snowflake JWT): `CertificateAuth`
-- **Google service account** (BigQuery, GCS): `ServiceAccountAuth`
-
-### Usage examples
-
-```python
-from mountainash_settings import (
-    PasswordAuth, TokenAuth, OAuth2Auth, IAMAuth,
-    ServiceAccountAuth, AzureADAuth,
-)
-from pydantic import SecretStr
-
-# Password
-auth = PasswordAuth(username="app_user", password=SecretStr("s3cr3t"))
-
-# Bearer token
-auth = TokenAuth(token=SecretStr("mytoken"))
-
-# OAuth2 — client credentials
-auth = OAuth2Auth(client_id="my-client", client_secret=SecretStr("my-secret"))
-
-# OAuth2 — pre-issued token
-auth = OAuth2Auth(token=SecretStr("access-token-xyz"))
-
-# AWS IAM — explicit credentials
-auth = IAMAuth(
-    access_key_id="AKIAIOSFODNN7EXAMPLE",
-    secret_access_key=SecretStr("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"),
-)
-
-# AWS IAM — ambient credentials (env vars, instance profile, SSO)
-auth = IAMAuth()
-
-# Google service account — inline JSON key
-auth = ServiceAccountAuth(info={"type": "service_account", "project_id": "my-project", ...})
-
-# Google service account — path to key file
-from pathlib import Path
-auth = ServiceAccountAuth(file=Path("/secrets/sa-key.json"))
-
-# Azure AD — managed identity
-auth = AzureADAuth(managed_identity=True)
-
-# Azure AD — client credentials
-auth = AzureADAuth(
-    tenant_id="my-tenant-id",
-    client_id="my-client-id",
-    client_secret=SecretStr("my-client-secret"),
-)
-```
-
-### How `auth_to_driver_kwargs()` works
-
-For the six auth modes with default dispatch (`NoAuth`, `PasswordAuth`, `TokenAuth`, `JWTAuth`, `OAuth2Auth`, `IAMAuth`), call `auth_to_driver_kwargs()` to convert to driver-ready kwargs:
-
-```python
-from mountainash_settings import auth_to_driver_kwargs, PasswordAuth
-from pydantic import SecretStr
-
-auth = PasswordAuth(username="app_user", password=SecretStr("s3cr3t"))
-kwargs = auth_to_driver_kwargs(auth)
-# {"user": "app_user", "password": "s3cr3t"}
-```
-
-For the other seven modes (`OAuth1Auth`, `OAuth2AuthCodeAuth`, `AzureADAuth`, `WindowsAuth`, `KerberosAuth`, `CertificateAuth`, `ServiceAccountAuth`), your backend adapter is responsible for converting to driver kwargs. `auth_to_driver_kwargs()` will raise `KeyError` for these — that is intentional.
-
-### Using auth in a `Profile`
-
-When a profile has multiple `auth_modes`, pydantic uses the `kind` literal to discriminate:
-
-```python
-from mountainash_settings import (
-    Profile, ParameterSpec, ProfileSpec, Registry,
-    NoAuth, PasswordAuth, IAMAuth,
-)
-
-REDSHIFT_SPEC = ProfileSpec(
-    name="redshift",
-    provider_type="redshift",
-    parameters=[
-        ParameterSpec(name="HOST",     type=str, tier="core", driver_key="host"),
-        ParameterSpec(name="DATABASE", type=str, tier="core", driver_key="database"),
-        ParameterSpec(name="PORT",     type=int, tier="core", driver_key="port", default=5439),
-    ],
-    auth_modes=[PasswordAuth, IAMAuth],
-)
-
-class RedshiftSettings(Profile):
-    __spec__ = REDSHIFT_SPEC
-
-# Instantiate with the right auth — pydantic validates the kind discriminator
-settings = RedshiftSettings(
-    HOST="my-cluster.us-east-1.redshift.amazonaws.com",
-    DATABASE="analytics",
-    auth=IAMAuth(),                  # ambient AWS credentials
-)
-
-driver_kwargs = {**settings._default_kwargs(), **settings._auth_kwargs()}
-# {"host": "...", "database": "analytics", "port": 5439}
-# (IAMAuth with no explicit creds emits an empty dict — driver picks up ambient credentials)
-```
+Authentication models and OAuth flows are owned by
+[mountainash-auth-client](https://github.com/mountainash-io/mountainash-auth-client).
+The 0.1 settings API no longer exports bundled auth models, `auth_modes` unions or
+`auth_to_driver_kwargs()`. Settings provides the profile framework and selected
+local record stores those consumers use. See [migration to 0.1](migration-0.1.md)
+and [profile emission](profile-spec-pattern.md#extending-emission).
 
 ---
 
 ## Profile invariant tests
 
-Every domain that builds a `Registry` gets free pytest coverage with one line:
+Generate convention checks for a registry in a pytest module:
 
 ```python
 from mountainash_settings import spec_invariants_for
@@ -458,98 +341,27 @@ from my_package.settings import MY_REGISTRY
 TestMyInvariants = spec_invariants_for(MY_REGISTRY)
 ```
 
-Drop this in any `test_*.py` file. Pytest collects it as a parametrised test class — every spec registered in `MY_REGISTRY` is tested automatically.
+Pytest collects the returned class. Registrations present when
+`spec_invariants_for()` is called are included. Import the application's registry
+before generating the class. For a complete runnable module, see
+[the invariant-check recipe](../examples/invariant_checks/).
 
 ### What is checked
 
-For each registered descriptor:
+For each registered spec:
 
 | Invariant | What it verifies |
 |---|---|
-| Name matches registry key | `descriptor.name == key` used to register it |
+| Name matches registry key | `spec.name == key` used to register it |
 | Name is lowercase and non-empty | Prevents `"PostgreSQL"` vs `"postgresql"` mismatches |
 | Parameter names are uppercase and unique | `ParameterSpec.name` conventions |
-| `driver_key` values are unique | No two params map to the same driver kwarg |
+| `driver_key` values are unique | No two params map to the same output key for a target |
 | Parameter `tier` is `"core"` or `"advanced"` | Valid tier values |
-| `auth_modes` is non-empty | Use `[NoAuth]` for auth-free backends — never leave this empty |
-| All `auth_modes` are `AuthSpec` subclasses | Catches accidental non-auth objects |
 | `provider_type` is not `None` | Required for downstream dispatching |
 
-### Full example
-
-```python
-# tests/unit/test_db_profiles.py
-
-import pytest
-from mountainash_settings import (
-    Profile, MISSING, ParameterSpec, ProfileSpec,
-    Registry, NoAuth, PasswordAuth, IAMAuth,
-    spec_invariants_for,
-)
-
-# Build the registry under test
-DATABASES = Registry("databases")
-register = DATABASES.decorator()
-
-POSTGRESQL_SPEC = ProfileSpec(
-    name="postgresql",
-    provider_type="postgresql",
-    parameters=[
-        ParameterSpec(name="HOST",     type=str, tier="core",     driver_key="host"),
-        ParameterSpec(name="PORT",     type=int, tier="core",     driver_key="port",   default=5432),
-        ParameterSpec(name="DATABASE", type=str, tier="core",     driver_key="dbname"),
-        ParameterSpec(name="SSL_MODE", type=str, tier="advanced", driver_key="sslmode", default="prefer"),
-    ],
-    auth_modes=[NoAuth, PasswordAuth],
-)
-
-REDSHIFT_SPEC = ProfileSpec(
-    name="redshift",
-    provider_type="redshift",
-    parameters=[
-        ParameterSpec(name="HOST",     type=str, tier="core", driver_key="host"),
-        ParameterSpec(name="PORT",     type=int, tier="core", driver_key="port", default=5439),
-        ParameterSpec(name="DATABASE", type=str, tier="core", driver_key="database"),
-    ],
-    auth_modes=[PasswordAuth, IAMAuth],
-)
-
-@register
-class PostgreSQLSettings(Profile):
-    __spec__ = POSTGRESQL_SPEC
-
-@register
-class RedshiftSettings(Profile):
-    __spec__ = REDSHIFT_SPEC
-
-# This one line gives you parametrised invariant tests for BOTH specs.
-# Add more specs to the registry — they are covered automatically.
-TestDatabaseInvariants = spec_invariants_for(DATABASES)
-```
-
-Running `pytest tests/unit/test_db_profiles.py` will produce one test per invariant per descriptor:
-
-```
-tests/unit/test_db_profiles.py::TestDatabaseInvariants_databases::postgresql::test_name_matches_registry_key PASSED
-tests/unit/test_db_profiles.py::TestDatabaseInvariants_databases::postgresql::test_auth_modes_nonempty PASSED
-tests/unit/test_db_profiles.py::TestDatabaseInvariants_databases::redshift::test_driver_keys_unique PASSED
-...
-```
-
-### Resetting the registry between tests
-
-If tests register descriptors dynamically, use the built-in test seams to snapshot and restore state:
-
-```python
-import pytest
-from my_package.settings import DATABASES
-
-@pytest.fixture(autouse=True)
-def isolate_registry():
-    snap = DATABASES._snapshot_for_tests()
-    yield
-    DATABASES._reset_for_tests(*snap)
-```
+These checks do not prove that kwargs work with a real driver. Keep the domain's
+driver-contract tests separately. For tests that register classes dynamically,
+create a fresh registry per test instead of depending on another test's state.
 
 ---
 
@@ -587,7 +399,7 @@ Each tenant gets its own structural parameters, so the cache naturally isolates 
 def build_tenant_params(tenant_id: str) -> SettingsParameters:
     return SettingsParameters.create(
         settings_class=AppSettings,
-        config_files=[f"config/tenants/{tenant_id}.yaml", "config/base.yaml"],
+        config_files=["config/base.yaml", f"config/tenants/{tenant_id}.yaml"],
         env_prefix=f"{tenant_id.upper()}_",
     )
 
@@ -601,14 +413,14 @@ settings_globex = get_settings(settings_parameters=build_tenant_params("globex")
 
 - `get_settings()` selects one private source context for the five structural
   selectors (config files, settings class, env prefix, secrets dir, and
-  secrets provider). It returns a fresh independently owned result for every
+   selected secret store's identity). It returns a fresh independently owned result for every
   retrieval.
 - **Runtime kwargs do not affect structural identity.** They are
   invocation-local complete-validation inputs and never become retained
   baseline state.
 - Selected source inputs remain pinned for a context. Normal retrieval does
   not clear, refresh, or reread them; a new structural context may capture its
-  own source state. Context/provider refresh is separate lifecycle work.
+  own source state. A new process loads changed deployment inputs.
 
 ```python
 # These calls share pinned source state, not a returned settings instance:

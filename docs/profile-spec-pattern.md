@@ -1,201 +1,148 @@
-# The ProfileSpec Pattern: Why and When
+# Profiles: declaration, emission and extension
 
-The quickstart shows `Profile` + `ProfileSpec` used to define a connection profile. This guide explains the design rationale — what you gain over a plain `MountainAshBaseSettings` subclass, and when the extra structure is worth it.
-
-## The plain subclass approach
-
-When you need settings for a single connection type, a direct subclass is the simplest thing that works:
-
-```python
-from pydantic import Field, SecretStr
-from mountainash_settings import MountainAshBaseSettings
-
-class PostgreSQLSettings(MountainAshBaseSettings):
-    HOST: str = Field(default=...)
-    PORT: int = Field(default=5432)
-    DATABASE: str = Field(default=...)
-    USERNAME: str = Field(default=...)
-    PASSWORD: SecretStr = Field(default=...)
-```
-
-This is fine for one profile in one application. The friction starts when you have many.
-
-## What the ProfileSpec pattern adds
-
-### 1. The spec is inspectable data, not just code
-
-A `ProfileSpec` is a frozen dataclass — it's a value you can pass around, iterate over, and query programmatically, independently of any settings instance. Each `ParameterSpec` carries metadata that a plain pydantic field cannot express:
-
-| `ParameterSpec` attribute | What it holds |
-|---|---|
-| `driver_key` | The kwarg name the underlying driver expects (e.g. `"dbname"` not `"DATABASE"`) |
-| `tier` | `"core"` or `"advanced"` — audit-style severity for documentation and schema generation |
-| `secret` | Whether to wrap as `SecretStr` and unwrap at the kwargs boundary |
-| `transform` | A callable applied to the value when emitting driver kwargs |
-| `validator` | A pydantic-compatible field-level validator |
-| `template` | A `{FIELD_NAME}` template string for auto-derived fields |
-
-None of these exist in a plain pydantic `FieldInfo`. With a direct subclass you can define all the behaviour, but it is scattered across field annotations, validators, and `post_init()` methods with no single place to introspect it.
-
-With a spec, you can query the shape of a profile without constructing an instance:
-
-```python
-for spec in POSTGRESQL_SPEC.parameters:
-    if spec.secret:
-        print(f"  {spec.name} is a secret (driver key: {spec.driver_key})")
-```
-
-### 2. Field installation happens once, not per subclass
-
-With a direct subclass, every profile you write re-declares its fields. Twelve database profiles means twelve copies of `HOST`, `PORT`, `DATABASE`, each with slightly different types or defaults — and it's easy for them to drift.
-
-`Profile.__pydantic_init_subclass__` reads the `__spec__` at class-creation time and installs pydantic fields automatically. The spec is the single source of truth. If `POSTGRESQL_SPEC` says `PORT` defaults to `5432`, every subclass pointing at it gets that default — you cannot accidentally override it in the wrong place.
-
-```python
-# The spec is declared once
-POSTGRESQL_SPEC = ProfileSpec(
-    name="postgresql",
-    provider_type="postgresql",
-    parameters=[
-        ParameterSpec(name="HOST",     type=str, tier="core", driver_key="host"),
-        ParameterSpec(name="PORT",     type=int, tier="core", driver_key="port", default=5432),
-        ParameterSpec(name="DATABASE", type=str, tier="core", driver_key="dbname"),
-    ],
-    auth_modes=[NoAuth, PasswordAuth],
-)
-
-# The class declares nothing — fields come from the spec
-class PostgreSQLSettings(Profile):
-    __spec__ = POSTGRESQL_SPEC
-```
-
-### 3. The auth union is assembled automatically
-
-A connection profile typically accepts more than one auth mode, and the valid modes are part of the profile's definition — not every auth mode makes sense for every backend.
-
-With a direct subclass you would define this yourself:
-
-```python
-# Manual discriminated union — boilerplate per class
-class PostgreSQLSettings(MountainAshBaseSettings):
-    auth: Union[NoAuth, PasswordAuth] = Field(discriminator="kind")
-```
-
-The spec declares `auth_modes=[NoAuth, PasswordAuth]`, and `Profile` assembles the discriminated union field automatically. Add a new valid auth mode to the spec; all subclasses pick it up. Remove one; it is rejected at validation time for every profile pointing at that spec.
-
-### 4. The `_default_kwargs()` method handles the naming mismatch
-
-Settings field names follow Python conventions (uppercase, SETTINGS_STYLE). Driver kwargs follow the driver's conventions (usually lowercase, sometimes camelCase). Without help, you write a mapping manually for every profile:
-
-```python
-# Manual mapping — repeated in every settings class
-def to_driver_kwargs(self) -> dict:
-    return {
-        "host": self.HOST,
-        "port": self.PORT,
-        "dbname": self.DATABASE,
-        "password": self.PASSWORD.get_secret_value(),
-    }
-```
-
-`Profile._default_kwargs()` generates this mapping from `ParameterSpec.driver_key` automatically. It also handles:
-
-- **SecretStr unwrapping** — `spec.secret=True` fields are unwrapped via `.get_secret_value()` before emission
-- **None skipping** — optional fields that were not set are omitted from the output dict
-- **Transform application** — if `spec.transform` is set, it is called on the value before the kwarg is written
-
-```python
-settings = PostgreSQLSettings(HOST="db.example.com", DATABASE="myapp", auth=NoAuth())
-settings._default_kwargs()
-# {"host": "db.example.com", "port": 5432, "dbname": "myapp"}
-# PORT used its default; PASSWORD was None so it was skipped
-```
-
-### 5. A Registry enables dynamic lookup by name
-
-When the connection type is determined at runtime (e.g. read from a config file, dispatched from a string), a plain subclass gives you nothing to look up against. You end up maintaining your own `dict[str, type]` manually.
-
-`Registry` is that dict, with duplicate protection and descriptive `KeyError` messages:
-
-```python
-DATABASES = Registry("databases")
-register = DATABASES.decorator()
-
-@register
-class PostgreSQLSettings(Profile): ...
-
-@register
-class RedshiftSettings(Profile): ...
-
-# Runtime dispatch from a string — no manual mapping needed
-backend = config["backend"]                          # e.g. "postgresql"
-spec = DATABASES.get_spec(backend)
-cls = DATABASES.get_settings_class(backend)
-settings = cls(HOST=..., DATABASE=..., auth=...)
-```
-
-This pattern is the foundation for packages like `mountainash-data` that let callers configure any supported backend from a config file.
-
-### 6. Every new registration gets invariant tests for free
-
-With direct subclasses, testing that every profile satisfies the same structural rules requires either duplication (one test per class) or a manually maintained parametrised test.
-
-`spec_invariants_for(REGISTRY)` returns a pytest class parametrised over every spec in the registry. Add a new profile; it is automatically covered. The invariants check things that are easy to get wrong — parameter names in the wrong case, duplicate `driver_key` values, empty `auth_modes`, missing `provider_type`.
-
-```python
-# tests/unit/test_database_profiles.py
-
-from mountainash_settings import spec_invariants_for
-from my_package.db.settings import DATABASES
-
-TestDatabaseInvariants = spec_invariants_for(DATABASES)
-# That's it. Every spec in DATABASES is now tested.
-```
+`Profile` extends `MountainAshBaseSettings` with a shared mapping from settings
+fields to driver arguments. It retains the same sources, templates, selected
+stores and direct/cached retrieval paths as an ordinary settings class.
 
 ## When to use each approach
 
-| Situation | Use |
+| Need | Start with |
 |---|---|
-| One-off settings class for your own application | Plain `MountainAshBaseSettings` subclass |
-| Several connection types in the same domain that must be lookable by name | `ProfileSpec` + `Registry` |
-| You need to emit driver kwargs with field renaming, SecretStr unwrapping, or value transforms | `Profile` (`_default_kwargs()`) |
-| You want to introspect profile structure programmatically (schema generation, documentation, audit) | `ProfileSpec` — it's just data |
-| You're building a library where downstream code registers profiles you don't control | `Registry` + `spec_invariants_for()` |
-| The valid auth modes differ between backends | `ProfileSpec.auth_modes` discriminated union assembly |
+| Application fields or a short explicit driver mapping | [Ordinary settings](../examples/driver_mapping/) |
+| Visible typed fields with reusable emission conventions | [Native profile fields](../examples/profile_emission/) |
+| Field lists assembled as data | [Explicit specs](../examples/explicit_specs/) |
+| Metadata inspection without loading values | [Spec inspection](../examples/spec_inspection/) |
+| Caller selection by name | [Optional registry](../examples/registry_discovery/) |
+| Domain-specific declaration metadata | [Typed spec subclass](../examples/domain_metadata/) |
+| Several driver/client argument shapes | [Target mappings and adapters](../examples/target_adapters/) |
 
-## What you give up
+Ordinary Pydantic classes already support inheritance, aliases, validators, custom
+metadata and `model_fields` inspection. Profiles give these consumers a common
+spec and emission convention. A registry is an optional discovery layer.
 
-The pattern is not free. Compared to a plain subclass:
+## Native field declarations
 
-- **More indirection** — fields are installed at class-creation time via `__pydantic_init_subclass__`, which is invisible to a reader who just looks at the class body. IDE "go to definition" on a field like `HOST` will not lead anywhere useful — the field comes from `__spec__`, not the class body.
-- **Dynamic field installation is pydantic-version-sensitive** — it mutates `model_fields` and calls `model_rebuild(force=True)`, which is not officially documented by pydantic and may need adjustment on major pydantic upgrades.
-- **Slightly more ceremony to set up** — you need a `ProfileSpec`, at least one `ParameterSpec` per field, a `Registry`, and a `Profile` subclass, before you have a working settings class.
+Declare annotated fields on `Profile`, with concrete `name` and `provider_type`
+class headers. `ProfileField(...)` combines Pydantic field arguments with:
 
-For a single application-specific settings class, none of this is worth it. For a library or any code where you manage more than two or three similar profiles, the structural guarantees pay for themselves quickly.
+| Option | Meaning |
+|---|---|
+| `driver_key` | Output name, target-to-name mapping, or explicit `None` to exclude |
+| `tier` | `"core"` or `"advanced"` classification |
+| `transform` | Callable applied to an emitted value |
+| `template` | Brace template used to derive the field after inputs load |
+
+Lowercase output mapping is opt-in through `driver_keys="lower"`. An omitted
+mapping follows that convention; explicit names and exclusions take precedence.
+Use `SecretStr` annotations and native Pydantic validators for generated fields.
+Aliases, constraints, factories and decorator validators retain Pydantic semantics.
+
+The completed class publishes a generated `__spec__`. Its fields remain native
+Pydantic fields; the generated spec describes them for profile consumers.
+
+## Explicit specs
+
+An authored `ProfileSpec` assigned to a class's own `__spec__` installs its fields.
+Each `ParameterSpec` supplies the field's name, type and tier, plus optional
+default, description, mapping, secret, validator, transform and template settings.
+The [explicit-spec recipe](../examples/explicit_specs/) emits the same
+database arguments as the native declaration.
+
+Do not combine an own `__spec__` with generated-mode headers on one class.
+Generated specs cannot fully reconstruct aliases, factories or decorator
+validators and must not be fed back into the explicit-spec installer.
+
+## Inheritance and completion
+
+Generated application field names must be uppercase. Untouched inherited fields
+retain metadata; redeclaring a field follows Pydantic's replacement rules.
+For example, `PORT: int = 6432` replaces prior constraints and field options.
+Repeat any constraints and `ProfileField` options that should remain. Pydantic
+rejects unannotated `PORT = 6432` overrides.
+
+Concrete generated subclasses declare their own lowercase `name` and non-None
+`provider_type`. A class declaring neither is intermediate. Intermediate and
+unresolved classes expose their own `__spec__ = None` and cannot construct or
+register. Resolve forward references with a successful `model_rebuild()` before
+use; `defer_build=True` also requires an explicit successful rebuild.
+A no-change rebuild preserves completed spec identity. Dynamic declaration
+mutation is unsupported.
+
+One profile ancestry chain plus ordinary behavior mixins is supported; competing
+profile bases are rejected. A generated child can extend an explicit-spec parent:
+untouched installed fields retain mappings and exclusions, while additional body
+fields enter the generated spec. Under `driver_keys="lower"` those additions emit
+unless excluded explicitly.
+
+## Inspection and typing
+
+Inspect `__spec__.parameters` for domain field metadata and output mappings,
+without constructing a settings instance. The spec is a frozen dataclass, but
+its parameter list and metadata dictionary remain mutable; treat declarations
+as fixed.
+
+- `default is MISSING` means required.
+- `default is FACTORY_DEFAULT` means a native factory exists on the owning field.
+  Projection does not evaluate factories. Inspect `model_fields` for the factory.
+- Annotated attributes retain static types. Pinned mypy 1.10.1 does not catch
+  every missing required `ProfileField` constructor argument or invalid class
+  header; runtime validation remains authoritative.
+- Spec inspection is separate from JSON Schema generation. The inherited
+  `SETTINGS_CLASS` bookkeeping field currently prevents general
+  `model_json_schema()` support on settings and profiles.
+
+## Domain metadata
+
+Domains can select a `ProfileSpec` dataclass subtype with `spec_type=` and supply
+its typed metadata in class headers. Validation is strict: coercible but wrongly
+typed values and unknown options fail at declaration time. Metadata inherits by
+key; supplied dictionaries replace inherited dictionaries. Metadata does not
+automatically set the defaults of application fields.
+
+Put Pydantic settings options in `model_config`. The
+[domain recipe](../examples/domain_metadata/) keeps header metadata
+and field defaults explicit.
 
 ## Extending emission
 
-`emit()` targets are any `Hashable`, so other domains can add their own. The
-sanctioned mechanism is the **inline** per-target adapter map declared on the
-profile class:
+`emit()` maps fields, skips excluded fields and `None` values, unwraps `SecretStr`,
+and applies output transforms. It returns driver kwargs; the application owns
+connections and their lifetime. Emission may expose credentials, so do not log
+the resulting dictionary.
 
-```python
-class PasswordAuthProfile(Profile):
-    __spec__ = ...
-    __adapters__ = {MyTarget.POSTGRES: _postgres}
+A string `driver_key` applies to every target; a dictionary scopes names per
+target. Targets can be any hashable value. Small local examples use strings;
+shared domain libraries can define their own enums or other namespaced identifiers.
 
+Declare plural `__adapters__ = {target: callable}` on the profile. An adapter
+receives `(profile, merged_kwargs)` and returns the final dictionary. Emitted
+field values override same-named `base` values before the adapter runs.
+Only a shallow copy of `base` is taken, so adapters must copy nested containers
+before modifying them. See the [runnable adapter recipe](../examples/target_adapters/).
 
-def _postgres(auth, base):
-    return {**base, "user": auth.USERNAME,
-            "password": auth.PASSWORD.get_secret_value()}
-```
+Profiles with target-scoped mappings or adapters require `emit(target)` and reject
+unknown targets. No target is needed for a profile with only bare mappings and
+no adapters.
 
-Each adapter has the 2-arg compose signature `(profile, merged) -> dict`;
-`instance.emit(target, base=...)` routes through the entry for `target`. Use a
-package-namespaced target type (an `Enum` / frozen dataclass), never bare
-strings.
+`ProfileField(template=...)` derives values after loading. With cached retrieval,
+`reinitialise=True` recomputes eligible derived values from current invocation
+inputs while preserving explicit values. It does not reload sources. See
+[recomputation](../examples/recomputation/).
 
-A consumer that needs to extend emission for a profile it does not own builds a
-**consumer-owned** dispatch table (`(provider_type, auth_class) -> fn`) and reads
-the credential's data directly, rather than mutating a class it imports — see
-`mountainash-auth-client/a.architecture/credentials-are-rendered-by-the-consumer.md`.
+## Registration and invariant checks
+
+Use `Registry.register(spec, cls)` to register a completed class, or obtain
+`register = registry.decorator()` and use bare `@register` on its declaration.
+Register a name only once. Generated classes register their own published spec.
+Registry lookup selects a class, not an instance or a settings cache.
+
+`spec_invariants_for(registry)` creates pytest checks for registrations present
+when called. See [the executable invariant module](../examples/invariant_checks/).
+Keep separate tests for compatibility with the actual driver.
+
+## Authentication
+
+Authentication models and OAuth flows belong to
+[mountainash-auth-client](https://github.com/mountainash-io/mountainash-auth-client).
+Settings provides profiles and selected local stores; it no longer bundles auth
+models, auth unions or `auth_to_driver_kwargs()`. See the [0.1 migration guide](migration-0.1.md).

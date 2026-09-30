@@ -59,7 +59,7 @@ criteria. Consult it before documenting schema support or changing bookkeeping.
 | `src/mountainash_settings/secrets/` | Local records, storage protocols and native implementations |
 | `tests/native_store/` | Filesystem and platform-native regressions |
 | `tests/unit/tools/` | Qualification and typing tooling checks |
-| `examples/reporting/` | Runnable README walkthrough and exact config fixtures |
+| `examples/` | Independent configuration recipes using consistent application/database settings and shared fixtures |
 
 ## Verification
 
@@ -67,7 +67,7 @@ Use `pyproject.toml` and `hatch.toml` as dependency and environment authorities.
 
 ```bash
 hatch run test_github:test
-hatch run test_github:pytest tests/test_readme_examples.py -q
+hatch run test_github:pytest tests/test_readme_examples.py tests/test_examples.py -q
 hatch run test:test
 hatch run ruff:check
 hatch run mypy:check
@@ -84,17 +84,26 @@ Windows-native passes. Ruff's configured check covers `src`.
 
 ## README and examples
 
-Update `README.md` and `examples/reporting/` together. `reporting.py` is the exact
-concatenation of README Python blocks separated by one blank line, including
-their explanatory comments. YAML, TOML and dotenv examples match their files too.
-`tests/test_readme_examples.py` checks textual agreement and runs the actual script
-and generated invariant tests in an isolated temporary directory.
+The root README owns positioning, a broad capability map, one runnable quick
+start and links to depth. `tests/test_readme_examples.py` executes its actual
+Python block with its YAML input; do not expand it into a concatenated tutorial.
 
-Keep the progression from basic fields and direct loading to templates, cached
-retrieval/local overrides, then optional profiles, inspection and registration.
-Explain declaration and retrieval as two use cases, each with two patterns.
-The threaded comparison is deferred at the owner's request. Examples retain the
-README's pedagogical ordering and explanatory context.
+`examples/` contains sibling topic directories, each with a README and
+an independently runnable `example.py` (or `test_profiles.py` for invariants).
+Keep the application/database vocabulary and shared fixture data coherent. Repeat small
+declarations when they keep the lesson visible; never import another recipe or
+require it to run first. Each README states a question, root-level command,
+expected result and relevant explanation. Resolve bundled paths from `__file__`.
+
+`tests/test_examples.py` discovers scripts and executes them in fresh
+processes, with isolated environments and temporary writable resources. It also
+runs the generated invariant checks through pytest. Preserve explicit coverage
+configuration propagation for subprocesses that change working directory.
+
+Explain declaration and retrieval as two use cases, each with two patterns. The
+suite index supplies a reading order; recipes remain independently accessible.
+The threaded comparison is deferred at the owner's request. Contributor and
+textbook maintenance instructions live in `CONTRIBUTING.md` and `docs-site/README.md`.
 
 The docs sites have their own refresh workflows. Do not expand README work into
 site regeneration or edit generated provenance just to advance its baseline.
