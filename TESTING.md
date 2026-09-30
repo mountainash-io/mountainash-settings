@@ -76,14 +76,18 @@ pass does not replace the installed three-platform qualification.
 
 | Workflow | Trigger and scope |
 |---|---|
-| [Pytest](.github/workflows/python-run-pytest.yml) | PRs changing `src/mountainash_settings/**`, or manual dispatch; Ubuntu 24.04 / Python 3.12, `test_github:test-cov`, Codecov coverage and test-result uploads |
+| [Pytest](.github/workflows/python-run-pytest.yml) | Pushes to `develop`/`main`, PRs changing source/tests/examples/README/test configuration or this workflow, and manual dispatch; Ubuntu 24.04 / Python 3.12, `test_github:test-cov`, Codecov coverage and test-result uploads |
 | [Production typing](.github/workflows/python-run-mypy.yml) | All PRs and pushes to `develop`; four mypy passes |
 | [Local Store Candidate](.github/workflows/native-store-candidate.yml) | PRs targeting `develop`, or manual dispatch; installed native-store checks on Linux/macOS/Windows, Python 3.12 |
 | [Release Candidate Qualification](.github/workflows/release-candidate-qualification.yml) | Manual dispatch; full installed suite and two-process lifecycle on all three OSes, Python 3.12/3.13, wheel and sdist-rebuilt wheel |
 | [Build, Verify, and Publish](.github/workflows/build-and-release-package.yml) | PRs targeting `main`/`develop`, or manual dispatch; package build/install verification, separately gated publication |
 
-The Pytest workflow does not run automatically for test-only or documentation-only
-changes. Run the relevant local checks or dispatch it manually. Its retained
+Codecov coverage and test-result uploads authenticate with GitHub OIDC using
+job-scoped `id-token: write`. Upload failures fail the job. Push runs keep the
+`develop` and `main` coverage baselines current after merges.
+
+Documentation-only PRs outside the README/examples do not trigger Pytest.
+Run relevant local checks or dispatch it manually. Its retained
 `fallback_branch` input sets an environment variable; the current workflow does
 not check out dependency repositories or select matching dependency branches.
 
