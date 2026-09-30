@@ -28,6 +28,8 @@ and development environments. Hatch creates its own environments for checks.
 Follow the surrounding Python style, use type hints and keep functions focused.
 Add tests for observable contracts and credible regressions; avoid checks that
 duplicate stronger coverage or assert implementation details.
+Place tests under their package-module owner and reuse shared fixtures according
+to [the suite organisation rules](TESTING.md#suite-organisation-and-fixtures).
 
 Start with the settings-only suite and production checks:
 
@@ -49,7 +51,7 @@ checkout. Keep mypy pinned to 1.10.1 with its existing rules and test exclusion.
 - Add independent, single-concept [configuration recipes](examples/) with a question,
   root-level command, expected result and explanation. Use consistent sample data.
 - Verify README and recipe changes with
-  `hatch run test_github:pytest tests/test_readme_examples.py tests/test_examples.py -q`.
+  `hatch run test_github:pytest tests/examples -q`.
 - Keep designs, plans and historical delivery evidence in
   [mountainash-central](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/superpowers/INDEX.md).
 - Follow [the textbook workflow](docs-site/README.md) for generated-site refreshes.

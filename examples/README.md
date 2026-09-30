@@ -95,7 +95,7 @@ The recipe scripts are executed independently in temporary directories, with
 ambient configuration removed:
 
 ```bash
-hatch run test_github:pytest tests/test_readme_examples.py tests/test_examples.py -q
+hatch run test_github:pytest tests/examples -q
 ```
 
 The root README's quick start is executed separately with its documented input.

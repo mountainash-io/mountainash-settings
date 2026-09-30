@@ -18,8 +18,8 @@ hatch run test_github:test-cov
 For focused work:
 
 ```bash
-hatch run test_github:pytest tests/test_base_settings.py -v
-hatch run test_github:pytest tests/test_readme_examples.py tests/test_examples.py -q
+hatch run test_github:pytest tests/settings/test_base_settings.py -v
+hatch run test_github:pytest tests/examples -q
 ```
 
 Append `::test_name` to a test path to select a specific test. The README/example
@@ -38,6 +38,39 @@ Ruff checks `src`; `hatch run ruff:fix` applies fixes. Mypy is pinned to 1.10.1
 with the existing rules and test exclusion. `tools/check_types.py` runs common,
 Linux POSIX, macOS POSIX and Windows-native passes; do not add `--strict`.
 
+## Suite organisation and fixtures
+
+Tests follow the package's module ownership: `settings/` (including `app/`),
+`settings_cache/`, `settings_parameters/`, `profiles/` and `secrets/` (including
+`native/`). Root `test_resolve.py` and `test_public_api.py` cover root-module
+contracts. `tests/examples/` executes documentation; `tests/tools/` covers repository
+tooling. Select an owner directory to run its tests. Markers describe test types
+without duplicating this tree under unit/integration directories.
+
+- `tests/conftest.py` explicitly registers shared modules from `tests/fixtures/`.
+  Request fixtures by argument; import reusable models from their support module.
+- Use `isolated_settings_manager` for public retrieval and direct manager tests
+  that need the same fresh owner. Mutable settings, stores and managers are
+  function-scoped. A test exercising manager construction may construct its own.
+- Keep domain setup in the nearest `conftest.py`: the AppSettings clock under
+  `settings/app/`, subprocess environments under `examples/`, and the filesystem
+  `store` fixture under `secrets/`. Keep scenario-specific models and helpers close
+  to their tests when their declarations are part of the scenario.
+- Use `tmp_path` for writable resources and the shared configuration fixtures for
+  repeated inputs. Static inputs live in `tests/data/`, reached via `test_data_dir`
+  rather than a working-directory-relative string. Keep raw malformed inputs
+  visible in the tests that exercise them.
+- Declare markers in `pytest.ini`. Support models named `Test*` use
+  `__test__ = False` so pytest does not mistake them for test containers.
+
+The native qualification runner copies `tests/secrets/native/`, the secrets
+conftest and selected portable tests into an independent directory. Keep that
+subset self-contained when adding fixture/helper dependencies. Root fixtures
+are deliberately outside its `--confcutdir` boundary.
+
+`tests/test_config_files.py` contains historical commented code and `tests/test.ipynb`
+is a historical notebook. Neither contributes collected pytest cases.
+
 ## Optional sibling-checkout environment
 
 The `test` environment installs `mountainash-auth-client` from the sibling
@@ -49,7 +82,7 @@ settings-only suite.
 |---|---|
 | `hatch run test:test` | Suite with coverage, JUnit and JSON/XML/HTML coverage reports |
 | `hatch run test:test-quick` | Suite without coverage |
-| `hatch run test:test-target-quick tests/test_base_settings.py` | Focused tests without coverage |
+| `hatch run test:test-target-quick tests/settings/test_base_settings.py` | Focused tests without coverage |
 | `hatch run test:test-changed-quick` | Selection through pytest-picked; not a substitute for the suite |
 | `hatch run test:test-ci` | Structured pytest JSON, JUnit and coverage reports |
 
@@ -67,7 +100,7 @@ Keep that configuration propagation when changing subprocess commands: the
 examples run from temporary working directories and must retain the same
 branch-coverage settings as their parent.
 
-Native store tests live in `tests/native_store/`. Linux needs `libacl.so.1` and
+Native store tests live in `tests/secrets/native/`. Linux needs `libacl.so.1` and
 ACL fixture tools (`acl` on Ubuntu); macOS and Windows use their native APIs.
 Platform-specific tests may be unselected on other platforms. A local Linux
 pass does not replace the installed three-platform qualification.
