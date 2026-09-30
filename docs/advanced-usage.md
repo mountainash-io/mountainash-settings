@@ -166,7 +166,7 @@ If an otherwise valid supplied value cannot be faithfully represented in, and in
 
 ### Service registry pattern
 
-`SettingsParameters` objects are frozen and hashable — they can be stored in dicts and used as cache keys. This makes them a natural fit for service registries:
+Store reusable `SettingsParameters` objects under application-owned service names:
 
 ```python
 REGISTRY = {
@@ -191,6 +191,12 @@ def get_service(name: str, **runtime_overrides):
         )
     return get_settings(settings_parameters=base)
 ```
+
+The dataclass is frozen, but its nested kwargs are not deeply immutable.
+Equality and hashing compare structural selectors only, ignoring runtime kwargs.
+Two parameter objects with different runtime values can therefore compare equal;
+do not use them as keys for caching complete settings results. The registry above
+uses service names as keys and parameters as values.
 
 ## Cache contexts and runtime materialization
 

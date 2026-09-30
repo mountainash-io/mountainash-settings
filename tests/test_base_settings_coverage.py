@@ -671,7 +671,7 @@ class TestEdgeCases:
 # ---------------------------------------------------------------------------
 # Canonical pydantic assignment semantics
 # ---------------------------------------------------------------------------
-# See docs/superpowers/specs/2026-04-18-setattr-bypass-fix-design.md
+# See mountainash-central/04.planning/mountainash-settings/superpowers/specs/2026-04-18-setattr-bypass-fix-design.md
 # Tests codify the contract restored by enabling validate_assignment=True.
 # ---------------------------------------------------------------------------
 
@@ -817,7 +817,7 @@ class TestEdgeCases:
 
 #         If this assertion fires, someone disabled validate_assignment on
 #         MountainAshBaseSettings. Do not 'fix' by deleting this test.
-#         See docs/superpowers/specs/2026-04-18-setattr-bypass-fix-design.md
+#         See mountainash-central/04.planning/mountainash-settings/superpowers/specs/2026-04-18-setattr-bypass-fix-design.md
 #         """
 #         assert MountainAshBaseSettings.model_config.get("validate_assignment") is True
 

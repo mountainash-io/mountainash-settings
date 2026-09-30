@@ -1,178 +1,90 @@
-# Testing Mountain Ash Settings
+# Testing
 
-This document outlines the testing procedures for the Mountain Ash Settings project, including how to run tests locally and via GitHub Actions.
+Use Python 3.12+ and [Hatch](https://hatch.pypa.io/). Run commands from the repository
+root. [hatch.toml](hatch.toml) owns environments and scripts;
+[pyproject.toml](pyproject.toml) owns package dependencies and coverage settings.
+Both test environments currently select Python 3.12.
 
-## Table of Contents
+## Everyday checks
 
-1. [Local Testing](#local-testing)
-2. [Test Commands Reference](#test-commands-reference)
-3. [Coverage Reports](#coverage-reports)
-4. [GitHub Actions Testing](#github-actions-testing)
-5. [Testing Dependencies](#testing-dependencies)
+The `test_github` environment runs the settings-only suite without sibling checkouts:
 
-## Local Testing
+```bash
+python -m pip install hatch
+hatch run test_github:test
+hatch run test_github:test-cov
+```
 
-We use [Hatch](https://hatch.pypa.io/) to manage our development environment and run tests. To run tests locally:
+For focused work:
 
-1. Ensure you have Hatch installed:
-   ```bash
-   pip install hatch
-   ```
+```bash
+hatch run test_github:pytest tests/test_base_settings.py -v
+hatch run test_github:pytest tests/test_readme_examples.py tests/test_examples.py -q
+```
 
-2. Run the comprehensive test suite (recommended for daily use):
-   ```bash
-   hatch run test:test
-   ```
-   This command runs tests with coverage and generates all coverage reports (JSON, XML, HTML) plus a terminal summary.
+Append `::test_name` to a test path to select a specific test. The README/example
+checks execute the documented code, independent recipe scripts and generated
+profile invariants.
 
-## Test Commands Reference
+Run lint, production typing and package builds as appropriate:
 
-### Core Testing Commands (Use these daily)
+```bash
+hatch run ruff:check
+hatch run mypy:check
+hatch build
+```
 
-- **Full test suite with coverage:**
-  ```bash
-  hatch run test:test
-  ```
-  Runs pytest with coverage, generates JSON/XML/HTML reports, and shows missing coverage.
+Ruff checks `src`; `hatch run ruff:fix` applies fixes. Mypy is pinned to 1.10.1
+with the existing rules and test exclusion. `tools/check_types.py` runs common,
+Linux POSIX, macOS POSIX and Windows-native passes; do not add `--strict`.
 
-- **GitHub Actions test with coverage:**
-  ```bash
-  hatch run test_github:test-cov
-  ```
-  Runs tests with coverage and generates XML output for CI.
+## Optional sibling-checkout environment
 
-- **Quick testing (no coverage overhead):**
-  ```bash
-  hatch run test:test-quick
-  ```
-  Fast iteration testing without coverage collection.
+The `test` environment installs `mountainash-auth-client` from the sibling
+`../mountainash-auth-client` checkout and includes extra pytest plugins. Use it
+when that dependency is available and relevant; it is not required for the
+settings-only suite.
 
-### Targeted Testing (For debugging specific issues)
+| Command | Purpose |
+|---|---|
+| `hatch run test:test` | Suite with coverage, JUnit and JSON/XML/HTML coverage reports |
+| `hatch run test:test-quick` | Suite without coverage |
+| `hatch run test:test-target-quick tests/test_base_settings.py` | Focused tests without coverage |
+| `hatch run test:test-changed-quick` | Selection through pytest-picked; not a substitute for the suite |
+| `hatch run test:test-ci` | Structured pytest JSON, JUnit and coverage reports |
 
-- **Test specific files/tests with coverage:**
-  ```bash
-  hatch run test:test-target tests/test_base_settings.py::TestBaseSettings::test_specific_method
-  ```
+Additional marker, benchmark and targeted-coverage scripts are defined in
+`hatch.toml`. There is no `test:cov` script.
 
-- **Test specific files/tests without coverage (fastest):**
-  ```bash
-  hatch run test:test-target-quick tests/test_base_settings.py
-  ```
+## Coverage and native-platform checks
 
-- **Test only changed files with coverage:**
-  ```bash
-  hatch run test:test-changed
-  ```
+`test_github:test-cov` writes `coverage.xml` and `junit.xml`. `test:test` also
+writes `coverage.json` and `htmlcov/index.html`; `test:test-ci` adds
+`pytest_report.json`. Report formats depend on the selected script.
 
-- **Test only changed files without coverage:**
-  ```bash
-  hatch run test:test-changed-quick
-  ```
+The main coverage commands pass `--cov-config={root}/pyproject.toml` explicitly.
+Keep that configuration propagation when changing subprocess commands: the
+examples run from temporary working directories and must retain the same
+branch-coverage settings as their parent.
 
-### Specialized Testing
+Native store tests live in `tests/native_store/`. Linux needs `libacl.so.1` and
+ACL fixture tools (`acl` on Ubuntu); macOS and Windows use their native APIs.
+Platform-specific tests may be unselected on other platforms. A local Linux
+pass does not replace the installed three-platform qualification.
 
-- **Performance benchmarks only:**
-  ```bash
-  hatch run test:test-perf
-  ```
+## GitHub Actions
 
-- **Test by markers:**
-  ```bash
-  hatch run test:test-unit        # Unit tests only
-  hatch run test:test-integration # Integration tests only
-  hatch run test:test-performance # Performance tests only
-  ```
+| Workflow | Trigger and scope |
+|---|---|
+| [Pytest](.github/workflows/python-run-pytest.yml) | PRs changing `src/mountainash_settings/**`, or manual dispatch; Ubuntu 24.04 / Python 3.12, `test_github:test-cov`, Codecov coverage and test-result uploads |
+| [Production typing](.github/workflows/python-run-mypy.yml) | All PRs and pushes to `develop`; four mypy passes |
+| [Local Store Candidate](.github/workflows/native-store-candidate.yml) | PRs targeting `develop`, or manual dispatch; installed native-store checks on Linux/macOS/Windows, Python 3.12 |
+| [Release Candidate Qualification](.github/workflows/release-candidate-qualification.yml) | Manual dispatch; full installed suite and two-process lifecycle on all three OSes, Python 3.12/3.13, wheel and sdist-rebuilt wheel |
+| [Build, Verify, and Publish](.github/workflows/build-and-release-package.yml) | PRs targeting `main`/`develop`, or manual dispatch; package build/install verification, separately gated publication |
 
-### CI/Reporting Commands
+The Pytest workflow does not run automatically for test-only or documentation-only
+changes. Run the relevant local checks or dispatch it manually. Its retained
+`fallback_branch` input sets an environment variable; the current workflow does
+not check out dependency repositories or select matching dependency branches.
 
-- **Full CI suite with structured reports:**
-  ```bash
-  hatch run test:test-ci
-  ```
-  Generates JSON test reports, JUnit XML, and all coverage formats.
-
-## Coverage Reports
-
-When you run tests with coverage, several output formats are generated:
-
-### Local Coverage Files Generated
-
-After running `hatch run test:test` or any coverage-enabled command, you'll find:
-
-- **`coverage.json`** - Machine-readable coverage data in JSON format
-- **`coverage.xml`** - Coverage data in XML format (for CI tools)
-- **`htmlcov/`** - Complete HTML coverage report directory
-  - Open `htmlcov/index.html` in your browser for interactive coverage exploration
-- **`junit.xml`** - JUnit test results format
-- **`pytest_report.json`** - Structured pytest results (when using `test-ci`)
-
-### Inspecting Coverage Results
-
-1. **Terminal Summary:** Coverage percentage and missing lines displayed after test completion
-
-2. **HTML Report:** Open `htmlcov/index.html` in your browser for:
-   - File-by-file coverage breakdown
-   - Line-by-line highlighting of covered/uncovered code
-   - Interactive navigation through your codebase
-
-3. **JSON Analysis:** Use `coverage.json` for programmatic analysis:
-   ```bash
-   python -c "import json; print(json.load(open('coverage.json'))['totals']['percent_covered'])"
-   ```
-
-4. **Missing Coverage:** The terminal report shows specific line numbers that lack coverage
-
-## GitHub Actions Testing
-
-Our GitHub Actions workflow automatically runs tests on pull requests and pushes to specific branches. The workflow is defined in `.github/workflows/python-run-pytest.yml`.
-
-Key points:
-- Tests are run on Ubuntu 24.04 with Python 3.12
-- The workflow is triggered on pull requests that modify `src/mountainash_settings/**` files
-- Uses the `test_github` environment defined in `hatch.toml`
-- Automatically uploads coverage to Codecov
-
-To manually trigger the tests in GitHub Actions:
-1. Go to the "Actions" tab in the GitHub repository
-2. Select the "Pytest Runner" workflow
-3. Click "Run workflow" and select the branch you want to test
-4. Choose the fallback branch for dependencies:
-   - `develop` (default)
-   - `main`
-5. Click "Run workflow" to execute
-
-## Testing Dependencies
-
-One of the key features of our testing setup is the ability to test changes across multiple Mountain Ash repositories simultaneously. This is particularly useful when making changes that affect multiple packages.
-
-To test dependency changes:
-1. Create branches with identical names across all relevant Mountain Ash repositories.
-2. Push your changes to these branches.
-3. When you create a pull request or push to the branch in this repository, the GitHub Actions workflow will automatically use the matching branches from the dependency repositories.
-4. If a matching branch doesn't exist for a dependency, the workflow falls back to using the branch specified in the workflow dispatch (either main or develop).
-
-This allows you to test integrated changes across multiple packages before merging, with the flexibility to choose which version of dependencies to fall back on.
-
-## Online Coverage Tracking
-
-We use [Codecov](https://codecov.io/) to track code coverage across commits and pull requests. Coverage reports are automatically uploaded after successful test runs in GitHub Actions.
-
-To view online coverage reports:
-1. Go to the [Codecov dashboard](https://codecov.io/github/mountainash-io/mountainash-settings) for this repository
-2. Navigate through files to see detailed coverage information
-3. View coverage trends over time and across branches
-4. Review coverage changes in pull requests
-
-We strive to maintain high code coverage. Please ensure that your contributions include appropriate test coverage.
-
-## Development Dependencies
-
-Our testing setup supports testing across multiple Mountain Ash repositories simultaneously, useful when making changes that affect multiple packages.
-
-To test dependency changes:
-1. Create branches with identical names across all relevant Mountain Ash repositories
-2. Push your changes to these branches
-3. When you create a pull request or push to the branch in this repository, the GitHub Actions workflow will automatically use the matching branches from dependency repositories
-4. If a matching branch doesn't exist for a dependency, the workflow falls back to the specified branch (main or develop)
-
-This allows you to test integrated changes across multiple packages before merging.
+For exact-artifact qualification and publication, follow [RELEASE.md](RELEASE.md).
