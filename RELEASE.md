@@ -20,6 +20,17 @@ separate owner authorization under the central release contract.
 The notes below retain historical development evidence; their old API-support
 statements and hashes are superseded by the current contract above.
 
+## Historical 0.1 candidate qualification — 2026-09-29
+
+Source commit `2f40607` passed installed-candidate qualification on Linux, macOS
+and Windows with Python 3.12 and 3.13. Wheel and sdist-rebuilt wheel runs passed
+the full suite and two-process lifecycle checks, with no failures or required
+skips. The earlier Windows marker-close defect was resolved; no xfail was accepted.
+See [run 36536362000](https://github.com/mountainash-io/mountainash-settings/actions/runs/36536362000).
+
+This historical receipt was relocated from the secrets usage guide. Later profile
+and documentation changes require renewed artifact qualification before release.
+
 ## Unpublished compatibility note — MAS-SEC-001
 
 The next release removes the public `SETTINGS_SOURCE_KWARGS` model field.

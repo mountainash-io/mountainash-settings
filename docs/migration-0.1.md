@@ -1,6 +1,8 @@
 # Migrating to 0.1.0
 
 0.1.0 starts the SemVer API. Removed names have no aliases or warning shims.
+This guide describes migration to the current development API; publication status
+and candidate qualification are tracked in [RELEASE.md](../RELEASE.md).
 
 | Removed surface | Replacement |
 |---|---|
@@ -17,10 +19,21 @@
 | Plain Pydantic `BaseSettings` passed to a cache | Subclass `MountainAshBaseSettings`; plain Pydantic classes still support direct construction |
 | `get_secrets_backend`, registry/provider lookup, `secrets_provider` | Construct/select a store and pass `secret_store=store` explicitly |
 | `SecretsBackend`, `ClearableBackend` | `SecretReader`, `SecretWriter`, `ClearableSecretStore` capabilities |
+| Bundled auth models, `auth_modes`, `auth_to_driver_kwargs()` | Authentication models and rendering owned by the consuming auth package |
+| `SETTINGS_SOURCE_KWARGS` | `SETTINGS_SOURCE_KWARG_NAMES` for diagnostics; `extract_settings_parameters()` for trusted reconstruction |
 
 The removed secrets-registry operations also include `register_secrets_backend`,
 `replace_secrets_backend` and `clear_secrets_registry`. Store implementations are
 in `mountainash_settings.secrets`; applications own selection and lifetime.
+
+## Profile declarations
+
+Explicit `ProfileSpec` declarations remain supported. For ordinary typed fields,
+you can instead declare a native `Profile` with `name=` and `provider_type=` class
+headers and use `ProfileField` for emission metadata. The class publishes its
+generated `__spec__`; bare registry decorators work with either form.
+Do not combine an authored `__spec__` with generated-mode headers on one class.
+See [declaration and inheritance](profile-spec-pattern.md).
 
 ## Adapter migration
 
@@ -78,8 +91,6 @@ the direct hook alone does not make a source cache-safe.
 
 ## Downstream delivery
 
-Develop and test consumer migrations against identified non-editable candidate
-artifacts before settings source freeze. Merge/publish downstream only after
-settings 0.1.0; consumer import failures are fixed at the consuming package,
-without restoring removed settings shims. Full settings requalification follows
-the passing ecosystem rehearsal.
+Consumer import failures are fixed in the consuming package, without restoring
+removed settings shims. Follow [the release procedure](../RELEASE.md#current-candidate--010)
+for candidate-artifact testing, ecosystem rehearsal and publication sequencing.

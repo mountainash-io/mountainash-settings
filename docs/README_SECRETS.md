@@ -126,7 +126,7 @@ bytes, dates, sets, custom objects, non-finite floats and reference cycles are
 rejected before any mutation; repeated non-cyclic subtrees are allowed. Reads
 return owned copies.
 
-Only a missing record returns `None`. An existing record that is empty/null,
+Only a missing record returns `None`. An existing record file that is empty/null,
 malformed or not JSON-native raises `SecretStoreUnavailableError` without
 mutation. There is no legacy mode or automatic repair.
 
@@ -188,12 +188,6 @@ The application provisions and secures store directories; the backend neither
 creates nor repairs the selected root. Native dependency and licensing evidence
 belongs to the release qualification records.
 
-The 0.1.0 source at commit `2f40607` passed installed-candidate qualification on
-Linux, macOS and Windows with Python 3.12 and 3.13. Both wheel and sdist-rebuilt
-wheel runs passed the full suite and two-process lifecycle checks, with no
-failures or required skips. The earlier Windows marker-close diagnostic defect
-is resolved; no xfail was accepted. See
-[qualification run 36536362000](https://github.com/mountainash-io/mountainash-settings/actions/runs/36536362000).
-
-That receipt identifies the tested artifacts. Subsequent README changes affect
-package build inputs and require renewed qualification before release.
+See [release procedure and qualification evidence](../RELEASE.md) for tested
+artifact identities and publication status. Platform targets do not by themselves
+establish qualification of the current checkout.

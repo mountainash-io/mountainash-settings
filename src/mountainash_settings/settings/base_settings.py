@@ -461,8 +461,9 @@ class MountainAshBaseSettings(BaseSettings):
     Assignments to declared fields after construction are revalidated via
     pydantic's field-validator pipeline — ``SecretStr`` wrapping, enum
     coercion, and ``AfterValidator`` transforms all run on every ``setattr``.
-    This is canonical pydantic v2 behaviour; see
-    ``docs/superpowers/specs/2026-04-18-setattr-bypass-fix-design.md``.
+    This is canonical pydantic v2 behaviour; see the assignment-semantics
+    design in mountainash-central's ``04.planning/mountainash-settings/``
+    ``superpowers/specs/2026-04-18-setattr-bypass-fix-design.md``.
     """
 
     model_config = SettingsConfigDict(
