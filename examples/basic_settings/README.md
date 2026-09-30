@@ -15,7 +15,7 @@ python examples/basic_settings/example.py
 Expected output:
 
 ```text
-reports: ordinary debug=False, diagnostic debug=True
+reports_app: ordinary debug=False, diagnostic debug=True
 ```
 
 Direct construction reads sources for each instance; it does not populate the

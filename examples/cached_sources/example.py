@@ -25,8 +25,8 @@ def main() -> None:
         second = get_settings(settings_parameters=params)
         direct = AppSettings(config_files=[config], env_prefix="REPORT_")
         assert first is not second
-        assert first.DATABASE == "reports"
-        assert second.DATABASE == "reports"
+        assert first.DATABASE == "reports_db"
+        assert second.DATABASE == "reports_db"
         assert direct.DATABASE == "changed_reports"
         print(f"Cached: {second.DATABASE}; direct: {direct.DATABASE}")
 

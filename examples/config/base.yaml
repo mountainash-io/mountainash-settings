@@ -1,2 +1,2 @@
-APP_NAME: reports
-DATABASE: reports
+APP_NAME: reports_app
+DATABASE: reports_db

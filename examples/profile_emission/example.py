@@ -18,15 +18,15 @@ class PostgreSQLSettings(
 
 def main() -> None:
     settings = PostgreSQLSettings(
-        env_prefix="REPORT_", HOST="prod-db.example.com", DATABASE="reports",
+        env_prefix="REPORT_", HOST="prod-db.example.com", DATABASE="reports_db",
         USERNAME="report_user", PASSWORD="example-password", LOCAL_NOTE="daily report",
     )
     kwargs = settings.emit()
     assert kwargs == {
-        "host": "prod-db.example.com", "port": 5432, "dbname": "reports",
+        "host": "prod-db.example.com", "port": 5432, "dbname": "reports_db",
         "user": "report_user", "password": "example-password",
     }
-    print("Prepared PostgreSQL arguments for reports (credentials omitted)")
+    print("Prepared PostgreSQL arguments for reports_db (credentials omitted)")
 
 
 if __name__ == "__main__":

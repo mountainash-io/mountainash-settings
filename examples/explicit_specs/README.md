@@ -14,7 +14,7 @@ python examples/explicit_specs/example.py
 Expected output:
 
 ```text
-Prepared PostgreSQL arguments for reports (credentials omitted)
+Prepared PostgreSQL arguments for reports_db (credentials omitted)
 ```
 
 This emits the same dictionary as the [native declaration](../profile_emission/)

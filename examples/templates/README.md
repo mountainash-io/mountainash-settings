@@ -14,7 +14,7 @@ python examples/templates/example.py
 Expected output on POSIX (path separators follow the platform):
 
 ```text
-Log path: ~/logs/reports/production.log
+Log path: ~/logs/reports_app/production.log
 ```
 
 Use UPath's `/` operator to construct portable path templates. This recipe only

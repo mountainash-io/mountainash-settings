@@ -30,7 +30,7 @@ example uses a temporary local directory and closes its store before cleanup.
 ## Shared example data
 
 These examples configure a Python application and its PostgreSQL connection.
-The sample application is `reports`, its database is `reports`, and deployments use
+The sample application is `reports_app`, its database is `reports_db`, and deployments use
 `development` or `production`. Connection recipes use `prod-db.example.com`,
 PostgreSQL port `5432`, `report_user` and a synthetic password. Passwords are
 checked internally but never printed.

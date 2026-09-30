@@ -19,7 +19,7 @@ Password reference resolved
 ```
 
 The last dot separates the record key from its field. Here the namespace view
-selects `reports`, the record is `database`, and the field is `password`.
+selects `reports_app`, the record is `database`, and the field is `password`.
 Pass the store object directly to settings or `SettingsParameters`; there is no
 named provider registry. Ordinary environment/file inputs need no record store.
 

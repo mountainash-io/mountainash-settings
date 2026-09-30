@@ -21,15 +21,15 @@ class DatabaseSettings(MountainAshBaseSettings):
 
 def main() -> None:
     settings = DatabaseSettings(
-        env_prefix="REPORT_", HOST="prod-db.example.com", DATABASE="reports",
+        env_prefix="REPORT_", HOST="prod-db.example.com", DATABASE="reports_db",
         USERNAME="report_user", PASSWORD="example-password",
     )
     kwargs = settings.driver_kwargs()
     assert kwargs == {
-        "host": "prod-db.example.com", "port": 5432, "dbname": "reports",
+        "host": "prod-db.example.com", "port": 5432, "dbname": "reports_db",
         "user": "report_user", "password": "example-password",
     }
-    print("Prepared PostgreSQL arguments for reports (credentials omitted)")
+    print("Prepared PostgreSQL arguments for reports_db (credentials omitted)")
 
 
 if __name__ == "__main__":

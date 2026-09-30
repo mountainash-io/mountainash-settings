@@ -1,4 +1,4 @@
-DATABASE: reports
+DATABASE: reports_db
 OPTIONS:
   export:
     format: csv

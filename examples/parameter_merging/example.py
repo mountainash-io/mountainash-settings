@@ -24,7 +24,7 @@ def main() -> None:
     diagnostic_settings = get_settings(settings_parameters=diagnostic)
     assert ordinary_settings.DEBUG is False
     assert diagnostic_settings.DEBUG is True
-    assert diagnostic_settings.DATABASE == "reports"
+    assert diagnostic_settings.DATABASE == "reports_db"
     print(f"Same source key: {diagnostic == base}; ordinary debug=False; diagnostic debug=True")
 
 

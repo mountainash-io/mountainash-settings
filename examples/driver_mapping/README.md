@@ -14,7 +14,7 @@ python examples/driver_mapping/example.py
 Expected output:
 
 ```text
-Prepared PostgreSQL arguments for reports (credentials omitted)
+Prepared PostgreSQL arguments for reports_db (credentials omitted)
 ```
 
 The resulting dictionary is ready to pass to a compatible driver; the example

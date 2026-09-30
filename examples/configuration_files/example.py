@@ -22,12 +22,12 @@ def main() -> None:
         ],
         env_prefix="REPORT_",
     )
-    assert settings.APP_NAME == "reports"
-    assert settings.DATABASE == "reports"
+    assert settings.APP_NAME == "reports_app"
+    assert settings.DATABASE == "reports_db"
     assert settings.ENV == "production"
     assert settings.DEBUG is False
     assert settings.BATCH_SIZE == 100
-    print(f"{settings.APP_NAME}: {settings.ENV}, batch={settings.BATCH_SIZE}, debug={settings.DEBUG}")
+    print(f"{settings.APP_NAME}: database={settings.DATABASE}, {settings.ENV}, batch={settings.BATCH_SIZE}, debug={settings.DEBUG}")
 
 
 if __name__ == "__main__":
