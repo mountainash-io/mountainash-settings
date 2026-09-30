@@ -1,9 +1,17 @@
 name: Pytest
 
 on:
+  push:
+    branches: [develop, main]
   pull_request:
     paths:
       - "src/mountainash_settings/**"
+      - "tests/**"
+      - "examples/**"
+      - "README.md"
+      - "pyproject.toml"
+      - "hatch.toml"
+      - ".github/workflows/python-run-pytest.yml"
   workflow_dispatch:
     inputs:
       fallback_branch:
@@ -20,6 +28,9 @@ permissions:
 
 jobs:
   test:
+    permissions:
+      contents: read
+      id-token: write
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -59,8 +70,18 @@ jobs:
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
+          use_oidc: true
+          fail_ci_if_error: true
+          files: ./coverage.xml
+          disable_search: true
           verbose: true
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1
+        uses: codecov/codecov-action@v5
+        with:
+          report_type: test_results
+          use_oidc: true
+          fail_ci_if_error: true
+          files: ./junit.xml
+          disable_search: true
