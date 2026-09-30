@@ -41,15 +41,7 @@ from pydantic import Field
 from mountainash_settings import MountainAshBaseSettings, SettingsParameters, get_settings
 
 
-@pytest.fixture(autouse=True)
-def _fresh_settings_manager(monkeypatch):
-    from mountainash_settings.settings_cache import settings_functions
-    fresh = SettingsManager()
-    monkeypatch.setattr(settings_functions, "_SETTINGS_MANAGER", fresh, raising=False)
-    yield
-
-
-from mountainash_settings.settings_cache.settings_manager import SettingsManager
+pytestmark = pytest.mark.usefixtures("isolated_settings_manager")
 
 
 class _StoreSettings(MountainAshBaseSettings):

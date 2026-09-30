@@ -1,16 +1,12 @@
 import pytest
 from typing import Dict, Any
 from dataclasses import FrozenInstanceError
-from pydantic_settings import BaseSettings
 from upath import UPath
 
 from mountainash_settings.settings_parameters.settings_parameters import SettingsParameters
 
 
-class MockSettings(BaseSettings):
-    field1: str = "default1"
-    field2: int = 42
-    field3: bool = True
+from tests.fixtures.settings_classes import MockSettings
 
 
 class TestSettingsParameters:

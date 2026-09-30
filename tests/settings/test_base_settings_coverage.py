@@ -598,7 +598,7 @@ class TestIntegration:
 
     @pytest.mark.integration
     def test_public_get_settings_keeps_runtime_and_mutable_values_local(
-        self, settings_manager
+        self, isolated_settings_manager
     ):
         first = get_settings(
             settings_class=TestSettings,

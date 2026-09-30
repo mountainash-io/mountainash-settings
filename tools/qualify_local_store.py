@@ -54,6 +54,7 @@ def qualify(output: Path) -> int:
             candidate = build_candidate(repository, work)
             copied_tests = work / "tests"
             shutil.copytree(repository / "tests/secrets/native", copied_tests)
+            shutil.copy2(repository / "tests/secrets/conftest.py", copied_tests / "conftest.py")
             portable_names = ("records", "keys", "memory", "namespaced")
             for name in portable_names:
                 shutil.copy2(

@@ -1,21 +1,5 @@
-import pytest
-from datetime import datetime
-from upath import UPath
-from pydantic import Field
-
 from mountainash_settings import SettingsParameters
 from mountainash_settings.settings.app.app_settings import AppSettings
-
-
-class TestAppSettingsWithPandas(AppSettings):
-    """Test subclass of AppSettings with additional Pandas framework field."""
-    PANDERA_DATAFRAME_FRAMEWORK: str = Field(default="pandas")
-
-
-@pytest.fixture
-def app_settings_instance():
-    """Provides an AppSettings instance with Pandas framework for testing."""
-    return TestAppSettingsWithPandas()
 
 
 class TestAppSettings:
@@ -26,17 +10,17 @@ class TestAppSettings:
         assert settings.LOCALE_TIMEZONE == "UTC"
         # assert settings.PLATFORM_SLASH is not None
 
-    def test_pandera_framework_field_exists(self, app_settings_instance):
+    def test_pandera_framework_field_exists(self, pandas_app_settings):
         """Test that the Pandas framework field exists and has correct default."""
-        assert hasattr(app_settings_instance, 'PANDERA_DATAFRAME_FRAMEWORK')
-        assert app_settings_instance.PANDERA_DATAFRAME_FRAMEWORK == "pandas"
+        assert hasattr(pandas_app_settings, 'PANDERA_DATAFRAME_FRAMEWORK')
+        assert pandas_app_settings.PANDERA_DATAFRAME_FRAMEWORK == "pandas"
 
-    def test_initialization_with_config_files_accepts_single_file(self, temp_config_file):
-        settings = AppSettings(config_files=temp_config_file)
+    def test_initialization_with_config_files_accepts_single_file(self, temp_yaml_file):
+        settings = AppSettings(config_files=temp_yaml_file)
         assert settings is not None
 
-    def test_initialization_with_config_files_accepts_list(self, temp_config_files):
-        settings = AppSettings(config_files=temp_config_files)
+    def test_initialization_with_config_files_accepts_list(self, temp_multiple_yaml_files):
+        settings = AppSettings(config_files=temp_multiple_yaml_files)
         assert settings is not None
 
     def test_initialization_with_settings_parameters_succeeds(self):
@@ -83,6 +67,6 @@ class TestAppSettings:
         assert isinstance(settings.RUNTIME, str)
         assert isinstance(settings.LOCALE_TIMEZONE, str)
 
-    def test_pandera_field_type_is_correct(self, app_settings_instance):
+    def test_pandera_field_type_is_correct(self, pandas_app_settings):
         """Test that the Pandas framework field has correct type."""
-        assert isinstance(app_settings_instance.PANDERA_DATAFRAME_FRAMEWORK, str)
+        assert isinstance(pandas_app_settings.PANDERA_DATAFRAME_FRAMEWORK, str)

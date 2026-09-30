@@ -16,12 +16,6 @@ from mountainash_settings.secrets import (
 )
 
 
-@pytest.fixture
-def store(tmp_path):
-    with FilesystemBackend(tmp_path) as value:
-        yield value
-
-
 def raw_file(store, root, name, payload):
     """Fixture-only invalid-record/marker writer using private native creation."""
     ops = store._ops

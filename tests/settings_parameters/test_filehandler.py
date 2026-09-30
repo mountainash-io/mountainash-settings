@@ -272,10 +272,10 @@ class TestSeparateConfigFiles:
         assert len(result.yaml_files) == 1
 
     @pytest.mark.unit
-    def test_separate_expands_user_path(self, temp_dir):
+    def test_separate_expands_user_path(self, tmp_path):
         """Test that ~ in paths is expanded."""
         # Create a file in temp dir
-        yaml_file = temp_dir / "config.yaml"
+        yaml_file = tmp_path / "config.yaml"
         yaml_file.write_text("TEST: value")
 
         # Use relative path with ~

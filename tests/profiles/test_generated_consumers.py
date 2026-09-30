@@ -102,7 +102,7 @@ def test_explicit_oauth_parent_exclusions_and_adapter_survive_generated_child():
     assert OAuth(ACCESS_TOKEN="access", CLIENT_SECRET="client").emit("http") == {"token": "access"}
 
 
-def test_generated_template_uses_captured_baseline_with_local_overrides(tmp_path, isolated_cache):
+def test_generated_template_uses_captured_baseline_with_local_overrides(tmp_path, isolated_settings_manager):
     config = tmp_path / "settings.json"
     config.write_text('{"HOST": "baseline", "PORT": 5432}')
 
@@ -113,17 +113,17 @@ def test_generated_template_uses_captured_baseline_with_local_overrides(tmp_path
         TAGS: list[str] = ProfileField(default_factory=list)
 
     params = SettingsParameters.create(settings_class=Database, config_files=[config])
-    first = isolated_cache.get_or_create_settings(params)
+    first = isolated_settings_manager.get_or_create_settings(params)
     assert first.URL == "baseline:5432"
     first.TAGS.append("local")
     config.write_text('{"HOST": "changed-on-disk", "PORT": 1111}')
     changed = SettingsParameters.create(settings_class=Database, config_files=[config], HOST="local")
-    second = isolated_cache.get_or_create_settings(changed, reinitialise=True)
+    second = isolated_settings_manager.get_or_create_settings(changed, reinitialise=True)
     assert second.URL == "local:5432"
     assert second.TAGS == []
     assert first.URL == "baseline:5432"
     explicit = SettingsParameters.create(settings_class=Database, config_files=[config], URL="explicit")
-    assert isolated_cache.get_or_create_settings(explicit, reinitialise=True).URL == "explicit"
+    assert isolated_settings_manager.get_or_create_settings(explicit, reinitialise=True).URL == "explicit"
 
 
 @pytest.mark.parametrize("annotation", [SecretStr | None, Annotated[SecretStr, Field(description="secret")]])

@@ -20,60 +20,26 @@ from mountainash_settings.resolve import (
 from mountainash_settings.settings.base_settings import MountainAshBaseSettings
 
 
-class _TestBackendData(dict):
-    """Dict that returns 'resolved_key/field' for any field lookup."""
-    def __init__(self, key: str):
-        super().__init__()
-        self._key = key
-
-    def __contains__(self, field):
-        return True
-
-    def __getitem__(self, field):
-        return f"resolved_{self._key}/{field}"
-
-    def __len__(self):
-        return 2  # Not 1, so _resolve_value doesn't try single-value extraction
-
-
-class _TestBackend:
-    def get(self, key: str) -> dict[str, t.Any] | None:
-        return _TestBackendData(key)
-
-    def set(self, key: str, data: dict[str, t.Any]) -> None:
-        pass
-
-    def delete(self, key: str) -> None:
-        pass
-
-    def transaction(self, key: str):
-        from contextlib import nullcontext
-        return nullcontext()
-
-
-_test_backend = _TestBackend()
-
-
 @pytest.mark.unit
 class TestResolveReferencesInDict:
-    def test_flat_dict_resolves_prefixed_value(self):
+    def test_flat_dict_resolves_prefixed_value(self, resolving_secret_store):
         data = {"PASSWORD": "secret:db.password"}
-        result = resolve_references_in_dict(data, _test_backend)
+        result = resolve_references_in_dict(data, resolving_secret_store)
         assert result == {"PASSWORD": "resolved_db/password"}
 
-    def test_nested_dict_resolved_recursively(self):
+    def test_nested_dict_resolved_recursively(self, resolving_secret_store):
         data = {"outer": {"inner": "secret:nested.key"}}
-        result = resolve_references_in_dict(data, _test_backend)
+        result = resolve_references_in_dict(data, resolving_secret_store)
         assert result == {"outer": {"inner": "resolved_nested/key"}}
 
-    def test_list_values_resolve_recursively(self):
+    def test_list_values_resolve_recursively(self, resolving_secret_store):
         data = {
             "items": [
                 "secret:first.value",
                 {"token": "secret:second.value"},
             ]
         }
-        result = resolve_references_in_dict(data, _test_backend)
+        result = resolve_references_in_dict(data, resolving_secret_store)
         assert result == {
             "items": [
                 "resolved_first/value",
@@ -81,27 +47,27 @@ class TestResolveReferencesInDict:
             ]
         }
 
-    def test_tuple_values_preserve_tuple_type(self):
+    def test_tuple_values_preserve_tuple_type(self, resolving_secret_store):
         data = {"items": ("secret:first.value", "plain")}
-        result = resolve_references_in_dict(data, _test_backend)
+        result = resolve_references_in_dict(data, resolving_secret_store)
         assert result == {"items": ("resolved_first/value", "plain")}
         assert isinstance(result["items"], tuple)
 
-    def test_nested_containers_do_not_mutate_input(self):
+    def test_nested_containers_do_not_mutate_input(self, resolving_secret_store):
         data = {"items": [{"token": "secret:api.token"}]}
-        result = resolve_references_in_dict(data, _test_backend)
+        result = resolve_references_in_dict(data, resolving_secret_store)
         assert data == {"items": [{"token": "secret:api.token"}]}
         assert result is not data
         assert result["items"] is not data["items"]
 
-    def test_secretstr_values_remain_wrapped_in_containers(self):
+    def test_secretstr_values_remain_wrapped_in_containers(self, resolving_secret_store):
         data = {
             "direct": SecretStr("secret:direct.value"),
             "items": [SecretStr("secret:list.value")],
             "pair": (SecretStr("secret:tuple.value"),),
         }
 
-        result = resolve_references_in_dict(data, _test_backend)
+        result = resolve_references_in_dict(data, resolving_secret_store)
 
         resolved = [
             result["direct"],
@@ -115,40 +81,40 @@ class TestResolveReferencesInDict:
             "resolved_tuple/value",
         ]
 
-    def test_secretstr_custom_prefix_remains_wrapped(self):
+    def test_secretstr_custom_prefix_remains_wrapped(self, resolving_secret_store):
         data = {"token": SecretStr("vault:api.token")}
 
         result = resolve_references_in_dict(
             data,
-            _test_backend,
+            resolving_secret_store,
             prefix="vault:",
         )
 
         assert isinstance(result["token"], SecretStr)
         assert result["token"].get_secret_value() == "resolved_api/token"
 
-    def test_non_string_values_passed_through(self):
+    def test_non_string_values_passed_through(self, resolving_secret_store):
         data = {"count": 42, "flag": True, "items": [1, 2, 3]}
-        result = resolve_references_in_dict(data, _test_backend)
+        result = resolve_references_in_dict(data, resolving_secret_store)
         assert result == data
 
-    def test_non_prefixed_strings_passed_through(self):
+    def test_non_prefixed_strings_passed_through(self, resolving_secret_store):
         data = {"name": "plain_value", "host": "localhost"}
-        result = resolve_references_in_dict(data, _test_backend)
+        result = resolve_references_in_dict(data, resolving_secret_store)
         assert result == data
 
-    def test_empty_dict_returns_empty(self):
-        assert resolve_references_in_dict({}, _test_backend) == {}
+    def test_empty_dict_returns_empty(self, resolving_secret_store):
+        assert resolve_references_in_dict({}, resolving_secret_store) == {}
 
-    def test_custom_prefix(self):
+    def test_custom_prefix(self, resolving_secret_store):
         data = {"TOKEN": "vault:api.token"}
-        result = resolve_references_in_dict(data, _test_backend, prefix="vault:")
+        result = resolve_references_in_dict(data, resolving_secret_store, prefix="vault:")
         assert result == {"TOKEN": "resolved_api/token"}
 
-    def test_does_not_mutate_input(self):
+    def test_does_not_mutate_input(self, resolving_secret_store):
         data = {"PASSWORD": "secret:db.password"}
         original = dict(data)
-        resolve_references_in_dict(data, _test_backend)
+        resolve_references_in_dict(data, resolving_secret_store)
         assert data == original
 
 
@@ -160,32 +126,32 @@ class _FlatTestSettings(MountainAshBaseSettings):
 
 @pytest.mark.unit
 class TestResolveReferencesInModelTreeFlat:
-    def test_resolves_prefixed_string_fields(self):
+    def test_resolves_prefixed_string_fields(self, resolving_secret_store):
         instance = _FlatTestSettings.model_construct(USERNAME="admin", PASSWORD="secret:db.pass")
-        resolve_references_in_model_tree(instance, _test_backend)
+        resolve_references_in_model_tree(instance, resolving_secret_store)
         assert instance.PASSWORD == "resolved_db/pass"
 
-    def test_skips_non_string_fields(self):
+    def test_skips_non_string_fields(self, resolving_secret_store):
         instance = _FlatTestSettings.model_construct(PORT=5432)
-        resolve_references_in_model_tree(instance, _test_backend)
+        resolve_references_in_model_tree(instance, resolving_secret_store)
         assert instance.PORT == 5432
 
-    def test_skips_non_prefixed_strings(self):
+    def test_skips_non_prefixed_strings(self, resolving_secret_store):
         instance = _FlatTestSettings.model_construct(USERNAME="admin", PASSWORD="plaintext")
-        resolve_references_in_model_tree(instance, _test_backend)
+        resolve_references_in_model_tree(instance, resolving_secret_store)
         assert instance.PASSWORD == "plaintext"
 
-    def test_resolves_secretstr_field(self):
+    def test_resolves_secretstr_field(self, resolving_secret_store):
         class WithSecretStr(MountainAshBaseSettings):
             TOKEN: SecretStr = Field(default=SecretStr("default"))
 
         instance = WithSecretStr.model_construct(TOKEN="secret:api.token")
-        resolve_references_in_model_tree(instance, _test_backend)
+        resolve_references_in_model_tree(instance, resolving_secret_store)
         assert instance.TOKEN.get_secret_value() == "resolved_api/token"
 
-    def test_skips_settings_source_bookkeeping_fields(self):
+    def test_skips_settings_source_bookkeeping_fields(self, resolving_secret_store):
         instance = _FlatTestSettings.model_construct(USERNAME="admin", SETTINGS_CLASS=_FlatTestSettings)
-        resolve_references_in_model_tree(instance, _test_backend)
+        resolve_references_in_model_tree(instance, resolving_secret_store)
         assert instance.SETTINGS_CLASS is not None
 
 
@@ -399,54 +365,54 @@ class _RejectTypeErrorRootSettings(MountainAshBaseSettings):
 
 @pytest.mark.unit
 class TestResolveReferencesInModelTreeNested:
-    def test_resolves_nested_model_str_field(self):
+    def test_resolves_nested_model_str_field(self, resolving_secret_store):
         instance = _SettingsWithNested.model_construct(
             nested=_NestedModel(host="localhost", password="secret:db.pass")
         )
-        resolve_references_in_model_tree(instance, _test_backend)
+        resolve_references_in_model_tree(instance, resolving_secret_store)
         assert instance.nested.password == "resolved_db/pass"
         assert instance.nested.host == "localhost"
 
-    def test_resolves_frozen_nested_model_secretstr_field(self):
+    def test_resolves_frozen_nested_model_secretstr_field(self, resolving_secret_store):
         instance = _SettingsWithFrozenNested.model_construct(
             frozen_nested=_FrozenNestedModel(kind="test", token=SecretStr("secret:api.token"))
         )
-        resolve_references_in_model_tree(instance, _test_backend)
+        resolve_references_in_model_tree(instance, resolving_secret_store)
         assert instance.frozen_nested.token.get_secret_value() == "resolved_api/token"
         assert instance.frozen_nested.kind == "test"
 
-    def test_frozen_nested_is_new_instance(self):
+    def test_frozen_nested_is_new_instance(self, resolving_secret_store):
         instance = _SettingsWithFrozenNested.model_construct(
             frozen_nested=_FrozenNestedModel(kind="test", token=SecretStr("secret:api.token"))
         )
         original_nested = instance.frozen_nested
-        resolve_references_in_model_tree(instance, _test_backend)
+        resolve_references_in_model_tree(instance, resolving_secret_store)
         assert instance.frozen_nested is not original_nested
 
-    def test_no_rebuild_when_no_secrets(self):
+    def test_no_rebuild_when_no_secrets(self, resolving_secret_store):
         instance = _SettingsWithFrozenNested.model_construct(
             frozen_nested=_FrozenNestedModel(kind="test", token=SecretStr("plain_token"))
         )
         original_nested = instance.frozen_nested
-        resolve_references_in_model_tree(instance, _test_backend)
+        resolve_references_in_model_tree(instance, resolving_secret_store)
         assert instance.frozen_nested is original_nested
 
-    def test_two_levels_of_nesting(self):
+    def test_two_levels_of_nesting(self, resolving_secret_store):
         instance = _SettingsWithDeepNesting.model_construct(
             deep=_DeepNestedOuter(name="outer", inner=_DeepNestedInner(api_key="secret:deep.key"))
         )
-        resolve_references_in_model_tree(instance, _test_backend)
+        resolve_references_in_model_tree(instance, resolving_secret_store)
         assert instance.deep.inner.api_key == "resolved_deep/key"
         assert instance.deep.name == "outer"
 
-    def test_custom_prefix_on_nested(self):
+    def test_custom_prefix_on_nested(self, resolving_secret_store):
         instance = _SettingsWithNested.model_construct(
             nested=_NestedModel(host="localhost", password="vault:db.pass")
         )
-        resolve_references_in_model_tree(instance, _test_backend, prefix="vault:")
+        resolve_references_in_model_tree(instance, resolving_secret_store, prefix="vault:")
         assert instance.nested.password == "resolved_db/pass"
 
-    def test_resolves_dict_list_tuple_and_models(self):
+    def test_resolves_dict_list_tuple_and_models(self, resolving_secret_store):
         settings = _SettingsWithContainers.model_construct(
             mapping={"token": "secret:mapping.token"},
             items=["secret:list.token", {"inner": "secret:list.inner"}],
@@ -454,7 +420,7 @@ class TestResolveReferencesInModelTreeNested:
             models=[_ContainerSecretModel.model_validate({"token": "secret:model.token"})],
         )
 
-        resolve_references_in_model_tree(settings, _test_backend)
+        resolve_references_in_model_tree(settings, resolving_secret_store)
 
         assert settings.mapping == {"token": "resolved_mapping/token"}
         assert settings.items == [
@@ -464,7 +430,7 @@ class TestResolveReferencesInModelTreeNested:
         assert settings.pair == ("resolved_tuple/token", "plain")
         assert settings.models[0].token.get_secret_value() == "resolved_model/token"
 
-    def test_rebuilds_alias_only_and_alias_path_models_inside_lists(self):
+    def test_rebuilds_alias_only_and_alias_path_models_inside_lists(self, resolving_secret_store):
         settings = _SettingsWithAliasedContainers.model_construct(
             aliases=[_AliasOnlySecretModel.model_validate({"TOKEN": "secret:alias.token"})],
             paths=[_AliasPathSecretModel.model_validate({
@@ -473,13 +439,13 @@ class TestResolveReferencesInModelTreeNested:
             })],
         )
 
-        resolve_references_in_model_tree(settings, _test_backend)
+        resolve_references_in_model_tree(settings, resolving_secret_store)
 
         assert settings.aliases[0].token.get_secret_value() == "resolved_alias/token"
         assert settings.paths[0].token.get_secret_value() == "resolved_path/token"
         assert settings.paths[0].choice.get_secret_value() == "resolved_choice/token"
 
-    def test_alias_choices_rebuild_without_colliding_paths(self):
+    def test_alias_choices_rebuild_without_colliding_paths(self, resolving_secret_store):
         settings = _SettingsWithAliasChoicesCollision.model_construct(
             values=[_AliasChoicesCollisionModel.model_validate({
                 "first": "secret:first.token",
@@ -487,30 +453,30 @@ class TestResolveReferencesInModelTreeNested:
             })],
         )
 
-        resolve_references_in_model_tree(settings, _test_backend)
+        resolve_references_in_model_tree(settings, resolving_secret_store)
 
         assert settings.values[0].first.get_secret_value() == "resolved_first/token"
         assert settings.values[0].second.get_secret_value() == "resolved_second/token"
 
-    def test_positive_alias_path_index_rebuilds(self):
+    def test_positive_alias_path_index_rebuilds(self, resolving_secret_store):
         settings = _SettingsWithPositiveIndexedAlias.model_construct(
             values=[_PositiveIndexedAliasModel.model_validate({"items": [None, "secret:positive.token"]})],
         )
 
-        resolve_references_in_model_tree(settings, _test_backend)
+        resolve_references_in_model_tree(settings, resolving_secret_store)
 
         assert settings.values[0].token.get_secret_value() == "resolved_positive/token"
 
-    def test_negative_alias_path_index_rebuilds(self):
+    def test_negative_alias_path_index_rebuilds(self, resolving_secret_store):
         settings = _SettingsWithNegativeIndexedAlias.model_construct(
             values=[_NegativeIndexedAliasModel.model_validate({"items": ["secret:negative.token"]})],
         )
 
-        resolve_references_in_model_tree(settings, _test_backend)
+        resolve_references_in_model_tree(settings, resolving_secret_store)
 
         assert settings.values[0].token.get_secret_value() == "resolved_negative/token"
 
-    def test_shared_positive_and_negative_alias_paths_are_order_independent(self):
+    def test_shared_positive_and_negative_alias_paths_are_order_independent(self, resolving_secret_store):
         settings = _SettingsWithSharedIndexedAliases.model_construct(
             forward=[_PositiveNegativeIndexedAliasModel.model_validate({
                 "items": [
@@ -528,40 +494,40 @@ class TestResolveReferencesInModelTreeNested:
             })],
         )
 
-        resolve_references_in_model_tree(settings, _test_backend)
+        resolve_references_in_model_tree(settings, resolving_secret_store)
 
         assert settings.forward[0].positive.get_secret_value() == "resolved_positive/token"
         assert settings.forward[0].negative.get_secret_value() == "resolved_negative/token"
         assert settings.reverse[0].positive.get_secret_value() == "resolved_positive/token"
         assert settings.reverse[0].negative.get_secret_value() == "resolved_negative/token"
 
-    def test_compatible_identical_alias_paths_coalesce(self):
+    def test_compatible_identical_alias_paths_coalesce(self, resolving_secret_store):
         settings = _SettingsWithCompatibleSharedAlias.model_construct(
             values=[_CompatibleSharedAliasModel.model_validate({"shared": "secret:shared.token"})],
         )
 
-        resolve_references_in_model_tree(settings, _test_backend)
+        resolve_references_in_model_tree(settings, resolving_secret_store)
 
         assert settings.values[0].first.get_secret_value() == "resolved_shared/token"
         assert settings.values[0].second.get_secret_value() == "resolved_shared/token"
 
-    def test_compatible_overlapping_alias_paths_merge(self):
+    def test_compatible_overlapping_alias_paths_merge(self, resolving_secret_store):
         settings = _SettingsWithCompatibleOverlappingAlias.model_construct(
             values=[_CompatibleOverlappingAliasModel.model_validate({"auth": {"token": "secret:shared.token"}})],
         )
 
-        resolve_references_in_model_tree(settings, _test_backend)
+        resolve_references_in_model_tree(settings, resolving_secret_store)
 
         assert settings.values[0].auth == {"token": "resolved_shared/token"}
         assert settings.values[0].token.get_secret_value() == "resolved_shared/token"
 
-    def test_nested_validation_errors_are_sanitized(self):
+    def test_nested_validation_errors_are_sanitized(self, resolving_secret_store):
         settings = _SettingsWithRejectResolvedNested.model_construct(
             values=[_RejectResolvedNestedModel.model_validate({"token": "secret:nested.value"})],
         )
 
         with pytest.raises(ValueError) as caught:
-            resolve_references_in_model_tree(settings, _test_backend)
+            resolve_references_in_model_tree(settings, resolving_secret_store)
 
         error = caught.value
         assert "_RejectResolvedNestedModel" in str(error)
@@ -571,11 +537,11 @@ class TestResolveReferencesInModelTreeNested:
         assert error.__cause__ is None
         assert error.__context__ is None
 
-    def test_root_assignment_validation_errors_are_sanitized(self):
+    def test_root_assignment_validation_errors_are_sanitized(self, resolving_secret_store):
         settings = _RejectResolvedRootSettings.model_construct(token="secret:root.value")
 
         with pytest.raises(ValueError) as caught:
-            resolve_references_in_model_tree(settings, _test_backend)
+            resolve_references_in_model_tree(settings, resolving_secret_store)
 
         error = caught.value
         assert "_RejectResolvedRootSettings" in str(error)
@@ -585,13 +551,13 @@ class TestResolveReferencesInModelTreeNested:
         assert error.__cause__ is None
         assert error.__context__ is None
 
-    def test_nested_type_errors_are_sanitized(self):
+    def test_nested_type_errors_are_sanitized(self, resolving_secret_store):
         settings = _SettingsWithRejectTypeErrorNested.model_construct(
             values=[_RejectTypeErrorNestedModel.model_validate({"token": "secret:type_nested.value"})],
         )
 
         with pytest.raises(ValueError) as caught:
-            resolve_references_in_model_tree(settings, _test_backend)
+            resolve_references_in_model_tree(settings, resolving_secret_store)
 
         error = caught.value
         assert "_RejectTypeErrorNestedModel" in str(error)
@@ -601,11 +567,11 @@ class TestResolveReferencesInModelTreeNested:
         assert error.__cause__ is None
         assert error.__context__ is None
 
-    def test_root_assignment_type_errors_are_sanitized(self):
+    def test_root_assignment_type_errors_are_sanitized(self, resolving_secret_store):
         settings = _RejectTypeErrorRootSettings.model_construct(token="secret:type_root.value")
 
         with pytest.raises(ValueError) as caught:
-            resolve_references_in_model_tree(settings, _test_backend)
+            resolve_references_in_model_tree(settings, resolving_secret_store)
 
         error = caught.value
         assert "_RejectTypeErrorRootSettings" in str(error)

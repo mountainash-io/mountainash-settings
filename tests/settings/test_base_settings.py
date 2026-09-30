@@ -11,18 +11,11 @@ from mountainash_settings import get_settings
 from mountainash_settings.secrets import SecretCapabilityError
 
 
-@pytest.fixture
-def settings_manager(monkeypatch) -> SettingsManager:
-    manager = SettingsManager()
-    monkeypatch.setattr(
-        "mountainash_settings.settings_cache.settings_functions.get_settings_manager",
-        lambda: manager,
-    )
-    return manager
-
 ##############
 # Test Settings Class
 class TestSettings(MountainAshBaseSettings):
+    __test__ = False
+
     def __init__(
         self,
         config_files: Optional[List[UPath|str]] = None,
@@ -66,8 +59,8 @@ def get_test_settings(settings_parameters: SettingsParameters,
 
 
 
-def test_init_sets_env_file():
-    env_file = [UPath("./tests/config_testing1.env")]
+def test_init_sets_env_file(test_data_dir):
+    env_file = [UPath(test_data_dir / "config_testing1.env")]
 
     sp = SettingsParameters.create(settings_class=TestSettings, config_files= env_file)
 
@@ -90,8 +83,8 @@ def test_init_sets_env_prefix():
 ## Test using variables with a prefix in the test config files, and in kwargs!
 
 
-def test_init_no_file(settings_manager: SettingsManager):
-    config_files: List[Any] = []#"./tests/config_testing1.env"]
+def test_init_no_file(isolated_settings_manager: SettingsManager):
+    config_files: List[Any] = []
     kwargs = {}
 
     settings_parameters = SettingsParameters.create( settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
@@ -102,8 +95,8 @@ def test_init_no_file(settings_manager: SettingsManager):
         assert app_settings.TEST_VAL_1 is None
         assert app_settings.TEST_VAL_2 is None
 
-def test_init_no_file_kwarg(settings_manager: SettingsManager):
-    config_files: List[Any] = []#"./tests/config_testing1.env"]
+def test_init_no_file_kwarg(isolated_settings_manager: SettingsManager):
+    config_files: List[Any] = []
     kwargs = {"TEST_VAL_1": "ABC", "TEST_VAL_2": "XYZ"}
 
     settings_parameters = SettingsParameters.create(settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
@@ -116,8 +109,8 @@ def test_init_no_file_kwarg(settings_manager: SettingsManager):
         assert app_settings.TEST_VAL_2 == "XYZ"
 
 
-def test_init_file(settings_manager: SettingsManager):
-    config_files: List[Any] = ["./tests/config_testing1.env"]
+def test_init_file(isolated_settings_manager: SettingsManager, test_data_dir):
+    config_files: List[Any] = [str(test_data_dir / "config_testing1.env")]
     kwargs = {}
 
     settings_parameters = SettingsParameters.create(settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
@@ -129,8 +122,8 @@ def test_init_file(settings_manager: SettingsManager):
         assert app_settings.TEST_VAL_2 == "TEST_VAL_2_File_1"
 
 
-def test_init_file_and_kwarg(settings_manager: SettingsManager):
-    config_files: List[Any] = ["./tests/config_testing1.env"]
+def test_init_file_and_kwarg(isolated_settings_manager: SettingsManager, test_data_dir):
+    config_files: List[Any] = [str(test_data_dir / "config_testing1.env")]
     kwargs = {"TEST_VAL_1": "ABC"}
 
     settings_parameters = SettingsParameters.create(settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
@@ -142,8 +135,8 @@ def test_init_file_and_kwarg(settings_manager: SettingsManager):
         assert app_settings.TEST_VAL_1 == "ABC"
         assert app_settings.TEST_VAL_2 == "TEST_VAL_2_File_1"
 
-def test_init_file_and_kwarg2(settings_manager: SettingsManager):
-    config_files: List[Any] = ["./tests/config_testing1.env"]
+def test_init_file_and_kwarg2(isolated_settings_manager: SettingsManager, test_data_dir):
+    config_files: List[Any] = [str(test_data_dir / "config_testing1.env")]
     kwargs = {"TEST_VAL_2": "XYZ"}
 
     settings_parameters = SettingsParameters.create(settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
@@ -157,8 +150,8 @@ def test_init_file_and_kwarg2(settings_manager: SettingsManager):
 
 
 
-def test_init_file_prefix1(settings_manager: SettingsManager):
-    config_files: List[Any] = ["./tests/config_testing1.env"]
+def test_init_file_prefix1(isolated_settings_manager: SettingsManager, test_data_dir):
+    config_files: List[Any] = [str(test_data_dir / "config_testing1.env")]
     kwargs = {}
 
     settings_parameters = SettingsParameters.create(settings_class=TestSettings,
@@ -172,8 +165,8 @@ def test_init_file_prefix1(settings_manager: SettingsManager):
         assert app_settings.TEST_VAL_1 == "TEST_VAL_1_File_1"
         assert app_settings.TEST_VAL_2 == "TEST_VAL_2_File_1"
 
-def test_init_file_prefix2(settings_manager: SettingsManager):
-    config_files: List[Any] = ["./tests/config_testing_prefix1.env"]
+def test_init_file_prefix2(isolated_settings_manager: SettingsManager, test_data_dir):
+    config_files: List[Any] = [str(test_data_dir / "config_testing_prefix1.env")]
     kwargs = {}
 
     settings_parameters = SettingsParameters.create(settings_class=TestSettings,
@@ -187,8 +180,8 @@ def test_init_file_prefix2(settings_manager: SettingsManager):
         assert app_settings.TEST_VAL_1 == "TEST_VAL_1_File_Prefix1"
         assert app_settings.TEST_VAL_2 == "TEST_VAL_2_File_Prefix1"
 
-def test_init_file_prefix3(settings_manager: SettingsManager):
-    config_files: List[Any] = ["./tests/config_testing_prefix1.env"]
+def test_init_file_prefix3(isolated_settings_manager: SettingsManager, test_data_dir):
+    config_files: List[Any] = [str(test_data_dir / "config_testing_prefix1.env")]
     kwargs = {}
 
     settings_parameters = SettingsParameters.create(settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
@@ -199,7 +192,7 @@ def test_init_file_prefix3(settings_manager: SettingsManager):
         assert app_settings.TEST_VAL_1 is None
         assert app_settings.TEST_VAL_2 is None
 
-def test_init_file_prefix_prefers_prefixed_value(settings_manager, tmp_path):
+def test_init_file_prefix_prefers_prefixed_value(isolated_settings_manager, tmp_path):
     env_file = tmp_path / "both.env"
     env_file.write_text(
         'TEST_VAL_1="unprefixed"\n'
@@ -217,9 +210,9 @@ def test_init_file_prefix_prefers_prefixed_value(settings_manager, tmp_path):
 
 
 
-def test_init_config_valid_init_two_files_noprefix(settings_manager: SettingsManager):
+def test_init_config_valid_init_two_files_noprefix(isolated_settings_manager: SettingsManager, test_data_dir):
     # Arrange
-    config_files: List[Any] = [ "./tests/config_testing1.env", "./tests/config_testing2.env"]
+    config_files: List[Any] = [str(test_data_dir / "config_testing1.env"), str(test_data_dir / "config_testing2.env")]
     kwargs = {}
 
     settings_parameters = SettingsParameters.create(settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
@@ -230,8 +223,8 @@ def test_init_config_valid_init_two_files_noprefix(settings_manager: SettingsMan
         assert app_settings.TEST_VAL_1 == "TEST_VAL_1_File_2"
         assert app_settings.TEST_VAL_2 == "TEST_VAL_2_File_2"
 
-def test_init_config_valid_init_files_reverse_noprefix(settings_manager: SettingsManager):
-    config_files: List[Any] = ["./tests/config_testing2.env", "./tests/config_testing1.env"]
+def test_init_config_valid_init_files_reverse_noprefix(isolated_settings_manager: SettingsManager, test_data_dir):
+    config_files: List[Any] = [str(test_data_dir / "config_testing2.env"), str(test_data_dir / "config_testing1.env")]
     kwargs = {}
 
     settings_parameters = SettingsParameters.create(settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
@@ -245,9 +238,9 @@ def test_init_config_valid_init_files_reverse_noprefix(settings_manager: Setting
 
 
 
-def test_init_config_valid_init_files_override_and_kwargs_noprefix(settings_manager: SettingsManager):
+def test_init_config_valid_init_files_override_and_kwargs_noprefix(isolated_settings_manager: SettingsManager, test_data_dir):
     # Arrange
-    config_files: List[Any] = ["./tests/config_testing1.env"]
+    config_files: List[Any] = [str(test_data_dir / "config_testing1.env")]
     kwargs = {"TEST_VAL_2": "000003"}
 
     settings_parameters = SettingsParameters.create(settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
@@ -258,9 +251,9 @@ def test_init_config_valid_init_files_override_and_kwargs_noprefix(settings_mana
         #kwargs not working here
         assert app_settings.TEST_VAL_2 == "000003"
 
-def test_init_config_valid_init_files_override_and_kwargs_noprefix2(settings_manager: SettingsManager):
+def test_init_config_valid_init_files_override_and_kwargs_noprefix2(isolated_settings_manager: SettingsManager, test_data_dir):
     # Arrange
-    config_files: List[Any] = [ "./tests/config_testing2.env"]
+    config_files: List[Any] = [str(test_data_dir / "config_testing2.env")]
     kwargs = {"TEST_VAL_1": "ABC"}
 
     settings_parameters = SettingsParameters.create(settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
@@ -275,43 +268,6 @@ def test_init_config_valid_init_files_override_and_kwargs_noprefix2(settings_man
 
 # --- Secrets Resolution Integration Tests ---
 
-class _TestBackendData(dict):
-    """Dict that returns 'resolved_key/field' for any field lookup."""
-    def __init__(self, key: str):
-        super().__init__()
-        self._key = key
-
-    def __contains__(self, field):
-        return True
-
-    def __getitem__(self, field):
-        return f"resolved_{self._key}/{field}"
-
-    def __len__(self):
-        return 2
-
-
-class _TestBackend:
-    def get(self, key: str) -> dict | None:
-        return _TestBackendData(key)
-
-    def set(self, key: str, data: dict) -> None:
-        pass
-
-    def delete(self, key: str) -> None:
-        pass
-
-    def transaction(self, key: str):
-        from contextlib import nullcontext
-        return nullcontext()
-
-
-@pytest.fixture
-def secrets_registry():
-    """Provide a bindable test store for secret_store=."""
-    return _TestBackend()
-
-
 class _SecretsTestSettings(MountainAshBaseSettings):
     USERNAME: str = Field(default="default_user")
     PASSWORD: str = Field(default="default_pass")
@@ -323,22 +279,22 @@ class _ContainerSecretsSettings(MountainAshBaseSettings):
     ENDPOINTS: list[Any] = Field(default_factory=list)
 
 class TestSecretsResolution:
-    def test_kwargs_secret_resolved_on_construction(self, secrets_registry):
+    def test_kwargs_secret_resolved_on_construction(self, resolving_secret_store):
         settings = _SecretsTestSettings(
             settings_parameters=SettingsParameters.create(
                 settings_class=_SecretsTestSettings,
-                secret_store=secrets_registry,
+                secret_store=resolving_secret_store,
                 PASSWORD="secret:db.password",
             )
         )
         assert settings.PASSWORD == "resolved_db/password"
 
-    def test_config_file_secret_resolved_post_construction(self, secrets_registry):
+    def test_config_file_secret_resolved_post_construction(self, resolving_secret_store, test_data_dir):
         settings = _SecretsTestSettings(
             settings_parameters=SettingsParameters.create(
                 settings_class=_SecretsTestSettings,
-                secret_store=secrets_registry,
-                config_files=["tests/config/secrets_test.yaml"],
+                secret_store=resolving_secret_store,
+                config_files=[str(test_data_dir / "secrets_test.yaml")],
                 env_prefix="SECRETSTEST_",
             )
         )
@@ -350,12 +306,12 @@ class TestSecretsResolution:
             _SecretsTestSettings(PASSWORD="secret:db.password")
 
     def test_cache_hit_runtime_override_resolves_secret(
-        self, secrets_registry, settings_manager
+        self, resolving_secret_store, isolated_settings_manager, test_data_dir
     ):
         params_base = SettingsParameters.create(
             settings_class=_SecretsTestSettings,
-            secret_store=secrets_registry,
-            config_files=["tests/config/secrets_test.yaml"],
+            secret_store=resolving_secret_store,
+            config_files=[str(test_data_dir / "secrets_test.yaml")],
         )
 
         settings1 = get_settings(settings_parameters=params_base)
@@ -368,7 +324,7 @@ class TestSecretsResolution:
         assert settings2.PASSWORD == "resolved_other/password"
         assert settings1.PASSWORD == "resolved_db/password"
 
-    def test_config_file_container_secrets_resolve(self, secrets_registry, tmp_path):
+    def test_config_file_container_secrets_resolve(self, resolving_secret_store, tmp_path):
         config = tmp_path / "containers.toml"
         config.write_text(
             'ENDPOINTS = ["secret:api.token"]\n'
@@ -378,17 +334,17 @@ class TestSecretsResolution:
         settings = _ContainerSecretsSettings(
             settings_parameters=SettingsParameters.create(
                 settings_class=_ContainerSecretsSettings,
-                secret_store=secrets_registry,
+                secret_store=resolving_secret_store,
                 config_files=[config],
             )
         )
         assert settings.CONNECTION == {"password": "resolved_db/password"}
         assert settings.ENDPOINTS == ["resolved_api/token"]
 
-    def test_cache_hit_container_override_resolves(self, secrets_registry, settings_manager):
+    def test_cache_hit_container_override_resolves(self, resolving_secret_store, isolated_settings_manager):
         params = SettingsParameters.create(
             settings_class=_ContainerSecretsSettings,
-            secret_store=secrets_registry,
+            secret_store=resolving_secret_store,
         )
         get_settings(settings_parameters=params)
 
@@ -399,7 +355,7 @@ class TestSecretsResolution:
 
         assert overridden.CONNECTION == {"password": "resolved_other/password"}
 
-    def test_nested_frozen_model_secret_resolved_from_yaml(self, secrets_registry):
+    def test_nested_frozen_model_secret_resolved_from_yaml(self, resolving_secret_store, test_data_dir):
         from pydantic import BaseModel, ConfigDict, SecretStr
         import typing as t
 
@@ -416,8 +372,8 @@ class TestSecretsResolution:
         settings = _NestedAuthSettings(
             settings_parameters=SettingsParameters.create(
                 settings_class=_NestedAuthSettings,
-                secret_store=secrets_registry,
-                config_files=["tests/config/nested_secrets_test.yaml"],
+                secret_store=resolving_secret_store,
+                config_files=[str(test_data_dir / "nested_secrets_test.yaml")],
                 env_prefix="NESTEDSECTEST_",
             )
         )
@@ -425,7 +381,7 @@ class TestSecretsResolution:
         assert settings.auth.username == "admin"
         assert settings.auth.password.get_secret_value() == "resolved_db.production/password"
 
-    def test_nested_model_secret_in_kwargs_resolved(self, secrets_registry):
+    def test_nested_model_secret_in_kwargs_resolved(self, resolving_secret_store):
         from pydantic import BaseModel, ConfigDict, SecretStr
         import typing as t
 
@@ -442,7 +398,7 @@ class TestSecretsResolution:
         settings = _NestedAuthSettings(
             settings_parameters=SettingsParameters.create(
                 settings_class=_NestedAuthSettings,
-                secret_store=secrets_registry,
+                secret_store=resolving_secret_store,
                 auth={"kind": "password", "username": "admin", "password": "secret:db.password"},
             )
         )
@@ -530,7 +486,7 @@ class TestSecretValidationErrorBoundary:
                 )
             )
 
-    def test_cache_hit_rejecting_validator_sanitizes_resolved_marker(self, settings_manager):
+    def test_cache_hit_rejecting_validator_sanitizes_resolved_marker(self, isolated_settings_manager):
         backend = _M7MarkerBackend()
         params = SettingsParameters.create(
             settings_class=_M7RejectingSettings,
@@ -571,7 +527,7 @@ class TestSecretValidationErrorBoundary:
             )
         assert backend.MARKER not in str(excinfo.value)
 
-    def test_cache_hit_unrelated_field_failure_keeps_its_own_diagnostic(self, settings_manager):
+    def test_cache_hit_unrelated_field_failure_keeps_its_own_diagnostic(self, isolated_settings_manager):
         """Same as the constructor case, through the cache-hit route."""
 
         class _MixedFieldsCacheSettings(MountainAshBaseSettings):
