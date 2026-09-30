@@ -495,6 +495,11 @@ class MountainAshBaseSettings(BaseSettings):
     _settings_carried_field_names: frozenset[str] = PrivateAttr(default=frozenset())
     _settings_runtime_field_names: frozenset[str] = PrivateAttr(default=frozenset())
 
+    @classmethod
+    def _capture_initialization_defaults(cls) -> dict[str, Any]:
+        """Capture class-owned defaults once for a structural context."""
+        return {}
+
     def __new__(cls, *args: Any, **kwargs: Any) -> "MountainAshBaseSettings":
         """Bind the frame to this outer allocation before custom init can nest."""
         instance = super().__new__(cls)
@@ -719,7 +724,10 @@ class MountainAshBaseSettings(BaseSettings):
         resolve_references_in_model_tree(self, local_settings_params.secret_store)
 
         # Initialise templated variables
-        self.post_init()
+        if template_settings_parameters is None:
+            self.post_init()
+        else:
+            self.post_init(template_settings_parameters=template_settings_parameters)
 
 
     @staticmethod
@@ -923,8 +931,8 @@ class MountainAshBaseSettings(BaseSettings):
             return None
         self._apply_settings_inputs(settings_dict)
 
-    def _apply_settings_inputs(self, settings_dict: dict[str, Any], backend: Any = None) -> None:
-        """Stage source form before optional runtime resolution and assignment."""
+    def _apply_settings_inputs(self, settings_dict: dict[str, Any]) -> None:
+        """Stage reconstruction inputs before validated assignment."""
 
         patch = _snapshot_reconstruction(settings_dict)
         recipe = self._settings_reconstruction_kwargs
@@ -933,30 +941,10 @@ class MountainAshBaseSettings(BaseSettings):
             merged = _patch_reconstruction(merged, patch, type(self))
         else:
             merged = None
-        resolved_field_names: frozenset[str] = frozenset()
-        if backend is not None:
-            from mountainash_settings.resolve import _resolve_dict_with_changed_fields
-            settings_dict, resolved_field_names = _resolve_dict_with_changed_fields(settings_dict, backend)
         for key, value in settings_dict.items():
             if not hasattr(self, key):
                 raise AttributeError(f"The object does not have an attribute named '{key}'")
-            # MAS-SEC-006 (M7): a resolved-reference value can still fail
-            # this key's own validation; record the failure and leave the
-            # handler before raising the sanitized error, same as every
-            # other route that validates an already-resolved secret. This
-            # is a single-field assignment, so the failing key is already
-            # known precisely -- no batch cross-field attribution needed.
-            assignment_error: Optional[Exception] = None
-            try:
-                setattr(self, key, value)
-            except Exception as exc:
-                assignment_error = exc
-            if assignment_error is not None:
-                if key in resolved_field_names:
-                    from mountainash_settings.resolve import _raise_sanitized_resolution_error
-
-                    _raise_sanitized_resolution_error(type(self), [key])
-                raise assignment_error
+            setattr(self, key, value)
 
         self._settings_reconstruction_kwargs = merged
         names = tuple(merged) if merged is not None else tuple(dict.fromkeys(

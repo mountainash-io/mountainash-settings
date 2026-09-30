@@ -179,6 +179,14 @@ def consume_cache_frame(instance: MountainAshBaseSettings) -> _CacheFrame | None
     return None
 
 
+def initialization_defaults_for_instance(instance: MountainAshBaseSettings) -> dict[str, Any] | None:
+    """Return captured defaults only to the frame's exact bound allocation."""
+    frame = _CURRENT_FRAME.get()
+    if frame is not None and frame.bound_instance is instance:
+        return _copy_for_call(frame.context._initialization_defaults)
+    return None
+
+
 def current_cache_assignment_recorder(instance: Any) -> _CacheFrame | None:
     frame = _CURRENT_FRAME.get()
     if frame is not None and frame.recording_instance is instance:
@@ -371,6 +379,7 @@ class _SettingsContext:
         self._raw_sources: tuple[_SourceSnapshot, ...] | None = None
         self._resolved_sources: tuple[_SourceSnapshot, ...] | None = None
         self._resolved_static_defaults: dict[str, Any] = {}
+        self._initialization_defaults: dict[str, Any] = {}
         self._source_carry: dict[str, Any] | None = None
         # MAS-SEC-006 (M7): deterministic top-level field names -- never
         # values -- whose captured config/env/static-default value was
@@ -384,6 +393,7 @@ class _SettingsContext:
         raw_sources, _ = _capture_sources(self.key)
         resolved_sources, source_sensitive_fields = _resolve_capture(self.key, raw_sources)
         static_defaults = _capture_static_defaults(self.key)
+        initialization_defaults = self.key.settings_class._capture_initialization_defaults()
         self._raw_sources = tuple(
             (source_type, name, _owned(values), custom)
             for source_type, name, values, custom in raw_sources
@@ -393,6 +403,7 @@ class _SettingsContext:
             for source_type, name, values, custom in resolved_sources
         )
         self._resolved_static_defaults = _owned(static_defaults)
+        self._initialization_defaults = _owned(initialization_defaults)
         self._source_sensitive_fields = source_sensitive_fields | frozenset(static_defaults)
 
     def source_sensitive_field_names(self) -> frozenset[str]:

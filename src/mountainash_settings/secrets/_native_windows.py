@@ -189,7 +189,6 @@ FILE_TYPE_DISK = 0x0001
 
 FILE_RENAME_INFORMATION = 10
 
-FILE_LINK_INFORMATION = 11
 
 FILE_DISPOSITION_INFORMATION_CLASS = 13
 
@@ -731,27 +730,6 @@ def _rename_on_handle(
         handle, c.byref(iosb), buffer, size, FILE_RENAME_INFORMATION
     )
     _check_status(status, "NtSetInformationFile(FileRenameInformation)")
-
-def _link_on_handle(
-    handle: HANDLE, destination_parent: HANDLE, destination_name: str
-) -> None:
-    encoded = destination_name.encode("utf-16-le")
-    size = FILE_RENAME_INFORMATION_FIXED.FileName.offset + len(encoded)
-    buffer = c.create_string_buffer(size)
-    fixed = c.cast(buffer, c.POINTER(FILE_RENAME_INFORMATION_FIXED)).contents
-    fixed.ReplaceIfExists = 0
-    fixed.RootDirectory = destination_parent
-    fixed.FileNameLength = len(encoded)
-    c.memmove(
-        c.addressof(buffer) + FILE_RENAME_INFORMATION_FIXED.FileName.offset,
-        encoded,
-        len(encoded),
-    )
-    iosb = IO_STATUS_BLOCK()
-    status = _api().NtSetInformationFile(
-        handle, c.byref(iosb), buffer, size, FILE_LINK_INFORMATION
-    )
-    _check_status(status, "NtSetInformationFile(FileLinkInformation)")
 
 # The source helpers above deliberately resolve these late definitions at call time.
 def _open_relative(parent: int, name: str, disposition: int, *, directory: bool, access: int, security_descriptor: PVOID | None = None) -> int:

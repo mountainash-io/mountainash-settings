@@ -18,10 +18,20 @@ from mountainash_settings.resolve import (
     resolve_references_in_model_tree,
 )
 from mountainash_settings.settings.base_settings import MountainAshBaseSettings
+from mountainash_settings.secrets import MemorySecretStore
 
 
 @pytest.mark.unit
 class TestResolveReferencesInDict:
+    def test_bare_reference_requires_an_unambiguous_record(self):
+        store = MemorySecretStore()
+        store.set("single", {"token": "one"})
+        store.set("multiple", {"token": "two", "refresh": "three"})
+        assert resolve_references_in_dict({"TOKEN": "secret:single"}, store) == {"TOKEN": "one"}
+        with pytest.raises(KeyError, match="Ambiguous secret reference"):
+            resolve_references_in_dict({"TOKEN": "secret:multiple"}, store)
+        assert resolve_references_in_dict({"TOKEN": "secret:multiple.refresh"}, store) == {"TOKEN": "three"}
+
     def test_flat_dict_resolves_prefixed_value(self, resolving_secret_store):
         data = {"PASSWORD": "secret:db.password"}
         result = resolve_references_in_dict(data, resolving_secret_store)

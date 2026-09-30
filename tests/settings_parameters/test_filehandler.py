@@ -112,17 +112,14 @@ class TestFileTypeRegistry:
         assert result == "yaml"
 
     @pytest.mark.unit
-    def test_register_type_adds_new_extension(self):
+    def test_register_type_adds_new_extension(self, monkeypatch):
         """Test registering a new file type."""
-        # Register a new type
+        monkeypatch.setattr(FileTypeRegistry, "_registry", dict(FileTypeRegistry._registry))
         FileTypeRegistry.register_type("ini", "ini")
 
         # Verify it's registered
         result = FileTypeRegistry.identify("config.ini")
         assert result == "ini"
-
-        # Cleanup
-        del FileTypeRegistry._registry["ini"]
 
     @pytest.mark.unit
     def test_identify_dotenv_file(self):
@@ -216,8 +213,7 @@ class TestSeparateConfigFiles:
     def test_separate_single_yaml_file(self, temp_yaml_file):
         """Test separating single YAML file."""
         result = SettingsFileHandler.separate_config_files(temp_yaml_file)
-        assert result.yaml_files is not None
-        assert len(result.yaml_files) == 1
+        assert result.yaml_files == (temp_yaml_file,)
         assert result.env_files == ()
         assert result.toml_files == ()
         assert result.json_files == ()
@@ -227,8 +223,7 @@ class TestSeparateConfigFiles:
         """Test separating single .yml file."""
         yml_file = create_config_file('yml', {'TEST': 'value'})
         result = SettingsFileHandler.separate_config_files(yml_file)
-        assert result.yaml_files is not None
-        assert len(result.yaml_files) == 1
+        assert result.yaml_files == (yml_file,)
 
     @pytest.mark.unit
     def test_separate_multiple_files_different_types(
@@ -238,20 +233,16 @@ class TestSeparateConfigFiles:
         files = [temp_yaml_file, temp_toml_file, temp_json_file]
         result = SettingsFileHandler.separate_config_files(files)
 
-        assert result.yaml_files is not None
-        assert len(result.yaml_files) == 1
-        assert result.toml_files is not None
-        assert len(result.toml_files) == 1
-        assert result.json_files is not None
-        assert len(result.json_files) == 1
+        assert result.yaml_files == (temp_yaml_file,)
+        assert result.toml_files == (temp_toml_file,)
+        assert result.json_files == (temp_json_file,)
         assert result.env_files == ()
 
     @pytest.mark.unit
     def test_separate_multiple_yaml_files(self, temp_multiple_yaml_files):
         """Test separating multiple YAML files."""
         result = SettingsFileHandler.separate_config_files(temp_multiple_yaml_files)
-        assert result.yaml_files is not None
-        assert len(result.yaml_files) == 2
+        assert result.yaml_files == tuple(temp_multiple_yaml_files)
 
     @pytest.mark.unit
     def test_separate_with_tuple_input(self, temp_yaml_file, temp_toml_file):
@@ -259,8 +250,8 @@ class TestSeparateConfigFiles:
         files = (temp_yaml_file, temp_toml_file)
         result = SettingsFileHandler.separate_config_files(files)
 
-        assert result.yaml_files is not None
-        assert result.toml_files is not None
+        assert result.yaml_files == (temp_yaml_file,)
+        assert result.toml_files == (temp_toml_file,)
 
     @pytest.mark.unit
     def test_separate_deduplicates_files(self, temp_yaml_file):
@@ -268,27 +259,23 @@ class TestSeparateConfigFiles:
         files = [temp_yaml_file, temp_yaml_file]
         result = SettingsFileHandler.separate_config_files(files)
 
-        assert result.yaml_files is not None
-        assert len(result.yaml_files) == 1
+        assert result.yaml_files == (temp_yaml_file,)
 
     @pytest.mark.unit
-    def test_separate_expands_user_path(self, tmp_path):
+    def test_separate_expands_user_path(self, tmp_path, monkeypatch):
         """Test that ~ in paths is expanded."""
-        # Create a file in temp dir
-        yaml_file = tmp_path / "config.yaml"
+        yaml_file = tmp_path / "settings.yaml"
         yaml_file.write_text("TEST: value")
-
-        # Use relative path with ~
-        # Note: This test assumes the file is actually in the temp location
-        result = SettingsFileHandler.separate_config_files([str(yaml_file)])
-        assert result.yaml_files is not None
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
+        result = SettingsFileHandler.separate_config_files(["~/settings.yaml"])
+        assert result.yaml_files == (str(yaml_file),)
 
     @pytest.mark.unit
     def test_separate_dotenv_file(self, temp_dotenv_file):
         """Test separating .env dotfile."""
         result = SettingsFileHandler.separate_config_files(temp_dotenv_file)
-        assert result.env_files is not None
-        assert len(result.env_files) == 1
+        assert result.env_files == (temp_dotenv_file,)
         assert result.yaml_files == ()
         assert result.toml_files == ()
         assert result.json_files == ()
@@ -301,12 +288,9 @@ class TestSeparateConfigFiles:
         files = [temp_dotenv_file, temp_yaml_file, temp_toml_file]
         result = SettingsFileHandler.separate_config_files(files)
 
-        assert result.env_files is not None
-        assert len(result.env_files) == 1
-        assert result.yaml_files is not None
-        assert len(result.yaml_files) == 1
-        assert result.toml_files is not None
-        assert len(result.toml_files) == 1
+        assert result.env_files == (temp_dotenv_file,)
+        assert result.yaml_files == (temp_yaml_file,)
+        assert result.toml_files == (temp_toml_file,)
         assert result.json_files == ()
 
 
@@ -415,6 +399,16 @@ class TestIdentifyFileExtension:
 class TestValidateConfigFilesExist:
     """Test validate_config_files_exist method."""
 
+    def test_later_same_type_missing_file_is_rejected(self, temp_multiple_yaml_files):
+        from mountainash_settings import MountainAshBaseSettings
+
+        first, second = temp_multiple_yaml_files
+        MountainAshBaseSettings(config_files=[first, second])
+        Path(second).unlink()
+        with pytest.raises(FileNotFoundError) as caught:
+            MountainAshBaseSettings(config_files=[first, second])
+        assert second in str(caught.value)
+
     @pytest.mark.unit
     def test_validate_none_returns_none(self):
         """Test that None input returns None."""
@@ -480,15 +474,13 @@ class TestGroupFilesByType:
     def test_group_single_file(self, temp_yaml_file):
         """Test grouping single file."""
         result = SettingsFileHandler.group_files_by_type([temp_yaml_file])
-        assert "yaml" in result
-        assert len(result["yaml"]) == 1
+        assert result == {"yaml": [temp_yaml_file]}
 
     @pytest.mark.unit
     def test_group_multiple_files_same_type(self, temp_multiple_yaml_files):
         """Test grouping multiple files of same type."""
         result = SettingsFileHandler.group_files_by_type(temp_multiple_yaml_files)
-        assert "yaml" in result
-        assert len(result["yaml"]) == 2
+        assert result == {"yaml": temp_multiple_yaml_files}
 
     @pytest.mark.unit
     def test_group_multiple_files_different_types(
@@ -498,19 +490,13 @@ class TestGroupFilesByType:
         files = [temp_yaml_file, temp_toml_file, temp_json_file]
         result = SettingsFileHandler.group_files_by_type(files)
 
-        assert "yaml" in result
-        assert "toml" in result
-        assert "json" in result
-        assert len(result["yaml"]) == 1
-        assert len(result["toml"]) == 1
-        assert len(result["json"]) == 1
+        assert result == {"yaml": [temp_yaml_file], "toml": [temp_toml_file], "json": [temp_json_file]}
 
     @pytest.mark.unit
     def test_group_dotenv_file(self, temp_dotenv_file):
         """Test grouping .env dotfile."""
         result = SettingsFileHandler.group_files_by_type([temp_dotenv_file])
-        assert "env" in result
-        assert len(result["env"]) == 1
+        assert result == {"env": [temp_dotenv_file]}
 
     @pytest.mark.unit
     def test_group_dotenv_with_other_files(
@@ -520,11 +506,7 @@ class TestGroupFilesByType:
         files = [temp_dotenv_file, temp_yaml_file, temp_env_file]
         result = SettingsFileHandler.group_files_by_type(files)
 
-        assert "env" in result
-        assert "yaml" in result
-        # Both .env dotfile and .env extension file should be grouped together
-        assert len(result["env"]) == 2
-        assert len(result["yaml"]) == 1
+        assert result == {"env": [temp_dotenv_file, temp_env_file], "yaml": [temp_yaml_file]}
 
 
 class TestDeduplicateFiles:

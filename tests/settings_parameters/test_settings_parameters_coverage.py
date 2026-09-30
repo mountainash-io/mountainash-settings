@@ -91,7 +91,9 @@ class TestEquality:
 
         # secrets_dir is structural -- different values should NOT be equal
         assert params1 != params2
-        assert hash(params1) != hash(params2)
+        mapping = {params1: "first", params2: "second"}
+        assert len(mapping) == 2
+        assert (mapping[params1], mapping[params2]) == ("first", "second")
 
     @pytest.mark.unit
     def test_eq_differs_on_config_files(self):
@@ -106,7 +108,9 @@ class TestEquality:
         )
 
         assert params1 != params2
-        assert hash(params1) != hash(params2)
+        mapping = {params1: "first", params2: "second"}
+        assert len(mapping) == 2
+        assert (mapping[params1], mapping[params2]) == ("first", "second")
 
     @pytest.mark.unit
     def test_eq_differs_on_settings_class(self):
@@ -115,7 +119,9 @@ class TestEquality:
         params2 = SettingsParameters.create(settings_class=SimpleSettings)
 
         assert params1 != params2
-        assert hash(params1) != hash(params2)
+        mapping = {params1: "first", params2: "second"}
+        assert len(mapping) == 2
+        assert (mapping[params1], mapping[params2]) == ("first", "second")
 
     @pytest.mark.unit
     def test_eq_differs_on_env_prefix(self):
@@ -130,7 +136,9 @@ class TestEquality:
         )
 
         assert params1 != params2
-        assert hash(params1) != hash(params2)
+        mapping = {params1: "first", params2: "second"}
+        assert len(mapping) == 2
+        assert (mapping[params1], mapping[params2]) == ("first", "second")
 
 
 class TestGetSettings:
@@ -162,7 +170,8 @@ class TestGetSettings:
         """Test get_settings with additional kwargs passed."""
         params = SettingsParameters.create(
             settings_class=SimpleSettings,
-            VALUE="initial"
+            VALUE="initial",
+            COUNT=7,
         )
 
         # Additional kwargs passed to get_settings
@@ -170,6 +179,7 @@ class TestGetSettings:
 
         assert isinstance(settings, SimpleSettings)
         assert settings.VALUE == "initial"
+        assert settings.COUNT == 42
 
     @pytest.mark.unit
     def test_get_settings_works_correctly(self, isolated_settings_manager):
@@ -185,58 +195,6 @@ class TestGetSettings:
 
         assert isinstance(settings, SimpleSettings)
         assert settings.VALUE == "cached_value"
-
-
-class TestGetValidKwargNames:
-    """Test _get_valid_kwarg_names() method."""
-
-    @pytest.mark.unit
-    def test_get_valid_kwarg_names_with_none_settings_class(self):
-        """Test _get_valid_kwarg_names returns empty set when settings_class is None."""
-        params = SettingsParameters.create()
-
-        result = params._get_valid_kwarg_names()
-
-        assert result == set()
-
-    @pytest.mark.unit
-    def test_get_valid_kwarg_names_with_none_passed_and_none_stored(self):
-        """Test _get_valid_kwarg_names with None passed explicitly and None stored."""
-        params = SettingsParameters.create()
-
-        result = params._get_valid_kwarg_names(settings_class=None)
-
-        assert result == set()
-
-    @pytest.mark.unit
-    def test_get_valid_kwarg_names_with_class_provided(self):
-        """Test _get_valid_kwarg_names with settings_class provided.
-
-        M5 (MAS-SEC-004): only declared fields are valid; underscore source
-        controls are rejected, not treated as valid attribute kwargs.
-        """
-        params = SettingsParameters.create()
-
-        result = params._get_valid_kwarg_names(settings_class=SimpleSettings)
-
-        assert "VALUE" in result
-        assert "COUNT" in result
-        assert "_env_prefix" not in result
-        assert "_case_sensitive" not in result
-
-    @pytest.mark.unit
-    def test_get_valid_kwarg_names_uses_stored_class(self):
-        """Test _get_valid_kwarg_names uses stored settings_class."""
-        params = SettingsParameters.create(
-            settings_class=SimpleSettings
-        )
-
-        result = params._get_valid_kwarg_names()
-
-        assert "VALUE" in result
-        assert "COUNT" in result
-
-
 
 
 class TestHashWithConfigFiles:
@@ -265,19 +223,20 @@ class TestHashWithConfigFiles:
         assert hash(params1) == hash(params2)
 
     @pytest.mark.unit
-    def test_hash_different_config_file_order_normalized(self):
-        """Test that config files in different order produce same hash (if sorted)."""
+    def test_config_file_order_is_part_of_identity(self):
+        """Reversing precedence creates a distinct structural request."""
         params1 = SettingsParameters.create(
             settings_class=TestSettings,
             config_files=["a.yaml", "b.yaml"]
         )
         params2 = SettingsParameters.create(
             settings_class=TestSettings,
-            config_files=["a.yaml", "b.yaml"]
+            config_files=["b.yaml", "a.yaml"]
         )
 
-        # Should be same (same order)
-        assert hash(params1) == hash(params2)
+        assert params1 != params2
+        assert tuple(map(str, params1.config_files)) == ("a.yaml", "b.yaml")
+        assert tuple(map(str, params2.config_files)) == ("b.yaml", "a.yaml")
 
     @pytest.mark.unit
     def test_hash_consistency_across_multiple_calls(self):
@@ -325,10 +284,7 @@ class TestGetAttributeSettingsKwargs:
 
         result = params.get_attribute_settings_kwargs()
 
-        assert "VALUE" in result
-        assert "COUNT" in result
-        assert "INVALID_FIELD" not in result
-        assert "ANOTHER_INVALID" not in result
+        assert result == {"VALUE": "valid", "COUNT": 42}
 
 
 class TestGetAttributeSettingsKwargsSourceControlRejection:

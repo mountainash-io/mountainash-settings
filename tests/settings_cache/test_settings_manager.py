@@ -231,6 +231,97 @@ class _FieldNamedExtraSettings(MountainAshBaseSettings):
 
 
 class TestSettingsManagerRoutes:
+    @pytest.mark.parametrize("fail_capture", [False, True], ids=["success", "failure-retry"])
+    def test_capture_coordinates_waiters_and_keeps_other_keys_independent(
+        self, fail_capture, capture_signals, isolated_settings_manager, monkeypatch,
+    ):
+        from concurrent.futures import ThreadPoolExecutor
+
+        entered, release, waiting = capture_signals
+        captures = []
+        expected_captures = 2 if fail_capture else 1
+        manager = isolated_settings_manager
+        monkeypatch.setenv("COORD_VALUE", "captured")
+
+        class CoordinatedSettings(MountainAshBaseSettings):
+            VALUE: str
+            NUMBER: int = 1
+            ITEMS: list[str] = Field(default_factory=list)
+
+            @classmethod
+            def settings_capture_sources(cls, sources):
+                captures.append(None)
+                entered.set()
+                assert release.wait(5), "capture release timed out"
+                if fail_capture:
+                    raise ValueError("capture-probe")
+                return sources
+
+        params = SettingsParameters.create(settings_class=CoordinatedSettings, env_prefix="COORD_")
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            try:
+                owner = pool.submit(manager.get_or_create_settings, params)
+                assert entered.wait(5)
+                assert not manager.is_initialised(params)
+                waiter = pool.submit(manager.get_or_create_settings, params)
+                assert waiting.wait(5), "contender did not reach the wait boundary"
+                other = pool.submit(manager.get_or_create_settings, SettingsParameters.create(
+                    settings_class=_TransformingSettings, VALUE=7,
+                ))
+                assert other.result(timeout=5).VALUE == 8
+                release.set()
+                if fail_capture:
+                    with pytest.raises(ValueError, match="capture-probe"):
+                        owner.result(timeout=5)
+                    with pytest.raises(ValueError, match="capture failed"):
+                        waiter.result(timeout=5)
+                    assert not manager.is_initialised(params)
+                else:
+                    first, second = owner.result(timeout=5), waiter.result(timeout=5)
+                    assert first.VALUE == second.VALUE == "captured"
+                    assert first is not second
+                    first.ITEMS.append("local")
+                    assert second.ITEMS == []
+            finally:
+                release.set()
+
+        assert len(captures) == 1
+        if fail_capture:
+            fail_capture = False
+            assert manager.get_or_create_settings(params).VALUE == "captured"
+            assert len(captures) == 2
+        monkeypatch.setenv("COORD_VALUE", "changed")
+        with pytest.raises(ValidationError):
+            manager.get_or_create_settings(SettingsParameters.create(
+                settings_class=CoordinatedSettings, env_prefix="COORD_", NUMBER="invalid",
+            ))
+        assert manager.get_or_create_settings(params).VALUE == "captured"
+        assert len(captures) == expected_captures
+
+    def test_same_key_reentrant_capture_is_rejected_without_hanging(self):
+        import subprocess
+        import sys
+        from textwrap import dedent
+
+        result = subprocess.run([sys.executable, "-I", "-c", dedent('''
+            from mountainash_settings import MountainAshBaseSettings, SettingsManager, SettingsParameters
+            manager = SettingsManager()
+            class ReentrantSettings(MountainAshBaseSettings):
+                @classmethod
+                def settings_capture_sources(cls, sources):
+                    manager.get_or_create_settings(params)
+                    return sources
+            params = SettingsParameters.create(settings_class=ReentrantSettings)
+            try:
+                manager.get_or_create_settings(params)
+            except ValueError as error:
+                assert "reentrant" in str(error)
+            else:
+                raise AssertionError("reentrant capture was accepted")
+            assert not manager.is_initialised(params)
+        ''')], timeout=10, capture_output=True, text=True)
+        assert result.returncode == 0, result.stdout + result.stderr
+
     def test_manager_factory_returns_singleton(self):
         assert get_settings_manager() is get_settings_manager()
 
@@ -267,25 +358,32 @@ class TestSettingsManagerRoutes:
         with pytest.raises(TypeError):
             SettingsManager().get_or_create_settings(params, True)
 
-    def test_structural_selectors_choose_independent_source_contexts(self):
+    def test_structural_selectors_choose_independent_source_contexts(self, monkeypatch):
+        monkeypatch.setenv("FIRST_TEST_VAR", "first")
+        monkeypatch.setenv("SECOND_TEST_VAR", "second")
         manager = SettingsManager()
         first = manager.get_or_create_settings(
             SettingsParameters.create(
                 settings_class=TestSettings,
                 env_prefix="FIRST_",
-                TEST_VAR="first",
             )
         )
         second = manager.get_or_create_settings(
             SettingsParameters.create(
                 settings_class=TestSettings,
                 env_prefix="SECOND_",
-                TEST_VAR="second",
             )
         )
 
         assert first.TEST_VAR == "first"
         assert second.TEST_VAR == "second"
+        monkeypatch.setenv("FIRST_TEST_VAR", "changed")
+        monkeypatch.setenv("SECOND_TEST_VAR", "changed")
+        for prefix, expected in (("FIRST_", "first"), ("SECOND_", "second")):
+            result = manager.get_or_create_settings(
+                SettingsParameters.create(settings_class=TestSettings, env_prefix=prefix)
+            )
+            assert result.TEST_VAR == expected
 
     def test_public_retrieval_routes_reinitialise_as_operation_control(self, monkeypatch):
         manager = SettingsManager()

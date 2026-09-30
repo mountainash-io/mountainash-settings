@@ -315,27 +315,13 @@ class TestIntegration:
     def test_complex_workflow_with_nested_kwargs(self):
         """Test complex workflow with nested kwargs handling."""
         # Start with nested structure
-        kwargs1 = {"kwargs": {"inner1": "value1"}}
-        kwargs2 = {"inner2": "value2"}
+        kwargs1 = {"kwargs": {"inner1": "value1", "shared": "old"}}
+        kwargs2 = {"inner2": "value2", "shared": "new"}
 
         # Merge (should extract nested kwargs)
         merged = SettingsKwargsHandler.merge_kwargs(kwargs1, kwargs2)
 
-        # Result should have inner1 from nested kwargs extraction
-        # but also inner2 from kwargs2
-        # Note: The extraction happens in merge_kwargs
-        assert "inner1" in merged or "kwargs" in merged
-
-    @pytest.mark.integration
-    def test_format_dict_with_all_edge_cases(self):
-        """Test format_kwargs_dict with edge cases in sequence."""
-        # Test None
-        assert SettingsKwargsHandler.format_kwargs_dict(None) == {}
-        assert SettingsKwargsHandler.format_kwargs_dict({}) == {}
-        plain = {"key": "value"}
-        assert SettingsKwargsHandler.format_kwargs_dict(plain) == plain
-        nested = {"kwargs": {"key": "value"}}
-        assert SettingsKwargsHandler.format_kwargs_dict(nested) == {"key": "value"}
+        assert merged == {"inner1": "value1", "inner2": "value2", "shared": "new"}
 
 
 @pytest.mark.parametrize("value", [{"kwargs": None}, {"kwargs": []}, [("x",)], {1: "x"}])

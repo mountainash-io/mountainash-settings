@@ -12,15 +12,22 @@ def test_views_isolate_records_markers_and_validate_before_mutation():
     config = NamespacedSecretStore(inner, "config")
     oauth.set("provider.user", {"token": "one"})
     config.set("provider.user", {"token": "two"})
+    assert not oauth.is_cleared("provider.user")
+    assert not config.is_cleared("provider.user")
     oauth.delete("provider.user")
     assert inner.get("oauth.provider.user") is None
     assert inner.is_cleared("oauth.provider.user")
+    assert oauth.is_cleared("provider.user")
+    assert not config.is_cleared("provider.user")
     assert config.get("provider.user") == {"token": "two"}
     with pytest.raises(ValueError):
         oauth.set("provider.user\n", {"token": "bad"})
     with pytest.raises(ValueError):
         NamespacedSecretStore(inner, "oauth.")
     assert inner.get("oauth.provider.user") is None
+    oauth.set("provider.user", {"token": "replacement"})
+    assert not oauth.is_cleared("provider.user")
+    assert config.get("provider.user") == {"token": "two"}
     del oauth
     inner.set("oauth.provider.user", {"token": "still-owned"})
     assert inner.get("oauth.provider.user") == {"token": "still-owned"}

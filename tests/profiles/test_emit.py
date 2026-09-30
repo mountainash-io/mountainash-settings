@@ -116,7 +116,7 @@ class TestEmit:
 
     def test_untargeted_emit_layers_base(self):
         p = BareProfile(HOST="h")
-        assert p.emit(base={"region": "x"}) == {"region": "x", "host": "h"}
+        assert p.emit(base={"region": "x", "host": "base-host"}) == {"region": "x", "host": "h"}
 
     def test_targeted_profile_no_target_raises(self):
         p = ScopedProfile(USERNAME="u", PASSWORD="s")
@@ -208,7 +208,9 @@ class TestBackCompat:
         class P(Profile):
             __spec__ = spec
 
-        assert P(FLAG=True).emit("boto") == {"flag": 1}
+        result = P(FLAG=True).emit("boto")
+        assert result == {"flag": 1}
+        assert type(result["flag"]) is int
 
 
 @pytest.mark.unit
