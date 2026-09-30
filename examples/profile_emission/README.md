@@ -15,7 +15,7 @@ python examples/profile_emission/example.py
 Expected output:
 
 ```text
-Prepared PostgreSQL arguments for reports (credentials omitted)
+Prepared PostgreSQL arguments for reports_db (credentials omitted)
 ```
 
 `driver_keys="lower"` opts into lowercase mappings. `driver_key="dbname"`

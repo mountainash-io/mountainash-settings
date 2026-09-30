@@ -8,7 +8,7 @@ from mountainash_settings.secrets import FilesystemBackend
 
 
 class ReportSettings(MountainAshBaseSettings):
-    DATABASE: str = "reports"
+    DATABASE: str = "reports_db"
 
 
 def main() -> None:

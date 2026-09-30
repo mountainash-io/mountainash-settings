@@ -23,7 +23,7 @@ def main() -> None:
     assert ordinary.DEBUG is False
     diagnostic.DATABASE = "scratch_reports"
     later = get_settings(settings_parameters=params)
-    assert later.DATABASE == "reports"
+    assert later.DATABASE == "reports_db"
     print(f"Diagnostic debug={diagnostic.DEBUG}; ordinary debug={ordinary.DEBUG}; later database={later.DATABASE}")
 
 

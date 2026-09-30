@@ -24,7 +24,7 @@ def main() -> None:
     spec = PostgreSQLSettings.__spec__
     assert isinstance(spec, BackendSpec)
     assert spec.default_port == 5432
-    settings = PostgreSQLSettings(env_prefix="REPORT_", HOST="prod-db.example.com", DATABASE="reports")
+    settings = PostgreSQLSettings(env_prefix="REPORT_", HOST="prod-db.example.com", DATABASE="reports_db")
     assert settings.emit()["port"] == 5432
     print(f"PostgreSQL domain default port: {spec.default_port}")
 

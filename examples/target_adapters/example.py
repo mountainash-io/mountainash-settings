@@ -16,16 +16,16 @@ class PostgreSQLSettings(Profile, name="postgresql", provider_type="postgresql")
 
 
 def main() -> None:
-    settings = PostgreSQLSettings(env_prefix="REPORT_", HOST="prod-db.example.com", DATABASE="reports")
-    base = {"application_name": "reports"}
+    settings = PostgreSQLSettings(env_prefix="REPORT_", HOST="prod-db.example.com", DATABASE="reports_db")
+    base = {"application_name": "reports_app"}
     driver = settings.emit("driver", base=base)
     url = settings.emit("url")
     assert driver == {
-        "application_name": "reports", "host": "prod-db.example.com",
-        "dbname": "reports", "connect_timeout": 5,
+        "application_name": "reports_app", "host": "prod-db.example.com",
+        "dbname": "reports_db", "connect_timeout": 5,
     }
-    assert url == {"hostname": "prod-db.example.com", "database": "reports", "port": "5432"}
-    assert base == {"application_name": "reports"}
+    assert url == {"hostname": "prod-db.example.com", "database": "reports_db", "port": "5432"}
+    assert base == {"application_name": "reports_app"}
     print(f"Driver timeout: {driver['connect_timeout']}; URL port: {url['port']} (string)")
 
 

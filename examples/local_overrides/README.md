@@ -14,7 +14,7 @@ python examples/local_overrides/example.py
 Expected output:
 
 ```text
-Diagnostic debug=True; ordinary debug=False; later database=reports
+Diagnostic debug=True; ordinary debug=False; later database=reports_db
 ```
 
 Runtime field overrides are excluded from structural cache identity. Retrieval

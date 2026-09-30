@@ -9,7 +9,7 @@ from mountainash_settings import MountainAshBaseSettings
 
 
 class AppSettings(MountainAshBaseSettings):
-    DATABASE: str = "reports"
+    DATABASE: str = "reports_db"
     OPTIONS: dict[str, object] = Field(default_factory=dict)
 
 

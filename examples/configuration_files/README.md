@@ -20,7 +20,7 @@ python examples/configuration_files/example.py
 Expected output:
 
 ```text
-reports: production, batch=100, debug=False
+reports_app: database=reports_db, production, batch=100, debug=False
 ```
 
 The `REPORT_` prefix applies to environment and dotenv inputs; structured files

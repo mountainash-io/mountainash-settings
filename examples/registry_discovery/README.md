@@ -14,7 +14,7 @@ python examples/registry_discovery/example.py
 Expected output:
 
 ```text
-Selected PostgreSQLSettings for reports
+Selected PostgreSQLSettings for reports_db
 ```
 
 A registry adds discovery and duplicate-name protection. It does not construct

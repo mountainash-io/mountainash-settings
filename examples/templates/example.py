@@ -27,7 +27,7 @@ def main() -> None:
     settings = AppSettings(
         config_files=[config / "base.yaml", config / "production.toml"], env_prefix="REPORT_",
     )
-    assert settings.LOG_PATH == str(UPath("~") / "logs" / "reports" / "production.log")
+    assert settings.LOG_PATH == str(UPath("~") / "logs" / "reports_app" / "production.log")
     # No directories or log files are created by deriving this path.
     print(f"Log path: {settings.LOG_PATH}")
 

@@ -15,9 +15,9 @@ def main() -> None:
     databases.register(spec, PostgreSQLSettings)
     selected = databases.get_settings_class("postgresql")
     assert selected is PostgreSQLSettings
-    settings = selected(env_prefix="REPORT_", HOST="prod-db.example.com", DATABASE="reports")
-    assert settings.emit() == {"host": "prod-db.example.com", "dbname": "reports"}
-    print(f"Selected {selected.__name__} for reports")
+    settings = selected(env_prefix="REPORT_", HOST="prod-db.example.com", DATABASE="reports_db")
+    assert settings.emit() == {"host": "prod-db.example.com", "dbname": "reports_db"}
+    print(f"Selected {selected.__name__} for reports_db")
 
 
 if __name__ == "__main__":

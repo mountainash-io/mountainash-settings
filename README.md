@@ -44,8 +44,8 @@ python -m pip install -e .
 Configure a Python application. Save this as `report.yaml`:
 
 ```yaml
-APP_NAME: reports
-DATABASE: reports
+APP_NAME: reports_app
+DATABASE: reports_db
 ```
 
 Save this as `quickstart.py` alongside it:
@@ -67,7 +67,7 @@ print(f"{settings.APP_NAME}: {settings.DATABASE}, debug={settings.DEBUG}")
 Run `python quickstart.py` from that directory:
 
 ```text
-reports: reports, debug=True
+reports_app: reports_db, debug=True
 ```
 
 The file supplies the application values; `DEBUG=True` overrides the default for

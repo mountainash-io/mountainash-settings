@@ -24,4 +24,4 @@ def test_readme_quickstart_runs(tmp_path: Path, example_environment: dict[str, s
         timeout=60, check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.strip() == "reports: reports, debug=True"
+    assert result.stdout.strip() == "reports_app: reports_db, debug=True"

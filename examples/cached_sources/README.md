@@ -15,7 +15,7 @@ python examples/cached_sources/example.py
 Expected output:
 
 ```text
-Cached: reports; direct: changed_reports
+Cached: reports_db; direct: changed_reports
 ```
 
 Each retrieval returns an independently owned, validated instance. The cache saves
