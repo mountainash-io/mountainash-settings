@@ -87,9 +87,12 @@ as fixed.
 - Annotated attributes retain static types. Pinned mypy 1.10.1 does not catch
   every missing required `ProfileField` constructor argument or invalid class
   header; runtime validation remains authoritative.
-- Spec inspection is separate from JSON Schema generation. The inherited
-  `SETTINGS_CLASS` bookkeeping field currently prevents general
-  `model_json_schema()` support on settings and profiles.
+- Both declaration styles support class-level `model_json_schema()` in validation
+  and serialization modes for fields supported by Pydantic. The schema omits
+  `SETTINGS_CLASS`, which holds a Python class object; other bookkeeping fields
+  remain included. Runtime class identity, Python-mode dumps and parameter
+  extraction are unchanged. Arbitrary application types still need Pydantic schema
+  support; this is not a serializer for runtime class objects.
 
 ## Domain metadata
 

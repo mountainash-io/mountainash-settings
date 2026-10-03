@@ -55,8 +55,12 @@ selection; underscore-prefixed source controls such as `_env_file` are rejected.
 
 Declaration and retrieval are independent: ordinary settings or profiles can
 both be constructed directly or retrieved through the cache API. Profile
-spec inspection and `model_fields` work without loading settings, but inherited
-bookkeeping currently prevents general `model_json_schema()` generation.
+spec inspection, `model_fields` and class-level `model_json_schema()` work without
+loading settings. JSON Schema generation supports validation and serialization
+modes for fields supported by Pydantic. It omits the Python class-identity field
+`SETTINGS_CLASS`; other bookkeeping fields remain included. This omission does
+not change runtime field access or Python-mode dumps, or make arbitrary Python
+types JSON-serializable.
 
 ## What's next
 

@@ -1,6 +1,7 @@
 """Class declarations project native fields without replacing Pydantic behavior."""
 
 from dataclasses import dataclass, field
+import json
 
 import pytest
 from pydantic import ValidationError
@@ -19,6 +20,29 @@ class DatabaseSpec(ProfileSpec):
     def __post_init__(self):
         if not self.supported_auth:
             raise ValueError("supported_auth required")
+
+
+@pytest.mark.parametrize("mode", ["validation", "serialization"])
+@pytest.mark.parametrize("declaration", ["explicit", "generated"])
+def test_profile_schema_includes_declared_fields(declaration, mode):
+    if declaration == "explicit":
+        class Database(Profile):
+            __spec__ = ProfileSpec(name="database", provider_type="postgresql", parameters=[
+                ParameterSpec(name="PORT", type=int, tier="core", default=5432),
+            ])
+    else:
+        class Database(Profile, name="database", provider_type="postgresql"):
+            PORT: int = ProfileField(default=5432, ge=1, le=65535)
+
+    schema = Database.model_json_schema(mode=mode)
+    assert json.loads(json.dumps(schema)) == schema
+    assert "SETTINGS_CLASS" not in schema["properties"]
+    port = schema["properties"]["PORT"]
+    assert port["type"] == "integer"
+    assert port["default"] == 5432
+    assert "PORT" not in schema.get("required", [])
+    if declaration == "generated":
+        assert (port["minimum"], port["maximum"]) == (1, 65535)
 
 
 def test_profile_field_retains_native_field_behavior():
