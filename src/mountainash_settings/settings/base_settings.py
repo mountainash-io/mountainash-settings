@@ -12,6 +12,7 @@ from pathlib import PurePosixPath, PureWindowsPath, PosixPath, WindowsPath
 from uuid import UUID
 
 from pydantic import AliasPath, BaseModel, Field, PrivateAttr, SecretStr, SecretBytes
+from pydantic.json_schema import SkipJsonSchema
 from pydantic_settings import (
     BaseSettings,
     DotEnvSettingsSource,
@@ -475,7 +476,7 @@ class MountainAshBaseSettings(BaseSettings):
         )
 
     #Tracablility and repeatability
-    SETTINGS_CLASS: type | None =                                     Field(default=None)
+    SETTINGS_CLASS: SkipJsonSchema[type | None] =                     Field(default=None)
     SETTINGS_CLASS_NAME: str | None =                                 Field(default=None)
 
     SETTINGS_SOURCE_ENV_FILES: Optional[Union[Any, str, List[Any|str]]] =       Field(default=None)
