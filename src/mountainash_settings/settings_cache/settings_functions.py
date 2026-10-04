@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING, TypeVar, overload
 
 from ..settings_parameters.filehandler import ConfigFilesInput
 
@@ -12,11 +12,48 @@ from ..settings_parameters.settings_parameters import SettingsParameters
 from .settings_manager import SettingsManager
 
 _SETTINGS_MANAGER = SettingsManager()
+T = TypeVar("T", bound="MountainAshBaseSettings")
 
 
 def get_settings_manager() -> SettingsManager:
     """Retrieve the sole process-wide structural-context owner."""
     return _SETTINGS_MANAGER
+
+
+@overload
+def get_settings(
+    settings_parameters: Optional[SettingsParameters] = None,
+    *,
+    settings_class: type[T],
+    config_files: ConfigFilesInput = None,
+    env_prefix: Optional[str] = None,
+    reinitialise: bool = False,
+    **kwargs: Any,
+) -> T: ...
+
+
+@overload
+def get_settings(
+    settings_parameters: Optional[SettingsParameters],
+    settings_class: type[T],
+    config_files: ConfigFilesInput = None,
+    env_prefix: Optional[str] = None,
+    *,
+    reinitialise: bool = False,
+    **kwargs: Any,
+) -> T: ...
+
+
+@overload
+def get_settings(
+    settings_parameters: Optional[SettingsParameters] = None,
+    settings_class: None = None,
+    config_files: ConfigFilesInput = None,
+    env_prefix: Optional[str] = None,
+    *,
+    reinitialise: bool = False,
+    **kwargs: Any,
+) -> MountainAshBaseSettings: ...
 
 
 def get_settings(
