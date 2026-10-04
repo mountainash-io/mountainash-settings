@@ -37,12 +37,15 @@ Start with the settings-only suite and production checks:
 hatch run test_github:test
 hatch run ruff:check
 hatch run mypy:check
+hatch run mypy:qualify
 hatch build
 ```
 
 See [TESTING.md](TESTING.md) for focused checks, coverage, native-platform testing
 and CI scope. The optional `test` environment requires a sibling auth-client
 checkout. Keep mypy pinned to 1.10.1 with its existing rules and test exclusion.
+The separate installed-consumer gate checks `tests/typing/consumer.py` against
+built wheels; see [typing support](docs/typing.md#qualification) for its evidence.
 
 ## Documentation
 

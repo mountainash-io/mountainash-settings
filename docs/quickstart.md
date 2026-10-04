@@ -42,6 +42,9 @@ deployment inputs. See [cache lifecycle](advanced-usage.md#cache-contexts-and-ru
 
 ## Relationship to Pydantic Settings
 
+See [installed typing support](typing.md) for inferred retrieval types and the
+boundaries of dynamic profile fields and configuration inputs.
+
 `MountainAshBaseSettings` extends `pydantic_settings.BaseSettings`. Pydantic owns
 field types, constraints, validators, aliases and model introspection. Pydantic
 Settings supplies the source primitives; MountainAsh composes them through

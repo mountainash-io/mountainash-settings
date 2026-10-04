@@ -1,4 +1,4 @@
-from typing import Optional, Union, List, Any, Dict, Type, Tuple, TypeVar, cast
+from typing import Optional, Union, List, Any, Dict, Type, Tuple, TypeVar, Self, cast
 from upath import UPath
 from string import Formatter
 from importlib import import_module
@@ -819,7 +819,7 @@ class MountainAshBaseSettings(BaseSettings):
         *,
         reinitialise: bool = False,
         **kwargs: Any,
-    ) -> Any:
+    ) -> Self:
         # Lazy import to avoid circular dependency
         from mountainash_settings.settings_cache import get_settings
 
@@ -829,7 +829,7 @@ class MountainAshBaseSettings(BaseSettings):
             settings_class = getattr(import_module(name=class_module), class_name)
 
 
-        settings_instance: Any =  get_settings(
+        settings_instance = get_settings(
                                     settings_parameters = settings_parameters,
                                     settings_class = settings_class,
                                     config_files = config_files,
