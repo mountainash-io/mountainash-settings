@@ -2,6 +2,7 @@
 
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Coverage](https://codecov.io/gh/mountainash-io/mountainash-settings/branch/develop/graph/badge.svg)](https://app.codecov.io/gh/mountainash-io/mountainash-settings/tree/develop)
 
 Typed configuration for Python applications: combine deployment sources, derive
 values, retrieve isolated settings where they are needed, and turn connection
