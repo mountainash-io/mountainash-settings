@@ -12,6 +12,15 @@ Pydantic field types, validation, aliases and inheritance.
 [Examples](examples/) · [Getting started](docs/quickstart.md) ·
 [Reference](docs/advanced-usage.md) · [Migrating to 0.1](docs/migration-0.1.md)
 
+Settings loaded at startup—and even a warmed cache—may be absent when a worker
+reconstructs your application. Carry a **recipe** with `SettingsParameters` and
+retrieve where work executes: reuse local captured inputs or load them when
+needed, with independently owned results for each invocation. See the runnable
+[thread/process](examples/execution_boundaries/) and
+[Dagster](examples/dagster_workers/) reproductions. Storing that recipe on an
+[orchestration object](examples/orchestrator_credentials/) also keeps credential
+kwargs out of ordinary object printing.
+
 ## What MountainAsh adds to Pydantic Settings
 
 Pydantic supplies validation and model behavior; Pydantic Settings supplies source

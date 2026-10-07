@@ -15,7 +15,9 @@ Use Python 3.12+ and install this checkout from the repository root:
 python -m pip install -e .
 ```
 
-The invariant-check recipe additionally uses `pytest==8.3.5`. All commands in
+The invariant-check recipe additionally uses `pytest==8.3.5`; the optional
+[Dagster worker reproduction](dagster_workers/) has its own Hatch environment.
+All commands in
 the recipes run from the repository root. Input paths are relative to the script,
 so an absolute script path also works from a different working directory.
 
@@ -50,8 +52,16 @@ that recipe. Small repeated declarations keep the concept visible in each file.
 
 ## Retrieval
 
+For the motivation behind recipe-based retrieval, start with the execution-boundary
+reproduction: startup state can be absent when workers reconstruct the application.
+The credential example shows why retaining a recipe on an orchestration object
+also reduces accidental disclosure through ordinary printing.
+
 | Recipe | Question |
 |---|---|
+| [Execution boundaries](execution_boundaries/) | Which threads/processes inherit startup settings and caches, and which must rehydrate? |
+| [Dagster workers](dagster_workers/) | What happens to a warmed parent cache in real multiprocess step execution? |
+| [Orchestrator credentials](orchestrator_credentials/) | What can logging an orchestrator's settings attribute disclose? |
 | [Cached sources](cached_sources/) | How do I reuse deployment inputs while receiving fresh instances? |
 | [Local overrides](local_overrides/) | How do I change one invocation without affecting others? |
 | [Parameter merging](parameter_merging/) | How do I package recurring overrides? |

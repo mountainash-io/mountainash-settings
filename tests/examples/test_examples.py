@@ -1,6 +1,7 @@
 """Execute the examples users run, independently of their working directory."""
 
 from pathlib import Path
+from importlib.util import find_spec
 import shutil
 import subprocess
 import sys
@@ -16,13 +17,15 @@ assert RECIPES, "No runnable configuration recipes found"
 
 @pytest.mark.parametrize("recipe", RECIPES, ids=lambda path: path.parent.name)
 def test_recipe_runs(recipe: Path, tmp_path: Path, example_environment: dict[str, str]) -> None:
+    if recipe.parent.name == "dagster_workers" and find_spec("dagster") is None:
+        pytest.skip("Run hatch run examples_dagster:test for the optional Dagster recipe")
     work = tmp_path / "configuration examples"
     shutil.copytree(EXAMPLES, work)
     script = work / recipe.relative_to(EXAMPLES)
     result = subprocess.run(
         [sys.executable, "-I", str(script)], cwd=tmp_path,
         env=example_environment, capture_output=True, text=True,
-        timeout=60, check=False,
+        timeout=120 if recipe.parent.name == "dagster_workers" else 60, check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.strip(), "The recipe must show its demonstrated result"
