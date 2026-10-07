@@ -103,7 +103,9 @@ configuration propagation for subprocesses that change working directory.
 
 Explain declaration and retrieval as two use cases, each with two patterns. The
 suite index supplies a reading order; recipes remain independently accessible.
-The threaded comparison is deferred at the owner's request. Contributor and
+Execution-boundary and orchestrator-credential recipes demonstrate the motivation
+for recipe retrieval; the real Dagster reproduction uses the optional
+`examples_dagster` Hatch environment. Contributor and
 textbook maintenance instructions live in `CONTRIBUTING.md` and `docs-site/README.md`.
 
 The docs sites have their own refresh workflows. Do not expand README work into

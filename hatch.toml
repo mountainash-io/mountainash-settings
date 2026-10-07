@@ -34,6 +34,15 @@ installer = "uv"
 path = ".venv"
 dependencies = []
 
+# Optional, real multiprocess orchestration example; not a runtime dependency.
+[envs.examples_dagster]
+installer = "uv"
+python = "3.12"
+dependencies = ["dagster==1.13.25", "pytest==8.3.5"]
+[envs.examples_dagster.scripts]
+run = "python examples/dagster_workers/example.py"
+test = "pytest tests/examples/test_examples.py -k dagster_workers -q"
+
 #================
 # Env: tower
 #================
