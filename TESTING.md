@@ -38,6 +38,22 @@ Ruff checks `src`; `hatch run ruff:fix` applies fixes. Mypy is pinned to 1.10.1
 with the existing rules and test exclusion. `tools/check_types.py` runs common,
 Linux POSIX, macOS POSIX and Windows-native passes; do not add `--strict`.
 
+The separate test checker selects appropriate typeshed platforms for common and
+native test modules:
+
+```bash
+hatch run mypy:check-src
+hatch run mypy:check-tests
+hatch run mypy:check-tests-untyped
+```
+
+`tools/check_test_types.py` owns test checking. Its default mode checks annotated
+code; `-untyped` additionally checks unannotated bodies and can still report
+outstanding typing debt. Both accept additional mypy flags. See the
+[target layout](docs/typing.md#source-and-test-checks) for platform routing.
+These test targets are separate from the production-only gate and are not yet
+run by typing CI. A Windows typeshed pass on Linux is not Windows runtime proof.
+
 ## Suite organisation and fixtures
 
 Tests follow the package's module ownership: `settings/` (including `app/`),

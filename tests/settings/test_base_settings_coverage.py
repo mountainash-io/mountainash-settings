@@ -36,7 +36,7 @@ class TemplateSettings(MountainAshBaseSettings):
 class CustomPostInitSettings(MountainAshBaseSettings):
     """Settings class with custom post_init."""
     VALUE: str = Field(default="initial")
-    COMPUTED: str = Field(default=None)
+    COMPUTED: str | None = Field(default=None)
 
     def post_init(
         self,

@@ -32,8 +32,8 @@ class TestSettings(MountainAshBaseSettings):
         )
 
     # App Settings
-    TEST_VAL_1: str =                    Field(default=None)
-    TEST_VAL_2: str =                    Field(default=None)
+    TEST_VAL_1: str | None =              Field(default=None)
+    TEST_VAL_2: str | None =              Field(default=None)
 
 
 def get_test_settings(settings_parameters: SettingsParameters,
@@ -85,7 +85,7 @@ def test_init_sets_env_prefix():
 
 def test_init_no_file(isolated_settings_manager: SettingsManager):
     config_files: List[Any] = []
-    kwargs = {}
+    kwargs: dict[str, Any] = {}
 
     settings_parameters = SettingsParameters.create( settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
 
@@ -111,7 +111,7 @@ def test_init_no_file_kwarg(isolated_settings_manager: SettingsManager):
 
 def test_init_file(isolated_settings_manager: SettingsManager, test_data_dir):
     config_files: List[Any] = [str(test_data_dir / "config_testing1.env")]
-    kwargs = {}
+    kwargs: dict[str, Any] = {}
 
     settings_parameters = SettingsParameters.create(settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
 
@@ -152,7 +152,7 @@ def test_init_file_and_kwarg2(isolated_settings_manager: SettingsManager, test_d
 
 def test_init_file_prefix1(isolated_settings_manager: SettingsManager, test_data_dir):
     config_files: List[Any] = [str(test_data_dir / "config_testing1.env")]
-    kwargs = {}
+    kwargs: dict[str, Any] = {}
 
     settings_parameters = SettingsParameters.create(settings_class=TestSettings,
                                                     config_files=config_files,
@@ -167,7 +167,7 @@ def test_init_file_prefix1(isolated_settings_manager: SettingsManager, test_data
 
 def test_init_file_prefix2(isolated_settings_manager: SettingsManager, test_data_dir):
     config_files: List[Any] = [str(test_data_dir / "config_testing_prefix1.env")]
-    kwargs = {}
+    kwargs: dict[str, Any] = {}
 
     settings_parameters = SettingsParameters.create(settings_class=TestSettings,
                                                     config_files=config_files,
@@ -182,7 +182,7 @@ def test_init_file_prefix2(isolated_settings_manager: SettingsManager, test_data
 
 def test_init_file_prefix3(isolated_settings_manager: SettingsManager, test_data_dir):
     config_files: List[Any] = [str(test_data_dir / "config_testing_prefix1.env")]
-    kwargs = {}
+    kwargs: dict[str, Any] = {}
 
     settings_parameters = SettingsParameters.create(settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
 
@@ -213,7 +213,7 @@ def test_init_file_prefix_prefers_prefixed_value(isolated_settings_manager, tmp_
 def test_init_config_valid_init_two_files_noprefix(isolated_settings_manager: SettingsManager, test_data_dir):
     # Arrange
     config_files: List[Any] = [str(test_data_dir / "config_testing1.env"), str(test_data_dir / "config_testing2.env")]
-    kwargs = {}
+    kwargs: dict[str, Any] = {}
 
     settings_parameters = SettingsParameters.create(settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)
@@ -225,7 +225,7 @@ def test_init_config_valid_init_two_files_noprefix(isolated_settings_manager: Se
 
 def test_init_config_valid_init_files_reverse_noprefix(isolated_settings_manager: SettingsManager, test_data_dir):
     config_files: List[Any] = [str(test_data_dir / "config_testing2.env"), str(test_data_dir / "config_testing1.env")]
-    kwargs = {}
+    kwargs: dict[str, Any] = {}
 
     settings_parameters = SettingsParameters.create(settings_class=TestSettings, config_files=config_files, kwargs=kwargs)
     app_settings: TestSettings =     get_test_settings(settings_parameters=settings_parameters)

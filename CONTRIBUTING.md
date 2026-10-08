@@ -47,6 +47,19 @@ checkout. Keep mypy pinned to 1.10.1 with its existing rules and test exclusion.
 The separate installed-consumer gate checks `tests/typing/consumer.py` against
 built wheels; see [typing support](docs/typing.md#qualification) for its evidence.
 
+For source and test typing work, use the separate targets:
+
+```bash
+hatch run mypy:check-src
+hatch run mypy:check-tests
+hatch run mypy:check-tests-untyped
+```
+
+The test checker routes native modules to Linux, macOS and Windows typeshed
+passes. The `-untyped` mode is opt-in and can still report outstanding test-body
+typing debt. These developer targets do not add CI enforcement: current typing
+CI checks production source and installed consumers.
+
 ## Documentation
 
 - Keep the README concise: purpose, capability map, one runnable quick start and links.

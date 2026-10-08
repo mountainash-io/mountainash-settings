@@ -1,5 +1,10 @@
 """Installed public typing contract; checked by tools/qualify_typing.py."""
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, ClassVar, assert_type
+
+from pydantic import Field, ValidationError
 
 from mountainash_settings import (
     MountainAshBaseSettings, Profile, ProfileField, ProfileSpec, Registry,
@@ -24,6 +29,14 @@ class ExplicitProfile(Profile):
         name="explicit", provider_type="database", parameters=[],
     )
     HOST: str = "localhost"
+
+
+class FileSettings(MountainAshBaseSettings):
+    DATABASE: str
+
+
+class AliasedSettings(MountainAshBaseSettings):
+    DATABASE: str = Field(alias="database")
 
 
 params = SettingsParameters.create(settings_class=AppSettings)
@@ -68,6 +81,56 @@ except TypeError:
 else:
     raise AssertionError("class-method receiver check lost")
 
+constructed = assert_type(
+    AppSettings(env_prefix="MAS_TYPING_", config_files=[]), AppSettings,
+)
+assert_type(constructed.PORT, int)
+constructed_child = assert_type(
+    SpecialSettings(env_prefix="MAS_TYPING_", PORT="6000"), SpecialSettings,
+)
+assert_type(constructed_child.LABEL, str)
+assert constructed_child.PORT == 6000
+
+constructor_params = SettingsParameters(
+    settings_class=AppSettings, kwargs={"PORT": 6001},
+)
+assert AppSettings(settings_parameters=constructor_params).PORT == 6001
+assert AppSettings(template_settings_parameters=constructor_params, PORT=5432).PORT == 5432
+assert AppSettings(secrets_dir=None, secret_store=None, PORT=5432).PORT == 5432
+
+# Embedded fixture bytes travel in the already-hashed consumer.py.
+env_key = "MAS_TYPING_REQUIRED_DATABASE"
+prior_value = os.environ.pop(env_key, None)
+try:
+    with TemporaryDirectory(prefix="settings-typing-") as directory:
+        source = Path(directory) / "settings.json"
+        source.write_text('{"DATABASE": "reports_db"}', encoding="utf-8")
+        file_settings = assert_type(
+            FileSettings(config_files=[str(source)], env_prefix="MAS_TYPING_REQUIRED_"),
+            FileSettings,
+        )
+        assert_type(file_settings.DATABASE, str)
+        assert file_settings.DATABASE == "reports_db"
+finally:
+    if prior_value is not None:
+        os.environ[env_key] = prior_value
+
+constructed_profile = assert_type(
+    DatabaseProfile(env_prefix="MAS_TYPING_", HOST="db.example.com"), DatabaseProfile,
+)
+assert_type(constructed_profile.HOST, str)
+assert constructed_profile.HOST == "db.example.com"
+assert AliasedSettings(database="reports_db").DATABASE == "reports_db"
+assert AppSettings.model_validate({"PORT": 6002}).PORT == 6002
+assert "PORT" in AppSettings.model_json_schema()["properties"]
+assert isinstance(constructed.model_dump(), dict)
+try:
+    AppSettings(PORT="not-an-integer")
+except ValidationError:
+    pass
+else:
+    raise AssertionError("constructor bypassed validation")
+
 if TYPE_CHECKING:
     # warn-unused-ignores makes every expected rejection mandatory. If retrieval
     # regresses to Any, these assignments stop failing and the gate turns red.
@@ -77,3 +140,7 @@ if TYPE_CHECKING:
     get_settings(settings_class=AppSettings).PORT = "wrong"  # type: ignore[assignment]
     get_settings(settings_class=int)  # type: ignore[type-var]
     registry.register("wrong", DatabaseProfile)  # type: ignore[arg-type]
+    constructed.PORT = "wrong"  # type: ignore[assignment]
+    constructed_child.LABEL = 123  # type: ignore[assignment]
+    constructed_profile.HOST = 123  # type: ignore[assignment]
+    constructed.NONEXISTENT  # type: ignore[attr-defined]

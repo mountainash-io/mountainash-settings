@@ -5,16 +5,18 @@ from __future__ import annotations
 import typing as t
 
 from pydantic._internal._config import config_keys
-from pydantic._internal._model_construction import ModelMetaclass, build_lenient_weakvaluedict
+from pydantic._internal._model_construction import build_lenient_weakvaluedict
 from pydantic._internal._typing_extra import parent_frame_namespace
 from pydantic_settings import SettingsConfigDict
+
+from mountainash_settings.settings._metaclass import _SettingsMetaclass
 
 from ._declaration import prepare_declaration
 
 _CONFIG_KEYS = frozenset(config_keys) | frozenset(SettingsConfigDict.__annotations__)
 
 
-class _ProfileMetaclass(ModelMetaclass):
+class _ProfileMetaclass(_SettingsMetaclass):
     def __new__(
         mcs, cls_name: str, bases: tuple[type, ...], namespace: dict[str, t.Any],
         __pydantic_generic_metadata__: t.Any = None,

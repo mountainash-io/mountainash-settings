@@ -25,6 +25,7 @@ from pydantic_settings import (
 
 from mountainash_settings.settings_parameters import SettingsFileHandler, SettingsParameters, SettingsKwargsHandler, SettingsFiles
 from mountainash_settings.settings_parameters.filehandler import ConfigFilesInput
+from ._metaclass import _SettingsMetaclass
 
 # T = TypeVar('T', bound='BaseSettings')
 T = TypeVar('T', bound='MountainAshBaseSettings')
@@ -455,7 +456,7 @@ def _apply_cached_static_defaults(
             _raise_sanitized_resolution_error(type(instance), [name])
 
 
-class MountainAshBaseSettings(BaseSettings):
+class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
     """Base settings class with template support, multi-format config files,
     and smart caching.
 
@@ -606,7 +607,7 @@ class MountainAshBaseSettings(BaseSettings):
                  config_files:          ConfigFilesInput = None,
                  settings_parameters:   Optional[SettingsParameters] = None,
                  template_settings_parameters:   Optional[SettingsParameters] = None,
-                 **kwargs) -> None:
+                 **kwargs: Any) -> None:
 
         from mountainash_settings.settings_cache._context import consume_cache_frame
 

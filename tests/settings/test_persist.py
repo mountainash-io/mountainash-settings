@@ -36,8 +36,8 @@ class _InMemoryBackend:
 
 
 class _TestSettings(MountainAshBaseSettings):
-    TOKEN: str = Field(default=None)
-    REFRESH: str = Field(default=None)
+    TOKEN: str | None = Field(default=None)
+    REFRESH: str | None = Field(default=None)
 
 
 @pytest.mark.unit

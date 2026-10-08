@@ -81,7 +81,11 @@ test, use `hatch run test_github:pytest path/to/test.py::test_name -v`.
 
 Keep mypy pinned to 1.10.1 with the existing rules and test exclusion; do not enable
 `--strict`. `tools/check_types.py` runs common, Linux POSIX, macOS POSIX and
-Windows-native passes. Ruff's configured check covers `src`.
+Windows-native passes. `tools/check_test_types.py` separately owns the common and
+three native-platform test passes (`hatch run mypy:check-tests`). Its
+`check-tests-untyped` counterpart is opt-in and still has test-body typing debt.
+Typing CI currently runs production and installed-consumer checks, not the new
+test targets. Ruff's configured check covers `src`.
 
 ## README and examples
 
