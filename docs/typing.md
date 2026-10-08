@@ -60,12 +60,29 @@ hatch run mypy:check-tests-untyped
 
 The source commands use the same four production passes as `mypy:check`: common
 code, Linux POSIX, macOS POSIX and Windows-native code. Extra mypy flags are
-forwarded to every pass. The test commands target `tests` and also accept extra
-mypy flags without replacing that target. Test checks still follow source imports
-and can also report source errors.
+forwarded to every pass. `tools/check_test_types.py` owns a separate four-pass
+test check, also forwarding extra flags:
+
+| Pass | Targets |
+|---|---|
+| Common (Linux typeshed) | `tests`, excluding the four native files routed below |
+| Linux POSIX | `tests/secrets/native/test_posix.py` and `posix_helpers.py` |
+| macOS POSIX | The same two POSIX files |
+| Windows | `tests/secrets/native/test_windows.py` and `_windows_fixtures.py` |
+
+`tests/secrets/native/test_filesystem.py` remains in the common pass. That pass
+follows source imports normally and can report source errors; native passes use
+`--follow-imports=silent`. Discovery exclusions do not suppress imported modules,
+so keep native helpers confined to their platform's tests. Selecting a typeshed
+platform does not execute tests on that operating system.
 
 The `-untyped` variants include `--check-untyped-defs` to check bodies of
-unannotated functions. This flag remains opt-in.
+unannotated functions. This flag remains opt-in; the test variant can still report
+outstanding annotation and intentional-invalid-input diagnostics. A clean default
+test check does not establish that all untyped test bodies are checked.
+
+Current typing CI runs the production and installed-consumer gates. The separate
+test commands are developer checks, not yet additional CI jobs.
 
 ## Qualification
 

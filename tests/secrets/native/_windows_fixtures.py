@@ -95,7 +95,10 @@ def open_descendant_without_component_guard(parent: int, relative: str) -> int:
             ),
             "fixture NtCreateFile descendant",
         )
-        return int(opened.value)
+        value = opened.value
+        if value is None or value == native.INVALID_HANDLE_VALUE:
+            raise AssertionError("fixture NtCreateFile returned no valid handle")
+        return value
     except BaseException:
         if opened.value not in (None, native.INVALID_HANDLE_VALUE):
             try:
@@ -165,9 +168,10 @@ def open_for_dacl(path: Path, *, directory: bool = False) -> int:
         native.FILE_SHARE_READ | native.FILE_SHARE_WRITE | native.FILE_SHARE_DELETE,
         None, native.OPEN_EXISTING, 0x02000000 if directory else 0, None,
     ))
-    if handle.value == native.INVALID_HANDLE_VALUE:
+    value = handle.value
+    if value is None or value == native.INVALID_HANDLE_VALUE:
         raise OSError(c.get_last_error(), "fixture CreateFileW security handle")
-    return int(handle.value)
+    return value
 
 
 def open_without_delete_share(path: Path) -> int:
@@ -176,9 +180,10 @@ def open_without_delete_share(path: Path) -> int:
         str(path), native.GENERIC_READ, native.FILE_SHARE_READ | native.FILE_SHARE_WRITE,
         None, native.OPEN_EXISTING, 0, None,
     ))
-    if handle.value == native.INVALID_HANDLE_VALUE:
+    value = handle.value
+    if value is None or value == native.INVALID_HANDLE_VALUE:
         raise OSError(c.get_last_error(), "fixture CreateFileW")
-    return int(handle.value)
+    return value
 
 
 def file_id(handle: int) -> tuple[int, int]:

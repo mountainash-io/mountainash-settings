@@ -38,7 +38,7 @@ class TestSettings(MountainAshBaseSettings):
             **kwargs,
         )
 
-    TEST_VAL_1: str = Field(default=None)
-    TEST_VAL_2: str = Field(default=None)
+    TEST_VAL_1: str | None = Field(default=None)
+    TEST_VAL_2: str | None = Field(default=None)
     TEST_VAR: str = Field(default="default_value")
     COMPLEX_VAR: dict = Field(default_factory=lambda: {"key": "value"})

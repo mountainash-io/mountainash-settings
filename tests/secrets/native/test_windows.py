@@ -93,21 +93,21 @@ def test_symbolic_links_refuse_without_touching_outside(tmp_path: Path, kind):
         opened = None
         try:
             if kind == "symbolic-ancestor":
-                with pytest.raises(native._NtError) as caught:
+                with pytest.raises(native._NtError) as nt_error:
                     opened = open_descendant_without_component_guard(
                         parent, r"symbolic-ancestor\sentinel",
                     )
-                assert caught.value.status in (
+                assert nt_error.value.status in (
                     native.STATUS_REPARSE_POINT_ENCOUNTERED,
                     native.STATUS_STOPPED_ON_SYMLINK,
                 )
             else:
-                with pytest.raises(_Failure) as caught:
+                with pytest.raises(_Failure) as failure:
                     opened = (
                         native.open_namespace(parent, kind, create=False)
                         if directory else native.open_file(parent, kind)
                     )
-                assert native.reason(caught.value) == "unsafe_entry"
+                assert native.reason(failure.value) == "unsafe_entry"
         finally:
             if opened is not None:
                 native.close(opened)

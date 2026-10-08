@@ -269,11 +269,11 @@ radon-cc-detail = "radon cc ./src"
 installer = "uv"
 path = ".hatch/mypy"
 # The production spec-invariant helper lazily imports pytest.
-dependencies = ["mypy==1.10.1", "types-PyYAML==6.0.12.20260906", "pytest==8.3.5", "build>=1.2,<2"]
+dependencies = ["mypy==1.10.1", "types-PyYAML==6.0.12.20260906", "pytest==8.3.5", "pytest-check==2.5.3", "build>=1.2,<2"]
 [envs.mypy.scripts]
 check = "python tools/check_types.py"
 check-src = "python tools/check_types.py {args}"
-check-tests = "mypy tests {args}"
+check-tests = "python tools/check_test_types.py {args}"
 check-src-untyped = "python tools/check_types.py --check-untyped-defs {args}"
-check-tests-untyped = "mypy --check-untyped-defs tests {args}"
+check-tests-untyped = "python tools/check_test_types.py --check-untyped-defs {args}"
 qualify = "python tools/qualify_typing.py {args}"
