@@ -5,6 +5,34 @@ the package's inline annotations without configuring a source path or stubs.
 The installed-consumer gate uses mypy 1.10.1 on Python 3.12 and 3.13, with
 Pydantic's standard typing support and no mypy plugin.
 
+## Direct construction
+
+Ordinary subclasses accept MountainAsh's source controls and dynamic field inputs
+without a forwarding constructor or a required mypy plugin:
+
+```python
+from typing import assert_type
+from mountainash_settings import MountainAshBaseSettings
+
+class AppSettings(MountainAshBaseSettings):
+    PORT: int = 5432
+
+settings = AppSettings(config_files=[], env_prefix="REPORT_", PORT="6000")
+assert_type(settings, AppSettings)
+assert_type(settings.PORT, int)
+assert settings.PORT == 6000
+```
+
+Pydantic validates and coerces constructor inputs at runtime; the resulting
+object and its declared fields retain their static types. Required model fields
+can come from configured sources rather than explicit constructor arguments.
+This also applies through settings inheritance and native class-declared profiles.
+
+A private metaclass preserves the library's constructor signature under the
+supported mypy baseline. It is an implementation detail, not a new public
+metaclass extension API. Typed attribute assignment remains checked; dynamic
+constructor inputs do not make the resulting model `Any`.
+
 ## Retrieval types
 
 ```python
