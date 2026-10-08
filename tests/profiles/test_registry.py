@@ -1,4 +1,6 @@
 """Canonical registry registration, isolation and domain constraints."""
+from typing import Protocol, runtime_checkable
+
 import pytest
 
 from mountainash_settings.profiles import Profile, ProfileSpec, Registry
@@ -83,3 +85,43 @@ def test_missing_spec_and_old_decorator_form_fail():
         registry.decorator()(CustomProfile)
     with pytest.raises(TypeError, match="Profile subclass"):
         registry.decorator()(ProfileSpec(name="old", provider_type="old", parameters=[]))
+
+
+@pytest.mark.parametrize("constraint", ["spec", "profile"])
+def test_decorator_rejects_wrong_domain_without_insertion(constraint: str) -> None:
+    registry: Registry[CustomSpec, Profile] | Registry[ProfileSpec, CustomProfile] = (
+        Registry("custom", spec_type=CustomSpec)
+        if constraint == "spec"
+        else Registry("custom", profile_type=CustomProfile)
+    )
+    wrong = make_profile("wrong")
+    with pytest.raises(TypeError, match=f"{constraint}_type mismatch"):
+        registry.decorator()(wrong)
+    assert "wrong" not in registry
+    assert len(registry) == 0
+
+
+@runtime_checkable
+class UrlContract(Protocol):
+    def url(self) -> str: ...
+
+
+class UrlProfile(Profile, name="url", provider_type="database"):
+    def url(self) -> str:
+        return "db://example"
+
+
+class UrlOnly:
+    def url(self) -> str:
+        return "db://example"
+
+
+def test_protocol_registration_still_requires_profile_inheritance() -> None:
+    registry = Registry("url", profile_type=UrlContract)
+    registry.decorator()(UrlProfile)
+    assert registry.get_settings_class("url")().url() == "db://example"
+    spec = ProfileSpec(name="duck", provider_type="database", parameters=[])
+    with pytest.raises(TypeError, match="profile_type mismatch"):
+        registry.register(spec, UrlOnly)
+    assert "duck" not in registry
+    assert len(registry) == 1
