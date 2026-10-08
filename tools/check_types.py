@@ -15,7 +15,7 @@ def main() -> int:
     ]
     failed = False
     for args in passes:
-        result = subprocess.run([sys.executable, "-m", "mypy", *args], cwd=root, check=False)
+        result = subprocess.run([sys.executable, "-m", "mypy", *args, *sys.argv[1:]], cwd=root, check=False)
         failed = result.returncode != 0 or failed
     return int(failed)
 
