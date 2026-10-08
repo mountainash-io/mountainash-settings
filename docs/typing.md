@@ -49,6 +49,24 @@ with `isinstance` when application code needs its fields.
 - Emitted driver dictionaries and other intentionally dynamic values can contain
   `Any`. The marker does not make every operation statically precise.
 
+## Source and test checks
+
+```sh
+hatch run mypy:check-src
+hatch run mypy:check-tests
+hatch run mypy:check-src-untyped
+hatch run mypy:check-tests-untyped
+```
+
+The source commands use the same four production passes as `mypy:check`: common
+code, Linux POSIX, macOS POSIX and Windows-native code. Extra mypy flags are
+forwarded to every pass. The test commands target `tests` and also accept extra
+mypy flags without replacing that target. Test checks still follow source imports
+and can also report source errors.
+
+The `-untyped` variants include `--check-untyped-defs` to check bodies of
+unannotated functions. This flag remains opt-in.
+
 ## Qualification
 
 Run `hatch run mypy:check` for the four production passes and
