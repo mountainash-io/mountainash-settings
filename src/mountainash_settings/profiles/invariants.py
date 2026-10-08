@@ -18,11 +18,15 @@ from __future__ import annotations
 import typing as t
 
 from .registry import Registry
+from .spec import ProfileSpec
 
 __all__ = ["spec_invariants_for"]
 
+_SpecT = t.TypeVar("_SpecT", bound=ProfileSpec)
+_ProfileT = t.TypeVar("_ProfileT")
 
-def spec_invariants_for(registry: Registry) -> type:
+
+def spec_invariants_for(registry: Registry[_SpecT, _ProfileT]) -> type:
     """Return a pytest class parameterised over every spec in ``registry``.
 
     The returned class is named ``TestSpecInvariants_<registry_name>``.

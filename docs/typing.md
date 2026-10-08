@@ -69,13 +69,38 @@ with `isinstance` when application code needs its fields.
 - Native annotated profile fields retain their declared types. Fields installed
   solely from an explicit `ProfileSpec` are runtime-generated; static checking
   needs visible field annotations on the class to know those attributes.
-- Name-based `Registry.get_settings_class()` returns `type[Profile]`. A runtime
-  name does not establish a specific subclass for a type checker.
+- `Registry.get_settings_class()` returns the registry's selected profile class
+  interface, defaulting to `type[Profile]` when no profile selector is supplied.
+  A name alone does not establish the exact registered concrete subclass type.
 - Constructor and retrieval `**kwargs` remain dynamic inputs. Pydantic validates
   their values at runtime; the typing contract does not promise static checking
   of every input key or coercion. Typed attribute access and assignment are checked.
 - Emitted driver dictionaries and other intentionally dynamic values can contain
   `Any`. The marker does not make every operation statically precise.
+
+## Registry types
+
+`Registry` infers spec/profile types from `spec_type` and `profile_type`.
+`get_spec()` and `specs` retain the selected spec type; `get_settings_class()`
+returns the selected profile class type. Omitted or `None` selectors default to
+`ProfileSpec` and `Profile`. Optional selectors retain those default possibilities.
+Explicit generic arguments do not configure runtime selectors.
+
+Registry is statically final: use selectors and composition instead of
+subclassing it. Profile subclasses remain supported.
+
+Profile selectors are class objects, including runtime-checkable method-only
+Protocols usable with `issubclass`. Functions and callable instances are not
+selectors. Registered classes must still inherit Profile and meet the selected
+domain constraints. Data-member and non-runtime-checkable Protocols gain no support.
+
+Direct registration checks the selected argument types statically. Decorators
+preserve the exact input Profile subclass; their domain checks happen at runtime.
+A structural match alone does not establish nominal Profile inheritance.
+
+Protocol selector typing uses a documented class-only bottom-type union
+workaround for mypy 1.10.1. Installed positive and negative controls protect it
+when the checker changes; no plugin is required.
 
 ## Source and test checks
 

@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, ClassVar, assert_type
+from typing import TYPE_CHECKING, ClassVar, Generic, Protocol, TypeVar, assert_type, runtime_checkable
 
 from pydantic import Field, ValidationError
 
@@ -10,6 +10,7 @@ from mountainash_settings import (
     MountainAshBaseSettings, Profile, ProfileField, ProfileSpec, Registry,
     SettingsParameters, get_settings, get_settings_manager,
 )
+from mountainash_settings.profiles import spec_invariants_for
 
 
 class AppSettings(MountainAshBaseSettings):
@@ -144,3 +145,97 @@ if TYPE_CHECKING:
     constructed_child.LABEL = 123  # type: ignore[assignment]
     constructed_profile.HOST = 123  # type: ignore[assignment]
     constructed.NONEXISTENT  # type: ignore[attr-defined]
+
+
+class DomainSpec(ProfileSpec):
+    pass
+
+
+class DomainProfile(Profile):
+    def url(self) -> str:
+        return "db://example"
+
+
+class ConcreteDomain(DomainProfile, name="domain", provider_type="database", spec_type=DomainSpec):
+    LABEL: str = "concrete"
+
+
+@runtime_checkable
+class DomainProtocol(Protocol):
+    def url(self) -> str: ...
+
+
+class FactoryObject:
+    def __call__(self) -> DomainProfile:
+        return DomainProfile()
+
+
+def domain_factory() -> DomainProfile:
+    return DomainProfile()
+
+
+nominal = Registry("nominal", spec_type=DomainSpec, profile_type=DomainProfile)
+structural = Registry("structural", spec_type=DomainSpec, profile_type=DomainProtocol)
+assert_type(nominal, Registry[DomainSpec, DomainProfile])
+assert_type(structural, Registry[DomainSpec, DomainProtocol])
+decorated = assert_type(nominal.decorator()(ConcreteDomain), type[ConcreteDomain])
+assert_type(decorated().LABEL, str)
+assert decorated().LABEL == "concrete"
+assert_type(structural.decorator()(ConcreteDomain), type[ConcreteDomain])
+assert_type(nominal.get_spec("domain"), DomainSpec)
+assert_type(nominal.specs, dict[str, DomainSpec])
+assert_type(nominal.get_settings_class("domain"), type[DomainProfile])
+assert_type(structural.get_settings_class("domain"), type[DomainProtocol])
+assert structural.get_settings_class("domain")().url() == "db://example"
+snapshot = assert_type(
+    nominal._snapshot_for_tests(),
+    tuple[dict[str, DomainSpec], dict[str, type[DomainProfile]]],
+)
+nominal._reset_for_tests(*snapshot)
+spec_invariants_for(nominal)
+spec_invariants_for(structural)
+assert_type(Registry("base"), Registry[ProfileSpec, Profile])
+assert_type(Registry("spec", spec_type=DomainSpec), Registry[DomainSpec, Profile])
+assert_type(Registry("profile", profile_type=DomainProfile), Registry[ProfileSpec, DomainProfile])
+assert_type(Registry("protocol", profile_type=DomainProtocol), Registry[ProfileSpec, DomainProtocol])
+assert_type(Registry("none", spec_type=None, profile_type=None), Registry[ProfileSpec, Profile])
+assert_type(Registry("partial", spec_type=DomainSpec, profile_type=None), Registry[DomainSpec, Profile])
+
+
+def optional_registry(spec: type[DomainSpec] | None, profile: type[DomainProfile] | None) -> None:
+    selected = Registry("optional", spec_type=spec, profile_type=profile)
+    assert_type(
+        selected,
+        Registry[DomainSpec, DomainProfile] | Registry[DomainSpec, Profile]
+        | Registry[ProfileSpec, DomainProfile] | Registry[ProfileSpec, Profile],
+    )
+
+
+def class_variable_registry(profile: type[DomainProfile]) -> None:
+    assert_type(Registry("variable", profile_type=profile), Registry[ProfileSpec, DomainProfile])
+
+
+if TYPE_CHECKING:
+    Registry("factory", profile_type=domain_factory)  # type: ignore[call-overload]
+    Registry("factory-both", spec_type=DomainSpec, profile_type=domain_factory)  # type: ignore[call-overload]
+    Registry("lambda", profile_type=lambda: DomainProfile())  # type: ignore[call-overload]
+    Registry("callable", profile_type=FactoryObject())  # type: ignore[call-overload]
+    Registry("instance", profile_type=DomainProfile())  # type: ignore[call-overload]
+    Registry("spec-factory", spec_type=lambda: DomainSpec(name="x", provider_type="x", parameters=[]))  # type: ignore[call-overload]
+    bad_default: Registry[DomainSpec, DomainProfile] = Registry("bad")  # type: ignore[assignment]
+    bad_none: Registry[DomainSpec, DomainProfile] = Registry("bad-none", spec_type=DomainSpec, profile_type=None)  # type: ignore[assignment]
+    bad_explicit: Registry[DomainSpec, DomainProfile] = Registry[DomainSpec, DomainProfile]("bad-explicit")  # type: ignore[assignment]
+    nominal.register(ProfileSpec(name="bad", provider_type="bad", parameters=[]), ConcreteDomain)  # type: ignore[arg-type]
+    nominal.register(DomainSpec(name="bad", provider_type="bad", parameters=[]), ExplicitProfile)  # type: ignore[arg-type]
+
+    class PlainRegistry(Registry):  # type: ignore[misc]
+        pass
+
+    class SpecializedRegistry(Registry[DomainSpec, DomainProfile]):  # type: ignore[misc]
+        pass
+
+    RegistrySpecT = TypeVar("RegistrySpecT", bound=ProfileSpec)
+    RegistryProfileT = TypeVar("RegistryProfileT")
+
+    class GenericRegistry(Registry[RegistrySpecT, RegistryProfileT], Generic[RegistrySpecT, RegistryProfileT]):  # type: ignore[misc]
+        pass
