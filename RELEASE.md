@@ -29,9 +29,10 @@ steps; the PyPI workflow does not perform them.
    on its branch/ref and verify the run's source SHA.
 3. Inspect the full-suite and two-process lifecycle receipts for Linux, macOS and
    Windows, Python 3.12 and 3.13, using both wheel and sdist-rebuilt wheel installs.
-   The workflow runs `tools/qualify_release_candidate.py` and
-   `tools/qualify_lifecycle_receipt.py`; it retains
-   `settings-release-candidate-<OS>` artifacts for 30 days.
+   Full-suite environments include `dagster==1.13.25` so the optional Dagster
+   example runs rather than producing a required-skip result. The workflow runs
+   `tools/qualify_release_candidate.py` and `tools/qualify_lifecycle_receipt.py`;
+   it retains `settings-release-candidate-<OS>` artifacts for 30 days.
 4. Record the source revision, selected wheel/sdist hashes, receipt identities and
    rehearsal mapping in central release records. Preserve evidence before expiry.
    Source, version, dependency or build-input changes require a new candidate and

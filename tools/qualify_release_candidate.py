@@ -27,7 +27,11 @@ def _load_common():
 
 _common = _load_common()
 
-_TEST_REQUIREMENTS = ("pytest==8.3.5", "pytest-check==2.5.3")
+_TEST_REQUIREMENTS = (
+    "pytest==8.3.5",
+    "pytest-check==2.5.3",
+    "dagster==1.13.25",
+)
 
 
 def validate_python_identities(identities: list[dict[str, Any]]) -> None:
