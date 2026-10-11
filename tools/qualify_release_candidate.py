@@ -27,7 +27,10 @@ def _load_common():
 
 _common = _load_common()
 
-_TEST_REQUIREMENTS = ("pytest==8.3.5", "pytest-check==2.5.3")
+_TEST_REQUIREMENTS = (
+    "pytest==8.3.5",
+    "pytest-check==2.5.3",
+)
 
 
 def validate_python_identities(identities: list[dict[str, Any]]) -> None:
@@ -114,6 +117,9 @@ def _run_installed_suite(
         "pytest",
         "--import-mode=importlib",
         f"--confcutdir={copied_tests}",
+        f"--rootdir={work}",
+        # The Dagster integration recipe has its own opt-in Hatch environment.
+        "--deselect=tests/examples/test_examples.py::test_recipe_runs[dagster_workers]",
         f"--basetemp={work / ('pytest-' + version_label + '-' + kind)}",
         f"--junitxml={junit}",
         "-q",

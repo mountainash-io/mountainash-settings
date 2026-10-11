@@ -54,7 +54,7 @@ def _validate_metadata(class_name: str, option: str, annotation: t.Any, value: t
     invalid = False
     try:
         try:
-            adapter = TypeAdapter(annotation, config=ConfigDict(strict=True, arbitrary_types_allowed=True))
+            adapter: TypeAdapter[t.Any] = TypeAdapter(annotation, config=ConfigDict(strict=True, arbitrary_types_allowed=True))
         except PydanticUserError as error:
             if error.code != "type-adapter-config-unused":
                 raise
