@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = 'Mountain Ash - Settings'
 readme = "README.md"
 requires-python = ">=3.10"
-# license = "Proprietary"
+# license = "Apache-2.0"
 keywords = ["settings", "secrets", "cloud", "security"]
 authors = [
     { name = "Nathaniel Ramm", email = "nathaniel.ramm@discretedatascience.com" },
