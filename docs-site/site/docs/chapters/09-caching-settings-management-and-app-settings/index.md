@@ -8,9 +8,7 @@ version: 0.08
 
 # Caching, Settings Management, and App Settings
 
-## Summary
-
-This chapter covers cached settings retrieval, structural context identity, fresh owned result materialization, and the AppSettings convenience class.
+Cached settings retrieval selects a private source context by structural identity, captures source inputs once, and materializes a fresh, independently owned settings object for every call. `SettingsManager` owns the contexts, and `AppSettings` is the convenience class for common application fields such as run date and time.
 
 ---
 
@@ -20,6 +18,7 @@ This chapter covers cached settings retrieval, structural context identity, fres
 
 <!-- concept:99 -->
 <!-- concept:102 -->
+<!-- concept:105 -->
 ## Manager factory and direct retrieval
 
 `get_settings_manager()` remains a process-wide singleton manager factory. It is not a retained-settings-result cache. The manager owns private structural contexts rather than a public dictionary of settings objects.
@@ -37,14 +36,13 @@ settings = manager.get_or_create_settings(
 )
 ```
 
+`SettingsManager.is_initialised(settings_parameters)` reports whether source capture for the parameters' structural context has completed. It does not report whether a particular result object exists, because no result is retained. It returns `False` for a non-`SettingsParameters` argument or for parameters that cannot form a structural key.
+
 Tests needing isolation use a fresh manager owner; they do not clear a production cache.
 
 <!-- concept:100 -->
 <!-- concept:101 -->
 <!-- concept:106 -->
-<!-- concept:108 -->
-<!-- concept:109 -->
-<!-- concept:110 -->
 ## Get Settings Function
 
 The public `get_settings()` function accepts flexible inputs and returns a validated, independently owned instance:
@@ -118,6 +116,8 @@ Equal selectors reuse captured source state, not an object returned to the
 first caller. Runtime fields remain invocation-local and every complete
 result graph is isolated from other callers.
 
+<!-- concept:103 -->
+<!-- concept:104 -->
 ## Runtime Materialization
 
 Runtime values are combined with the retained baseline and validated as one
@@ -135,7 +135,11 @@ Invocation-local direct-constructor source framing is delivered
 (MAS-SEC-004). Shared secret-validation errors remain MAS-SEC-006, and
 provider/context refresh remains separate lifecycle work.
 
+`extract_settings_parameters()` on a live instance is controlled reconstruction. It returns a `SettingsParameters` carrying the structural selectors (including the bound `secret_store`) and a fresh, independently owned copy of the accepted constructor and update inputs in source form; a `secret:` reference stays a reference. It does not reread files, environment variables, or secret backends, and it raises `TypeError` when the source inputs have no faithful independently owned reconstruction.
+
 ## Cacheable Custom Sources
+
+Source capture is described in [Cache-Safe Settings Sources](../02-mountainash-base-settings/index.md#cache-safe-settings-sources).
 
 Cached custom sources must opt into the package-root
 `CacheableSettingsSource` protocol:
@@ -174,21 +178,25 @@ Cached retrieval requires a `MountainAshBaseSettings` subclass. Plain Pydantic
 `BaseSettings` subclasses are rejected before source reads, with or without a
 custom constructor. Their ordinary direct construction remains available.
 
+<!-- concept:107 -->
 ## AppSettings Class
 
 The **AppSettings** class is a convenience subclass of `MountainAshBaseSettings` that provides common application-level fields pre-configured with sensible defaults. It demonstrates the framework's template system in practice and serves as a starting point for application configuration:
 
 ```python
 class AppSettings(MountainAshBaseSettings):
+    RUN_TIMESTAMP_SCOPE: ClassVar[Literal["context", "process"]] = "context"
+
     LOCALE_TIMEZONE: str = Field(default="UTC")
     DEBUG: bool = Field(default=False)
-    RUNDATE: str = Field(default=datetime.now().strftime("%Y%m%d"))
-    RUNTIME: str = Field(default=datetime.now().strftime("%H%M%S"))
-    RUNDATETIME: str = Field(default=None)
+    RUNDATE: str = Field(default_factory=_timestamps.run_date)
+    RUNTIME: str = Field(default_factory=_timestamps.run_time)
+    RUNDATETIME: str | None = Field(default=None)
 ```
 
 The class provides five pre-declared fields that most applications need: timezone, debug flag, run date, run time, and a combined datetime stamp. Subclasses extend these with application-specific fields while inheriting the template expansion logic.
 
+<!-- concept:108 -->
 ## App Settings Defaults
 
 **App settings defaults** are the pre-configured values that `AppSettings` provides out of the box:
@@ -197,12 +205,28 @@ The class provides five pre-declared fields that most applications need: timezon
 |-------|---------|--------|
 | `LOCALE_TIMEZONE` | `"UTC"` | Static default |
 | `DEBUG` | `False` | Static default |
-| `RUNDATE` | Current date as `YYYYMMDD` | Computed at class definition time |
-| `RUNTIME` | Current time as `HHMMSS` | Computed at class definition time |
+| `RUNDATE` | Local date as `YYYYMMDD` | Default factory fed by the captured run instant |
+| `RUNTIME` | Local time as `HHMMSS` | Default factory fed by the captured run instant |
 | `RUNDATETIME` | `None` (template-derived) | Resolved during `post_init()` |
 
-The `RUNDATE` and `RUNTIME` fields use `datetime.now().strftime()` as their defaults. This means the value is computed once when the class is first defined (imported), not on each instantiation. For per-instance timestamps, callers should override these via kwargs or environment variables.
+`RUNDATE` and `RUNTIME` are not computed at import. Each is a Pydantic default factory that reads from one local-time instant captured when initialization starts, so both fields always come from the same instant. `LOCALE_TIMEZONE` does not convert them. Normal source precedence applies: configuration files, environment variables, and explicit field inputs override the generated defaults, and overriding one component keeps the generated other.
 
+The class variable `RUN_TIMESTAMP_SCOPE` (not a settings field or invocation override) sets the lifetime of the captured instant:
+
+- `"context"` (the default): direct construction captures a fresh instant on each call. Cached retrieval captures once per manager-owned structural context, and later retrievals of that context, including `reinitialise=True`, retain it. Separate contexts and managers capture independently.
+- `"process"`: one instant is shared across process-scoped `AppSettings` classes, contexts, and managers. Capture is lazy, on the first process-scoped construction or context initialization. A new process, including a forked child, captures its own instant on first use.
+
+Declare the scope on the class before initialization; changing it on an already initialized class or context is unsupported. An invalid value raises `ValueError`.
+
+```python
+from typing import ClassVar, Literal
+from mountainash_settings.settings.app.app_settings import AppSettings
+
+class ReportingSettings(AppSettings):
+    RUN_TIMESTAMP_SCOPE: ClassVar[Literal["context", "process"]] = "process"
+```
+
+<!-- concept:109 -->
 ## App Settings Templates
 
 The **AppSettingsTemplates** class is a companion settings class that holds the template strings used by `AppSettings.post_init()`:
@@ -229,6 +253,7 @@ def post_init(self, template_settings_parameters=None, reinitialise=False):
     )
 ```
 
+<!-- concept:110 -->
 ## App Settings Integration
 
 **App settings integration** refers to how `AppSettings` connects with the caching layer and serves as a foundation for application-specific settings classes. The integration follows the standard pattern:
@@ -245,8 +270,8 @@ class MyAppSettings(AppSettings):
     API_BASE_URL: str = Field(default="https://api.example.com")
     MAX_RETRIES: int = Field(default=3)
 
-    def post_init(self, **kwargs):
-        super().post_init(**kwargs)
+    def post_init(self, template_settings_parameters=None, reinitialise=False):
+        super().post_init(template_settings_parameters, reinitialise)
         # Custom template expansion for app-specific fields
 ```
 
@@ -281,13 +306,3 @@ This reuses source state without retaining request-specific values or exposing
 shared live mutable state. `reinitialise` remains an operation control, not a
 refresh; cached custom sources use capture/project and unsupported legacy
 hooks or plain custom constructors are rejected before reads.
-
-## Key Takeaways
-
-- **Get Settings Function** is the public entry point for structural context selection and fresh materialization.
-- **SettingsManager** owns private contexts; it does not expose a mutable result dictionary.
-- **Structural Cache Key** is the five-selector identity that reuses pinned source state across runtime invocations.
-- **Runtime fields** are complete-invocation inputs and do not enter baseline state.
-- **Defaults** and default factories remain Pydantic behavior evaluated per materialization.
-- **CacheableSettingsSource** makes capture/project source participation explicit and keeps projector results terminal.
-- **AppSettings** provides pre-configured application fields with template expansion; its Profile joint gate remains separate work.
