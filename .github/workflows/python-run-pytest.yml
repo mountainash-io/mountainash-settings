@@ -28,9 +28,6 @@ permissions:
 
 jobs:
   test:
-    permissions:
-      contents: read
-      id-token: write
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -40,18 +37,23 @@ jobs:
 
     steps:
       - name: Set fallback branch
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_FALLBACK_BRANCH: ${{ github.event.inputs.fallback_branch }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "FALLBACK_BRANCH=${{ github.event.inputs.fallback_branch }}" >> $GITHUB_ENV
-          elif [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "FALLBACK_BRANCH=${{ github.base_ref }}" >> $GITHUB_ENV
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            printf 'FALLBACK_BRANCH=%s\n' "$INPUT_FALLBACK_BRANCH" >> "$GITHUB_ENV"
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
+            printf 'FALLBACK_BRANCH=%s\n' "$BASE_REF" >> "$GITHUB_ENV"
           else
-            echo "FALLBACK_BRANCH=develop" >> $GITHUB_ENV
+            echo "FALLBACK_BRANCH=develop" >> "$GITHUB_ENV"
           fi
 
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -67,7 +69,37 @@ jobs:
       - name: Run Coverage Tests
         run: hatch run test_github:test-cov
 
+      - name: Retain coverage and test reports for upload
+        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: codecov-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            coverage.xml
+            junit.xml
+          if-no-files-found: warn
+          retention-days: 1
+
+  # Codecov OIDC upload runs only on push/dispatch; pull_request jobs never get id-token.
+  upload-coverage:
+    needs: test
+    if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download coverage and test reports
+        uses: actions/download-artifact@v4
+        with:
+          name: codecov-reports-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Upload coverage reports to Codecov
+        if: needs.test.result == 'success'
         uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5
         with:
           use_oidc: true
@@ -77,7 +109,6 @@ jobs:
           verbose: true
 
       - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
         uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5
         with:
           report_type: test_results
