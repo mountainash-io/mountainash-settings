@@ -8,11 +8,7 @@ version: 0.08
 
 # Secrets Resolution
 
-## Summary
-
-This chapter covers the secrets resolution subsystem that transparently resolves secret references in configuration values. You will learn about the directly selected `secret_store` binding, the record-store protocols that back it, the two-pass resolution pipeline (kwargs pass and model tree pass), helper functions for resolving references in dicts and model trees, secret prefix syntax for identifying references, the settings-owned local stores, and how frozen models are rebuilt after resolution.
-
----
+The secrets subsystem resolves `secret:` references in configuration values to their stored values while settings are constructed. A `secret_store` bound directly to the settings parameters supplies the records; resolution runs in two passes (kwargs before Pydantic validation, the populated model tree after it); and settings ships its own local record stores plus `persist()` / `persist_key()` for writing records back.
 
 <!-- concept:44 -->
 <!-- concept:45 -->
@@ -20,8 +16,6 @@ This chapter covers the secrets resolution subsystem that transparently resolves
 ## The Secrets Problem
 
 Production applications store sensitive values -- database passwords, API keys, encryption keys, OAuth client secrets -- outside configuration files. However, the configuration layer still needs to know _which_ secret to retrieve. mountainash-settings solves this with a reference-based approach: configuration files and kwargs contain references like `secret:database.production.password`, and the framework resolves them transparently to their actual values during construction.
-
-This chapter covers the resolution subsystem from the bottom up: first the directly selected `secret_store` binding, then the protocols those stores implement, then the two-pass pipeline that resolves references in both kwargs and the model tree, and finally the settings-owned local stores and how external secret managers fit in.
 
 ## Secret Store Binding
 
@@ -44,7 +38,7 @@ The binding participates in cache identity by **object identity**, never content
 
 A `secret:` reference with no bound store raises a value-free `SecretCapabilityError` immediately — there is no silent literal pass-through and no process-global fallback.
 
-## Secret Provider Protocol
+## Record-Store Protocols
 
 A bound store is a **record store**, not a string-returning callable. One key maps to one structured record (a JSON-native dictionary). The library splits the contract into capabilities so each consumer asks only for what it needs:
 
@@ -86,7 +80,7 @@ Type: workflow
 **Library:** vis-network<br/>
 **Status:** Specified
 
-A directed graph showing how a secret reference string flows through the resolution pipeline: the string "secret:db.prod.pw" enters, the prefix "secret:" is stripped, the remainder splits at the last dot into record key "db.prod" and field "pw", the registered record store returns the record, the field is selected, and the resolved value replaces the reference in the data structure. Learning objective: Trace how a secret reference is resolved from prefix detection through record lookup to value substitution (Bloom: Understand).
+A directed graph showing how a secret reference string flows through the resolution pipeline: the string "secret:db.prod.pw" enters, the prefix "secret:" is stripped, the remainder splits at the last dot into record key "db.prod" and field "pw", the registered record store returns the record, the field is selected, and the resolved value replaces the reference in the data structure.
 </details>
 
 ## Two Pass Resolution
@@ -112,6 +106,9 @@ resolve_references_in_model_tree(self, local_settings_params.secret_store)
 
 This two-pass approach means that secret references work identically regardless of where they appear -- in kwargs, in YAML files, in environment variables, or in `.env` files. The caller does not need to know which pass will handle their reference.
 
+!!! note "Cached retrieval timing"
+    With cached retrieval (`get_settings`), references found in captured sources (config files, environment, `secrets_dir`, static defaults) are resolved once when the source snapshot is captured and stay pinned for the cached context. References passed as explicit runtime overrides are resolved on each invocation.
+
 ## Kwargs Pass Resolution
 
 The **kwargs pass** runs before Pydantic's `BaseSettings.__init__` and processes the `valid_attribute_kwargs` dictionary. At this point, the dictionary contains only the kwargs that have been validated as belonging to fields on the target settings class (the routing performed by `get_attribute_settings_kwargs()`).
@@ -125,11 +122,14 @@ This ordering is important. If a field is typed as `SecretStr` and the kwarg val
 
 The **model tree pass** runs after `BaseSettings.__init__` has populated all fields from all sources. It walks the live model instance, inspecting every field value for secret references. This pass catches references that entered through config files, environment variables, or `.env` files -- sources that are only read during `BaseSettings.__init__`.
 
-The pass calls `resolve_references_in_model_tree()`, which handles three value types:
+The pass calls `resolve_references_in_model_tree()`, which handles four kinds of value:
 
-- **Plain strings** -- checked for the prefix, resolved in place via `setattr`
-- **SecretStr values** -- unwrapped via `.get_secret_value()`, checked for the prefix, resolved, and the new value assigned (Pydantic re-wraps it as `SecretStr` due to `validate_assignment=True`)
-- **Nested BaseModel instances** -- recursively extracted, resolved, and rebuilt
+- **Plain strings** -- checked for the prefix and resolved
+- **SecretStr values** -- unwrapped via `.get_secret_value()`, checked for the prefix, resolved, and re-wrapped as `SecretStr`
+- **Nested BaseModel instances** -- each field is inspected recursively, and the model is rebuilt only if a reference was resolved inside it
+- **dict, list and tuple containers** -- traversed recursively; only containers that hold a changed value are rebuilt (a tuple stays a tuple), unchanged containers are returned as the same object
+
+A resolved top-level field is then assigned back to the instance with `setattr`, so `validate_assignment=True` revalidates it. If resolution or revalidation fails for a field that carried a reference, the raised `ValueError` names the model and field but never the resolved value.
 
 The model tree pass deliberately skips meta-fields (those starting with `SETTINGS_SOURCE_` and the `SETTINGS_CLASS` / `SETTINGS_CLASS_NAME` fields). These contain infrastructure data, not configuration values, and should never be treated as secret references.
 
@@ -151,32 +151,17 @@ It walks nested dictionaries, lists and tuples, unwraps `SecretStr` to inspect r
 <!-- concept:50 -->
 ## Resolve References In Model Tree
 
-The `resolve_references_in_model_tree()` function operates on a live Pydantic model instance, mutating it in place. Unlike the dict resolver, this function handles the complexity of Pydantic's type system -- `SecretStr` values must be unwrapped to inspect the underlying string, and nested `BaseModel` instances require recursive processing.
-
-The function handles three distinct cases for each field:
-
-1. **BaseModel fields** -- extracted to a raw dictionary, checked for references, resolved, and rebuilt as a new model instance
-2. **SecretStr fields** -- unwrapped, resolved if the underlying string is a reference, and re-assigned (triggering `SecretStr` re-wrapping via `validate_assignment`)
-3. **Plain string fields** -- resolved directly if they match the prefix
+The `resolve_references_in_model_tree()` function operates on a live Pydantic model instance, assigning resolved values back onto it. Unlike the dict resolver, it has to work with Pydantic's type system -- `SecretStr` values are unwrapped to inspect the underlying string, and nested `BaseModel` instances are rebuilt rather than edited.
 
 ```python
-# Simplified structure of the model tree resolver:
-for field_name in instance.model_fields:
-    if field_name.startswith("SETTINGS_SOURCE_"):
-        continue  # skip meta-fields
-
-    value = getattr(instance, field_name)
-
-    if isinstance(value, BaseModel):
-        # Extract, resolve references, rebuild
-        ...
-    elif isinstance(value, SecretStr):
-        # Unwrap, resolve, re-assign
-        ...
-    elif isinstance(value, str) and value.startswith(prefix):
-        # Resolve directly
-        ...
+def resolve_references_in_model_tree(
+    instance: BaseModel,
+    store: SecretReader | None,
+    prefix: str = "secret:",
+) -> None: ...
 ```
+
+Every top-level field except the meta-fields (`SETTINGS_SOURCE_*`, `SETTINGS_CLASS`, `SETTINGS_CLASS_NAME`) is passed through the same recursive engine used by `resolve_references_in_dict()`, so strings, `SecretStr` values, nested models and containers all follow one set of rules. If a field changed, the new value is assigned with `setattr`.
 
 #### Diagram: Two-Pass Resolution Pipeline
 
@@ -188,9 +173,10 @@ Type: microsim
 **Library:** p5.js<br/>
 **Status:** Specified
 
-An animated simulation of the two-pass pipeline. The left panel shows a settings class with five fields, each populated from a different source (kwarg, env var, YAML, .env, default). Values containing "secret:" prefix are highlighted in red. Pass 1 animates: kwargs references resolve (turn green). Then BaseSettings.__init__ runs (remaining fields populate). Pass 2 animates: model tree references resolve (turn green). Users can toggle which fields contain secret references and see how the two passes handle each case. A counter shows total resolver calls per pass. Learning objective: Predict which resolution pass handles a secret reference based on its configuration source (Bloom: Apply).
+An animated simulation of the two-pass pipeline. The left panel shows a settings class with five fields, each populated from a different source (kwarg, env var, YAML, .env, default). Values containing "secret:" prefix are highlighted in red. Pass 1 animates: kwargs references resolve (turn green). Then BaseSettings.__init__ runs (remaining fields populate). Pass 2 animates: model tree references resolve (turn green). Users can toggle which fields contain secret references and see how the two passes handle each case. A counter shows total resolver calls per pass.
 </details>
 
+<!-- concept:111 -->
 ## Local Record Stores
 
 Settings ships the stores that back references, in `mountainash_settings.secrets`:
@@ -205,36 +191,73 @@ Settings ships the stores that back references, in `mountainash_settings.secrets
 from mountainash_settings import SettingsParameters
 from mountainash_settings.secrets import FilesystemBackend
 
-store = FilesystemBackend("/path/to/provisioned/private-records")
-params = SettingsParameters.create(settings_class=AppSettings, secret_store=store)
+with FilesystemBackend("/path/to/provisioned/private-records") as store:
+    params = SettingsParameters.create(settings_class=AppSettings, secret_store=store)
 ```
 
-Records are strict JSON-native mappings; malformed existing records raise value-free `SecretStoreUnavailableError` with a stable `.reason` rather than reading as absent. See `docs/README_SECRETS.md` for the full contract.
+`FilesystemBackend` does not create or repair its root directory; the application provisions and secures it, owns the store, and finishes all operations before `close()`. `get`/`set`/`delete` take no implicit lock, so compound operations belong inside `store.transaction(key)`.
 
 Settings does not ship cloud secret-manager clients (Vault, AWS, Azure, GCP) or a remote writer. Values held in those systems normally reach settings through ordinary Pydantic inputs (environment variables or `secrets_dir` files provisioned by the deployment). An application that must read them through `secret:` references supplies its own object implementing `SecretReader`.
+
+### Records, Keys and Errors
+
+A record is an exact `dict` with `str` keys whose values are JSON-native (`dict`, `list`, `str`, `int`, finite `float`, `bool`, `None`), recursively; the types are exported as `SecretRecord` and `JSONValue`. Anything else (subclasses, bytes, dates, sets, non-finite floats, reference cycles) is rejected before any mutation, and reads return owned copies. Only a missing record returns `None`; an existing record that is empty, malformed or not a JSON-native mapping raises `SecretStoreUnavailableError`.
+
+Keys are one or more dot-separated segments matching `[a-z0-9_]+`; an invalid key raises a value-free `ValueError`. `to_key_segment(raw)` returns a valid segment unchanged and maps any other identifier (or one starting with `h_`) to a deterministic `h_<sha256 base32>` segment:
+
+```python
+from mountainash_settings.secrets import to_key_segment
+
+to_key_segment("abc")          # 'abc'
+to_key_segment("Hello World")  # 'h_uwi2nval6qqeasqbc4z47n5rsdlcyzn7bpg2gk2xwj35tlm7crxa'
+```
+
+Library-generated errors carry no record values, paths or chained causes, so callers branch on class and `.reason`, never on the message:
+
+| Class | Meaning |
+|---|---|
+| `SecretStoreError` | Base class |
+| `SecretCapabilityError` | A required capability is missing (no store bound, a store that cannot write, a non-clearable store given to `NamespacedSecretStore`) |
+| `SecretStoreUnavailableError` | The operation failed; storage may or may not have changed. See `.reason` (for example `unsafe_entry`, `malformed_yaml`, `invalid_record_shape`, `store_closed`, `write_committed_cleanup_failed`) |
+
+See `docs/README_SECRETS.md` for the full reason table and platform support.
+
+### Persisting Settings: persist() and persist_key()
+
+`settings.persist(data, key=None)` replaces one complete record through the bound `SecretWriter`, then updates the matching fields on the settings instance. `persist_key()` derives the default key: the lowercased class name, prefixed by the lowercased environment prefix (trailing underscores removed) when one is configured.
+
+```python
+from mountainash_settings import MountainAshBaseSettings
+from mountainash_settings.secrets import MemorySecretStore
+
+class ServiceSettings(MountainAshBaseSettings):
+    TOKEN: str = ""
+    REFRESH: str = ""
+
+store = MemorySecretStore()
+settings = ServiceSettings(TOKEN="old", env_prefix="APP_", secret_store=store)
+
+settings.persist_key()                  # 'app.servicesettings'
+with store.transaction(settings.persist_key()):
+    settings.persist({"TOKEN": "new", "REFRESH": "r"})
+
+settings.TOKEN                          # 'new'
+store.get("app.servicesettings")        # {'TOKEN': 'new', 'REFRESH': 'r'}
+```
+
+`persist()` raises `SecretCapabilityError` if no store is bound or the store is not a `SecretWriter`, and `ValueError` if `data` is not a strict JSON-native record. Record validation happens before the write; field assignment happens afterward, so a field-validation failure can leave the record committed and earlier assignments applied. A transaction coordinates writers; it does not roll back across storage and model updates. Persistence does not rewrite configuration files or update a captured source snapshot, and later settings are not loaded from the saved record automatically -- use an explicit `secret:` reference to read it back.
 
 <!-- concept:55 -->
 ## Frozen Model Rebuild On Resolve
 
-When the model tree pass encounters a nested `BaseModel` field that contains secret references, it cannot simply modify the nested model in place -- Pydantic models may be frozen (immutable). Instead, the resolver extracts the model's fields as a raw dictionary, resolves any references in that dictionary, and rebuilds the nested model from scratch:
+A nested `BaseModel` that contains a secret reference cannot be modified in place -- Pydantic models may be frozen (immutable). Instead, the resolver inspects the model's fields recursively and, when at least one field (at any depth, including inside dict/list/tuple values) resolved from a reference, builds a new instance of the same model class from the resolved field values and validates it. The rebuild respects validation aliases, so aliased fields round-trip. The parent field is then assigned the rebuilt model through `setattr`, which revalidates it under `validate_assignment=True`.
 
-```python
-if isinstance(value, BaseModel):
-    raw_dict, has_refs = _extract_model_values(value, prefix)
-    if has_refs:
-        resolved_dict = resolve_references_in_dict(
-            raw_dict, backend, prefix
-        )
-        rebuilt = type(value)(**resolved_dict)
-        setattr(instance, field_name, rebuilt)
-```
+A model in which no reference was found is returned as the same object, so no rebuild happens and its identity is preserved. If rebuilding fails validation, the error names the model and the changed fields but not the resolved values.
 
-The `_extract_model_values()` helper recursively walks the nested model tree, unwrapping `SecretStr` fields to expose their underlying strings for reference detection. It returns both the raw dictionary and a boolean flag indicating whether any references were found -- if no references exist, the rebuild is skipped entirely (an optimization that avoids unnecessary object construction).
-
-This rebuild pattern ensures that even deeply nested, frozen model configurations can contain secret references. The resolved model is a new instance with all references replaced by their actual values, and the parent model's field is updated via `setattr` (which triggers revalidation due to `validate_assignment=True`).
+This rebuild pattern ensures that even deeply nested, frozen model configurations can contain secret references.
 
 !!! note "Performance consideration"
-    The rebuild operation reconstructs the entire nested model even if only one field within it contains a reference. For deeply nested models with many fields, this has a measurable cost. However, it runs only once during construction, and only when references are actually present -- the `has_refs` guard ensures no unnecessary work.
+    The rebuild reconstructs the entire nested model even if only one field within it contains a reference. For deeply nested models with many fields, this has a measurable cost. However, it runs only during construction, and only when references are actually present.
 
 #### Diagram: Frozen Model Rebuild Process
 
@@ -246,16 +269,5 @@ Type: workflow
 **Library:** vis-network<br/>
 **Status:** Specified
 
-A step-by-step workflow showing the rebuild process for a nested frozen model: (1) detect BaseModel field, (2) extract values to dict (unwrapping SecretStr), (3) check for references (has_refs flag), (4) resolve references in the extracted dict, (5) construct new model instance from resolved dict, (6) assign new instance to parent field. Clicking each step shows the data at that stage. A toggle allows users to switch between a model with references (full rebuild path) and one without (early exit at step 3). Learning objective: Explain why frozen models require rebuild rather than in-place mutation during secrets resolution (Bloom: Understand).
+A step-by-step workflow showing the rebuild process for a nested frozen model: (1) detect BaseModel field, (2) inspect each field recursively (unwrapping SecretStr), (3) check whether any reference resolved, (4) collect the resolved field values, (5) validate a new model instance from them, (6) assign the new instance to the parent field. Clicking each step shows the data at that stage. A toggle allows users to switch between a model with references (full rebuild path) and one without (early exit at step 3, original object kept).
 </details>
-
-## Key Takeaways
-
-- **Secret Store Binding** selects a record store directly by object, never by name; cache identity uses the store's object identity, never its content.
-- **Record-store protocols** (`SecretReader`, `SecretWriter`, `ClearableSecretStore`) return structured records; references select a record and an optional field.
-- **Two Pass Resolution** handles secrets from all sources: Pass 1 resolves kwargs before Pydantic validation; Pass 2 resolves config-file and env-var values in the live model tree.
-- **Kwargs Pass Resolution** runs before `BaseSettings.__init__`, allowing resolved values to flow through normal Pydantic validation and `SecretStr` wrapping.
-- **Model Tree Pass Resolution** walks the live instance after construction, handling plain strings, `SecretStr` values, and nested `BaseModel` instances.
-- **Secret Prefix Syntax** (`secret:path`) is configurable and domain-agnostic, enabling reuse of the resolution mechanism for non-secret reference patterns.
-- **Local Record Stores** (`FilesystemBackend`, `MemorySecretStore`, `NamespacedSecretStore`) are settings-owned; cloud managers are not shipped.
-- **Frozen Model Rebuild** extracts, resolves, and reconstructs nested models when they contain secret references, preserving immutability guarantees.
