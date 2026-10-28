@@ -1,0 +1,50 @@
+{
+  "id": "mountainash_settings.profiles._metaclass",
+  "path": "src/mountainash_settings/profiles/_metaclass.py",
+  "summary": "_ProfileMetaclass routes profile class-header keywords before Pydantic field construction, keeping header options out of native field handling.",
+  "role": "orchestration",
+  "visibility": "private",
+  "stability": "evolving",
+  "audiences": [
+    "maintainers"
+  ],
+  "doc_priority": "internal-note",
+  "confidence": "high",
+  "public_api": [],
+  "key_classes": [
+    "_ProfileMetaclass"
+  ],
+  "key_functions": [],
+  "dependencies": [
+    "mountainash_settings.profiles._declaration",
+    "mountainash_settings.settings._metaclass"
+  ],
+  "dependents": [
+    "mountainash_settings.profiles.profile"
+  ],
+  "extension_points": [],
+  "lifecycle_notes": [
+    "Runs at class-definition time for every Profile subclass"
+  ],
+  "documentation_hooks": [],
+  "examples": [],
+  "tests": [],
+  "risks": [
+    "Couples to Pydantic ModelMetaclass internals (__pydantic_generic_metadata__, __pydantic_reset_parent_namespace__)"
+  ],
+  "open_questions": [],
+  "evidence": [
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/profiles/profile.py",
+      "detail": "imports mountainash_settings.profiles._metaclass"
+    }
+  ],
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
+  "manual": {
+    "notes": "",
+    "editorial_status": "",
+    "owner": "",
+    "manual_summary": ""
+  }
+}

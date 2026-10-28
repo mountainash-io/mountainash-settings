@@ -1,0 +1,64 @@
+{
+  "id": "mountainash_settings.profiles.lookup",
+  "path": "src/mountainash_settings/profiles/lookup.py",
+  "summary": "lookup_class_var walks a class MRO and returns the first __dict__ value for a name; used by Profile for __spec__/__adapters__ and exposed for consumer dunder lookups.",
+  "role": "public-api",
+  "visibility": "public",
+  "stability": "stable",
+  "audiences": [
+    "extension-authors",
+    "maintainers"
+  ],
+  "doc_priority": "reference-only",
+  "confidence": "high",
+  "public_api": [
+    "lookup_class_var"
+  ],
+  "key_classes": [],
+  "key_functions": [
+    "lookup_class_var"
+  ],
+  "dependencies": [],
+  "dependents": [
+    "mountainash_settings.profiles",
+    "mountainash_settings.profiles.profile"
+  ],
+  "extension_points": [],
+  "lifecycle_notes": [],
+  "documentation_hooks": [],
+  "examples": [],
+  "tests": [
+    "tests/profiles/test_lookup.py"
+  ],
+  "risks": [],
+  "open_questions": [],
+  "evidence": [
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "lookup_class_var exported"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/profiles/__init__.py",
+      "detail": "imports mountainash_settings.profiles.lookup"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/profiles/profile.py",
+      "detail": "imports mountainash_settings.profiles.lookup"
+    },
+    {
+      "kind": "test",
+      "path": "tests/profiles/test_lookup.py",
+      "detail": "exercises module behaviour"
+    }
+  ],
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
+  "manual": {
+    "notes": "",
+    "editorial_status": "",
+    "owner": "",
+    "manual_summary": ""
+  }
+}

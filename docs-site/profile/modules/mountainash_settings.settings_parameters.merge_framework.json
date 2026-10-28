@@ -1,39 +1,66 @@
 {
   "id": "mountainash_settings.settings_parameters.merge_framework",
   "path": "src/mountainash_settings/settings_parameters/merge_framework.py",
-  "summary": "Defines ValidationError — a custom exception for settings parameter validation failures. The merge_framework module is minimal in its current form; ValidationError is the primary export.",
+  "summary": "Defines ValidationError, raised for invalid settings-parameter operations such as merging mismatched settings classes.",
   "role": "backend",
-  "visibility": "internal",
-  "stability": "evolving",
-  "audiences": ["maintainers", "contributors"],
+  "visibility": "semi-public",
+  "stability": "stable",
+  "audiences": [
+    "maintainers"
+  ],
   "doc_priority": "internal-note",
   "confidence": "medium",
   "public_api": [
     "ValidationError"
   ],
-  "key_classes": ["ValidationError"],
+  "key_classes": [
+    "ValidationError"
+  ],
   "key_functions": [],
   "dependencies": [],
   "dependents": [
-    "mountainash_settings.settings_parameters.settings_parameters"
+    "mountainash_settings.settings_parameters"
   ],
   "extension_points": [],
-  "lifecycle_notes": [
-    "Currently contains only ValidationError — may expand as merge logic grows"
-  ],
+  "lifecycle_notes": [],
   "documentation_hooks": [],
   "examples": [],
   "tests": [
-    "tests/test_settings_parameters/test_merge_framework.py"
+    "tests/profiles/test_class_declarations.py",
+    "tests/profiles/test_generated_consumers.py",
+    "tests/profiles/test_profile.py",
+    "tests/settings/test_base_settings.py",
+    "tests/settings_cache/test_settings_manager.py",
+    "tests/settings_cache/test_source_isolation.py",
+    "tests/settings_parameters/test_merge_framework.py"
   ],
   "risks": [],
   "open_questions": [
-    "The module name implies more merge logic may be planned — watch for expansion"
+    "Module name suggests a broader framework than the single exception it contains"
   ],
   "evidence": [
-    {"kind": "test", "path": "tests/test_settings_parameters/test_merge_framework.py", "detail": "Dedicated test file"}
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/settings_parameters/__init__.py",
+      "detail": "ValidationError exported"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings_parameters/__init__.py",
+      "detail": "imports mountainash_settings.settings_parameters.merge_framework"
+    },
+    {
+      "kind": "test",
+      "path": "tests/profiles/test_class_declarations.py",
+      "detail": "exercises module behaviour"
+    },
+    {
+      "kind": "test",
+      "path": "tests/profiles/test_generated_consumers.py",
+      "detail": "exercises module behaviour"
+    }
   ],
-  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
   "manual": {
     "notes": "",
     "editorial_status": "",

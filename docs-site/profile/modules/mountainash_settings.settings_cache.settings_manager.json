@@ -1,53 +1,82 @@
 {
   "id": "mountainash_settings.settings_cache.settings_manager",
   "path": "src/mountainash_settings/settings_cache/settings_manager.py",
-  "summary": "SettingsManager owns private structural contexts keyed by the five SettingsParameters selectors. It captures selected source state once, materializes every complete invocation as a fresh owned result, and exposes direct get_or_create/get-existing/status routes without a public result map.",
+  "summary": "SettingsManager owns one structural source context per key: get_or_create_settings captures sources once then validates an isolated invocation; get_settings_object and is_initialised operate on completed captures.",
   "role": "orchestration",
-  "visibility": "semi-public",
-  "stability": "stable",
-  "audiences": ["maintainers", "contributors", "backend-architecture"],
+  "visibility": "public",
+  "stability": "evolving",
+  "audiences": [
+    "users",
+    "maintainers"
+  ],
   "doc_priority": "useful",
   "confidence": "high",
   "public_api": [
-    "SettingsManager",
-    "SettingsManager.get_or_create_settings",
-    "SettingsManager.get_settings_object",
-    "SettingsManager.is_initialised"
+    "SettingsManager"
   ],
-  "key_classes": ["SettingsManager"],
-  "key_functions": [
-    "get_or_create_settings",
-    "get_settings_object",
-    "is_initialised"
+  "key_classes": [
+    "SettingsManager"
   ],
+  "key_functions": [],
   "dependencies": [
-    "mountainash_settings.settings_parameters.settings_parameters",
-    "mountainash_settings.settings_parameters.kwargshandler",
-    "mountainash_settings.settings.base_settings"
+    "mountainash_settings.settings.base_settings",
+    "mountainash_settings.settings_cache._context",
+    "mountainash_settings.settings_parameters"
   ],
   "dependents": [
+    "mountainash_settings",
+    "mountainash_settings.settings_cache",
     "mountainash_settings.settings_cache.settings_functions"
   ],
   "extension_points": [],
-  "lifecycle_notes": [
-    "Context initialization captures source inputs outside broad manager locks and publishes only complete capture",
-    "get_or_create_settings and get_settings_object accept keyword-only reinitialise operation control",
-    "Standard BaseSettings inherited constructors remain cached-compatible; plain custom constructors fail before source reads"
-  ],
+  "lifecycle_notes": [],
   "documentation_hooks": [],
   "examples": [],
   "tests": [
-    "tests/test_settings_manager.py"
+    "tests/profiles/test_profile.py",
+    "tests/settings/app/test_app_settings.py",
+    "tests/settings/app/test_timestamp_process.py",
+    "tests/settings/test_base_settings.py",
+    "tests/settings/test_dotenv_compat.py",
+    "tests/settings/test_persist.py",
+    "tests/settings_cache/test_settings_manager.py",
+    "tests/settings_cache/test_source_isolation.py"
   ],
-  "risks": [
-    "Contexts deliberately pin selected source inputs until separate lifecycle work introduces an approved refresh contract"
-  ],
+  "risks": [],
   "open_questions": [],
   "evidence": [
-    {"kind": "symbol", "path": "src/mountainash_settings/__init__.py", "detail": "SettingsManager in __all__"},
-    {"kind": "test", "path": "tests/test_settings_manager.py", "detail": "Manager lifecycle tests"}
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "SettingsManager exported"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "imports mountainash_settings.settings_cache.settings_manager"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings_cache/__init__.py",
+      "detail": "imports mountainash_settings.settings_cache.settings_manager"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings_cache/settings_functions.py",
+      "detail": "imports mountainash_settings.settings_cache.settings_manager"
+    },
+    {
+      "kind": "test",
+      "path": "tests/profiles/test_profile.py",
+      "detail": "exercises module behaviour"
+    },
+    {
+      "kind": "test",
+      "path": "tests/settings/app/test_app_settings.py",
+      "detail": "exercises module behaviour"
+    }
   ],
-  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
   "manual": {
     "notes": "",
     "editorial_status": "",

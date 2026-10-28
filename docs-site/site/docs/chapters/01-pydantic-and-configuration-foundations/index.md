@@ -8,18 +8,14 @@ version: 0.08
 
 # Pydantic and Configuration Foundations
 
-## Summary
-
-This chapter introduces the prerequisite concepts that underpin the mountainash-settings framework. You will learn about Pydantic's BaseModel and BaseSettings classes, field validators, model configuration, the four supported configuration file formats (YAML, TOML, JSON, .env), environment variables, Python decorators, discriminated unions, and the SecretStr type. These foundational concepts are essential for understanding how mountainash-settings extends Pydantic to provide a typed, multi-source configuration system.
+mountainash-settings is a typed, multi-source configuration layer built on Pydantic. It depends on these building blocks: `BaseModel` and `BaseSettings`, field validators, model configuration, the supported configuration file formats (YAML, TOML, JSON, .env), environment variables, Python decorators, discriminated unions, and the `SecretStr` type.
 
 ---
 
 <!-- concept:4 -->
 ## Why Configuration Matters
 
-Every non-trivial application needs external configuration: database URLs, API keys, feature flags, file paths, and timeouts that change between development, staging, and production. Hard-coding these values into source files creates fragile systems that resist change. The mountainash-settings framework solves this problem by providing a typed, validated, multi-source configuration layer built on top of Pydantic. Before diving into the framework itself, you need a solid understanding of the building blocks it depends on.
-
-This chapter covers twelve foundational concepts grouped into three themes: Pydantic's data modelling primitives, the configuration file formats that carry settings values, and several Python language features that the framework uses internally.
+Every non-trivial application needs external configuration: database URLs, API keys, feature flags, file paths, and timeouts that change between development, staging, and production. Hard-coding these values into source files creates fragile systems that resist change. The mountainash-settings framework solves this problem by providing a typed, validated, multi-source configuration layer built on top of Pydantic. The framework is made of a small set of Pydantic primitives, the configuration file formats that carry settings values, and several Python language features it uses internally.
 
 <!-- concept:1 -->
 <!-- concept:2 -->
@@ -72,13 +68,12 @@ class AppConfig(BaseSettings):
     database_url: str
     debug: bool = False
 
-<!-- concept:9 -->
 # Values loaded from environment variables automatically
 # export DATABASE_URL="postgresql://localhost/mydb"
 config = AppConfig()
 ```
 
-mountainash-settings extends `BaseSettings` further by adding YAML, TOML, and JSON file sources, template expansion, and a caching layer -- topics covered in subsequent chapters.
+mountainash-settings extends `BaseSettings` further by adding YAML, TOML, and JSON file sources, template expansion, and a caching layer -- described in the following chapters.
 
 <!-- concept:3 -->
 ## Field Validators
@@ -134,7 +129,7 @@ These four settings establish the contract for every settings class in the frame
 <!-- concept:8 -->
 ## Configuration File Formats
 
-mountainash-settings supports four file formats for externalizing configuration values. Each format has distinct strengths, and a single settings class can load from multiple formats simultaneously. Understanding the characteristics of each format helps you choose the right one for each use case.
+mountainash-settings supports four file formats for externalizing configuration values. Each format has distinct strengths, and a single settings class can load from multiple formats simultaneously. Choose the format that suits each use case.
 
 ### YAML File Format
 
@@ -181,7 +176,7 @@ JSON (JavaScript Object Notation) is the lingua franca of data interchange. Whil
 
 ### Env File Format
 
-The `.env` format is a simple key-value format where each line contains a variable assignment. It originated in the twelve-factor app methodology and is widely used with Docker, CI/CD systems, and local development tools. Unlike the hierarchical formats above, `.env` files are flat -- nested structures require a delimiter convention (like double underscores).
+The `.env` format is a simple key-value format where each line contains a variable assignment. It originated in the twelve-factor app methodology and is widely used with Docker, CI/CD systems, and local development tools. Unlike the hierarchical formats above, `.env` files are flat. Pydantic BaseSettings can express nesting with a delimiter convention (like double underscores), but MountainAshBaseSettings sets no `env_nested_delimiter`, so nested-delimiter parsing is off by default (see Environment Variables below).
 
 ```
 # .env
@@ -200,12 +195,13 @@ Type: chart
 **Library:** Chart.js<br/>
 **Status:** Specified
 
-A radar chart comparing the four configuration formats across five dimensions: human readability, nesting support, type safety, ecosystem adoption, and comment support. Each format is a colored polygon on the radar. Hovering over a vertex shows the specific score and a brief explanation. Clicking a format name in the legend toggles its visibility. Learning objective: Compare and evaluate configuration file formats for different use cases (Bloom: Evaluate).
+A radar chart comparing the four configuration formats across five dimensions: human readability, nesting support, type safety, ecosystem adoption, and comment support. Each format is a colored polygon on the radar. Hovering over a vertex shows the specific score and a brief explanation. Clicking a format name in the legend toggles its visibility. 
 </details>
 
+<!-- concept:9 -->
 ## Environment Variables
 
-**Environment variables** are key-value pairs maintained by the operating system process. They represent the most portable configuration mechanism because every operating system, container runtime, and cloud platform supports them natively. Pydantic BaseSettings reads environment variables by matching field names (case-insensitively by default) to variable names.
+**Environment variables** are key-value pairs maintained by the operating system process. They represent the most portable configuration mechanism because every operating system, container runtime, and cloud platform supports them natively. Pydantic BaseSettings reads environment variables by matching field names to variable names; by default that matching is case-insensitive. `MountainAshBaseSettings` overrides this: direct construction passes `_case_sensitive=True`, so environment variable names must match field names exactly.
 
 mountainash-settings adds an important extension: the **env prefix override**, which allows multiple settings classes to coexist by scoping their environment variable lookups. For example, a database settings class with prefix `DB_` would read `DB_HOST` and `DB_PORT` rather than `HOST` and `PORT`, preventing collisions with other settings.
 
@@ -214,12 +210,12 @@ Environment variables have two notable limitations that the file-based formats a
 - They are flat key-value pairs with no native nesting
 - All values are strings, requiring the consumer to handle type conversion
 
-Pydantic and mountainash-settings handle both limitations: nested models use a configurable delimiter (e.g. `__`), and Pydantic's type coercion converts string values to their declared Python types.
+Pydantic's type coercion converts string values to their declared Python types. Pydantic BaseSettings can also split nested model values on a configurable delimiter (e.g. `__`), but MountainAshBaseSettings sets no `env_nested_delimiter`, so nested-delimiter parsing is off by default. Setting `env_nested_delimiter` in the class `model_config` enables it for both direct construction and cached retrieval.
 
 <!-- concept:10 -->
 ## Python Decorators
 
-A **Python decorator** is a callable that wraps another callable, modifying or extending its behavior without changing its source code. Decorators use the `@` syntax and are applied at definition time. mountainash-settings uses decorators in two important contexts: the `@lru_cache` decorator for settings caching, and the registry `@register` decorator for profile registration.
+A **Python decorator** is a callable that wraps another callable, modifying or extending its behavior without changing its source code. Decorators use the `@` syntax and are applied at definition time. mountainash-settings uses decorators for profile registration: `Registry.decorator()` returns a registration decorator for profile classes. Settings caching does not rely on a decorator; the cache keys on structural source contexts (see the caching chapter).
 
 ```python
 # The @decorator syntax is syntactic sugar
@@ -244,41 +240,34 @@ Decorator factories are decorators that accept arguments and return the actual d
 
 A **discriminated union** (also called a tagged union) is a type that can be one of several variants, where each variant carries a literal tag field that identifies which variant is active. In Pydantic, discriminated unions use `Annotated[Union[A, B, C], Field(discriminator="kind")]` to enable efficient parsing -- Pydantic reads the discriminator field first to determine which variant to validate against, avoiding trial-and-error parsing.
 
-mountainash-settings uses discriminated unions in the authentication system, where each auth mode (password, token, OAuth2, certificate, etc.) shares a common `kind` literal that Pydantic uses for dispatch.
+Discriminated unions are a general Pydantic feature. mountainash-settings does not define any discriminated unions of its own; authentication models, which previously used them, now live in the separate `mountainash-auth-client` package. The pattern is useful in your own settings models whenever one field can take several shapes, such as a storage location that is either local or remote.
 
 ```python
-from typing import Literal, Union, Annotated
+from typing import Annotated, Literal, Union
 from pydantic import BaseModel, Field
 
-class PasswordAuth(BaseModel):
-    kind: Literal["password"] = "password"
-    username: str
-    password: str
+class LocalStorage(BaseModel):
+    kind: Literal["local"] = "local"
+    path: str
 
-class TokenAuth(BaseModel):
-    kind: Literal["token"] = "token"
-    token: str
+class S3Storage(BaseModel):
+    kind: Literal["s3"] = "s3"
+    bucket: str
+    region: str = "us-east-1"
 
-AuthType = Annotated[
-    Union[PasswordAuth, TokenAuth],
-    Field(discriminator="kind")
+StorageType = Annotated[
+    Union[LocalStorage, S3Storage],
+    Field(discriminator="kind"),
 ]
+
+class Config(BaseModel):
+    storage: StorageType
+
+cfg = Config.model_validate({"storage": {"kind": "s3", "bucket": "data"}})
+print(type(cfg.storage).__name__)  # S3Storage
 ```
 
 The discriminator approach is more efficient than standard union validation because Pydantic does not need to attempt parsing against each variant sequentially. It reads the `kind` field, selects the matching variant, and validates only against that variant.
-
-#### Diagram: Discriminated Union Dispatch
-
-<iframe src="../../sims/discriminated-union-dispatch/main.html" width="100%" height="450px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Discriminated Union Dispatch</summary>
-Type: workflow
-**sim-id:** discriminated-union-dispatch<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-A directed graph showing how Pydantic processes a discriminated union. The input data node flows to a "Read discriminator field" decision node, which branches to each variant type (PasswordAuth, TokenAuth, etc.). Clicking a variant highlights the validation path and shows the fields that would be validated. Hovering over the decision node shows the discriminator key name. Learning objective: Trace the discriminated union dispatch mechanism used by the auth system (Bloom: Understand).
-</details>
 
 <!-- concept:12 -->
 ## SecretStr Type
@@ -298,7 +287,7 @@ print(creds.api_key.get_secret_value()) # sk-abc123
 
 mountainash-settings uses `SecretStr` in two key contexts. First, the secrets resolution system works with `SecretStr` fields during its model tree pass, unwrapping the secret value to check for reference prefixes like `secret:` and then re-wrapping the resolved value. Second, the profile system's `ParameterSpec` has a `secret` flag -- when set to `True`, the field's type is automatically wrapped as `SecretStr`, and the `_default_kwargs()` method unwraps it via `.get_secret_value()` when emitting driver kwargs.
 
-This design ensures that secrets are protected by default throughout the settings lifecycle. Log statements, debug output, and serialization all see masked values unless the consumer explicitly opts in to reading the raw secret.
+`SecretStr` masks the value in `print`, `repr` and `model_dump()` output for the fields declared with that type. It is not general redaction: a `secret:` reference can resolve into a field declared as plain `str`, and that field is not masked, and `model_dump()` does not redact arbitrary sensitive values. Declare credential fields as `SecretStr` and see the secrets resolution chapter for the resolution rules.
 
 #### Diagram: SecretStr Lifecycle
 
@@ -310,25 +299,25 @@ Type: workflow
 **Library:** vis-network<br/>
 **Status:** Specified
 
-A linear workflow showing the lifecycle of a secret value: raw string input enters Pydantic, is wrapped as SecretStr during validation, is masked in print/dump operations, and is explicitly unwrapped via get_secret_value() at the consumption boundary. Each node is clickable to show the string representation at that stage. A toggle button switches between "safe" view (masked) and "debug" view (showing actual values). Learning objective: Explain how SecretStr protects sensitive configuration values throughout the settings lifecycle (Bloom: Understand).
+A linear workflow showing the lifecycle of a secret value: raw string input enters Pydantic, is wrapped as SecretStr during validation, is masked in print/dump operations, and is explicitly unwrapped via get_secret_value() at the consumption boundary. Each node is clickable to show the string representation at that stage. A toggle button switches between "safe" view (masked) and "debug" view (showing actual values). 
 </details>
 
 ## Bringing It All Together
 
-These twelve concepts form the vocabulary and the toolbox that mountainash-settings builds upon. The framework extends `BaseSettings` (not `BaseModel`) to inherit environment variable loading, adds file handler classes that leverage the four file formats, uses `model_config` to enforce `validate_assignment=True` across all settings, wires field validators through `ParameterSpec`, employs decorators for both caching and registration, dispatches auth modes via discriminated unions, and protects sensitive values with `SecretStr`.
+The framework extends `BaseSettings` (not `BaseModel`) to inherit environment variable loading, adds file handler classes that leverage the file formats, uses `model_config` to enforce `validate_assignment=True` across all settings, wires field validators through `ParameterSpec`, uses a decorator for profile registration, and protects declared secret fields with `SecretStr`.
 
 The following table maps each foundation concept to where it appears in the mountainash-settings architecture:
 
 | Foundation Concept | Framework Usage |
 |-------------------|-----------------|
-| Pydantic BaseModel | Base class for SettingsParameters, ProfileSpec, ParameterSpec |
+| Pydantic BaseModel | Base of `MountainAshBaseSettings` (via `BaseSettings`) and of nested settings models. `SettingsParameters`, `ProfileSpec` and `ParameterSpec` are frozen dataclasses, not models. |
 | Pydantic BaseSettings | Parent of MountainAshBaseSettings |
 | Field Validators | Wired via ParameterSpec.validator in dynamic field installation |
 | Model Config | Declared on MountainAshBaseSettings with validate_assignment=True |
 | YAML / TOML / JSON / .env | Loaded via FileHandler and pydantic-settings sources |
 | Environment Variables | Read by BaseSettings; scoped via env_prefix override |
-| Python Decorators | @lru_cache for caching, @register for profile registration |
-| Discriminated Unions | Auth system's AuthType union with kind discriminator |
+| Python Decorators | Registry decorator for profile registration |
+| Discriminated Unions | Pydantic feature available to your own models; not used by the package |
 | SecretStr Type | Secrets resolution, ParameterSpec.secret flag |
 
 #### Diagram: Foundation Concept Dependency Map
@@ -341,16 +330,5 @@ Type: graph-model
 **Library:** vis-network<br/>
 **Status:** Specified
 
-An interactive directed graph showing the 12 foundation concepts as nodes, with edges indicating dependencies (e.g., BaseSettings depends on BaseModel; SecretStr depends on BaseModel). Nodes are colored by theme: blue for Pydantic primitives, green for file formats, orange for Python features. Clicking a node highlights its dependents (downstream concepts) and prerequisites (upstream concepts). Dragging nodes rearranges the layout. Learning objective: Analyze the dependency relationships among foundation concepts to understand the framework's architectural prerequisites (Bloom: Analyze).
+An interactive directed graph showing the foundation concepts as nodes, with edges indicating dependencies (e.g., BaseSettings depends on BaseModel; SecretStr depends on BaseModel). Nodes are colored by theme: blue for Pydantic primitives, green for file formats, orange for Python features. Clicking a node highlights its dependents (downstream concepts) and prerequisites (upstream concepts). Dragging nodes rearranges the layout.
 </details>
-
-## Key Takeaways
-
-- **Pydantic BaseModel** provides type validation, coercion, serialization, and nested model support that every mountainash-settings class inherits.
-- **Pydantic BaseSettings** extends BaseModel with automatic loading from environment variables, `.env` files, and secrets directories, establishing the multi-source pattern.
-- **Field validators** enforce custom constraints and transformations during both construction and assignment, maintaining type safety throughout the settings lifecycle.
-- **Model Config** controls framework-wide behavior -- mountainash-settings uses `validate_assignment=True` and `extra="ignore"` as its baseline contract.
-- **Four file formats** (YAML, TOML, JSON, .env) cover different use cases from human-readable nested config to flat environment-style key-value pairs.
-- **Environment variables** provide the most portable configuration mechanism; mountainash-settings scopes them with configurable prefixes to prevent collisions.
-- **Python decorators** enable both the `@lru_cache` caching strategy and the `@register` pattern for profile registration without modifying the decorated class.
-- **Discriminated unions** allow efficient, tag-based dispatch in the authentication system, avoiding trial-and-error type parsing.

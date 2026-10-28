@@ -1,65 +1,79 @@
-# Package Profile Coverage Report
+# Profile coverage — mountainash-settings
 
-Generated: 2026-05-13T00:00:00Z
-Source hash: b09b31cf2867ac909f50975ed1d4e79090c8d359
-Branch: develop
+Source `88f4df95` (previous profile `b09b31cf`). Requested behaviour: incremental; effective: **full profile scan** (module topology changed; changed modules exceed one third).
 
-## Summary
+Discovered 41 modules: 34 profiled, 7 ignored (`__init__.py` aggregators excluded by scope).
 
-| Category | Count |
-|---|---|
-| Source files discovered | 37 |
-| Modules profiled | 29 |
-| Profiles ignored (with reason) | 8 |
-| Missing profiles | 0 |
-| Stale profiles | 0 |
-| Orphaned profiles | 0 |
-| Coverage gaps | 3 (open questions, not blockers) |
+## Missing
 
-## Ignored Paths
+None — every in-scope module has a profile.
 
-| Path | Reason |
-|---|---|
-| `src/mountainash_settings/__init__.py` | Package root aggregator — covered by all module profiles via "exported from __all__" evidence |
-| `src/mountainash_settings/auth/__init__.py` | Auth sub-package aggregator — covered by individual auth module profiles |
-| `src/mountainash_settings/profiles/__init__.py` | Profiles sub-package aggregator — covered by individual profiles module profiles |
-| `src/mountainash_settings/secrets/__init__.py` | Secrets sub-package aggregator — covered by secrets.registry profile |
-| `src/mountainash_settings/settings/__init__.py` | Settings sub-package aggregator — covered by base_settings profile |
-| `src/mountainash_settings/settings/app/__init__.py` | App sub-package aggregator — covered by app_settings profile |
-| `src/mountainash_settings/settings_cache/__init__.py` | Settings cache sub-package aggregator — covered by settings_functions and settings_manager profiles |
-| `src/mountainash_settings/settings_parameters/__init__.py` | Settings parameters sub-package aggregator — covered by individual settings_parameters profiles |
+## Stale
 
-## Public Modules Without User Facet Coverage
+None — all records carry the target source hash.
 
-All public modules with `doc_priority: essential` appear in the users facet.
+## Orphaned (removed since previous profile)
 
-## Internal Modules Without Maintainer Facet Coverage
+- `mountainash_settings.auth.azure` — source removed; record deleted
+- `mountainash_settings.auth.base` — source removed; record deleted
+- `mountainash_settings.auth.certificate` — source removed; record deleted
+- `mountainash_settings.auth.dispatch` — source removed; record deleted
+- `mountainash_settings.auth.iam` — source removed; record deleted
+- `mountainash_settings.auth.kerberos` — source removed; record deleted
+- `mountainash_settings.auth.none` — source removed; record deleted
+- `mountainash_settings.auth.oauth1` — source removed; record deleted
+- `mountainash_settings.auth.oauth2` — source removed; record deleted
+- `mountainash_settings.auth.oauth2_authcode` — source removed; record deleted
+- `mountainash_settings.auth.password` — source removed; record deleted
+- `mountainash_settings.auth.service_account` — source removed; record deleted
+- `mountainash_settings.auth.token` — source removed; record deleted
+- `mountainash_settings.profiles.descriptor` — source removed; record deleted
 
-All internal architecture modules appear in the maintainers facet.
+## Added since previous profile
 
-## Open Questions (Coverage Gaps)
+- `mountainash_settings.profiles._declaration`
+- `mountainash_settings.profiles._metaclass`
+- `mountainash_settings.profiles._projection`
+- `mountainash_settings.profiles.fields`
+- `mountainash_settings.profiles.lookup`
+- `mountainash_settings.profiles.spec`
+- `mountainash_settings.secrets._native`
+- `mountainash_settings.secrets._native_posix`
+- `mountainash_settings.secrets._native_windows`
+- `mountainash_settings.secrets.backend`
+- `mountainash_settings.secrets.errors`
+- `mountainash_settings.secrets.filesystem`
+- `mountainash_settings.secrets.keys`
+- `mountainash_settings.secrets.memory`
+- `mountainash_settings.secrets.namespaced`
+- `mountainash_settings.secrets.records`
+- `mountainash_settings.settings._metaclass`
+- `mountainash_settings.settings.app._timestamps`
+- `mountainash_settings.settings_cache._context`
+- `mountainash_settings.settings_cache.sources`
 
-1. **AppSettings public status** — `mountainash_settings.settings.app.app_settings` is not in package `__all__` but is a non-trivial convenience class. Should it be part of the primary public API?
+## Low / medium confidence
 
-2. **DescriptorProfile.__adapter__ contract** — The `__adapter__` extension point is declared but its callable signature is not documented in the codebase. Extension authors need a specification.
+- `mountainash_settings.settings.app._timestamps` (medium): classification from source structure only
+- `mountainash_settings.settings_parameters.merge_framework` (medium): Module name suggests a broader framework than the single exception it contains
 
-3. **Thread-safety of model_config mutation** — `MountainAshBaseSettings.__init__` mutates the class-level `model_config` dict before calling `super().__init__()`. Under concurrent construction of different subclasses sharing the same `model_config`, this could race. Needs audit before recommending for multi-threaded applications.
+## Modules without direct tests
 
-## Low-Confidence Profiles
+- `mountainash_settings.profiles._metaclass`
+- `mountainash_settings.profiles._projection`
+- `mountainash_settings.settings._metaclass`
+- `mountainash_settings.settings_cache._context`
 
-| Module | Confidence | Reason |
+## Audience coverage
+
+| Audience | Modules | Essential |
 |---|---|---|
-| `mountainash_settings.settings_parameters.merge_framework` | medium | Module name implies more planned content; currently only ValidationError |
+| users | 14 | 9 |
+| maintainers | 33 | 9 |
+| extension-authors | 14 | 6 |
+| broader-hype | 5 | 5 |
 
-## Facets Written
+## Notes
 
-- users
-- maintainers
-- extension-authors
-- broader-hype
-
-## Not Yet Written
-
-- contributors (not requested in this run — overlaps with maintainers + extension-authors; low priority)
-- backend-architecture (low priority for initial profile — maintainers facet covers the key architecture points)
-- executives-marketing (deferred — broader-hype facet covers the key claims)
+- The `auth` subpackage was removed (moved to `mountainash-auth-client`); see `docs/migration-0.1.md`.
+- `contributors` and `backend-architecture` lenses are not requested audiences for this profile.

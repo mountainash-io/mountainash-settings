@@ -1,50 +1,87 @@
 {
   "id": "mountainash_settings.settings_parameters.filehandler",
   "path": "src/mountainash_settings/settings_parameters/filehandler.py",
-  "summary": "SettingsFileHandler separates a flat config-file list into SettingsFiles (env/yaml/toml/json buckets) by extension using FileTypeRegistry. Also validates file existence. SettingsFiles is a NamedTuple container. FileTypeRegistry is extensible via register_type().",
+  "summary": "Configuration path normalization: SettingsFileHandler formats, deduplicates, merges, validates and groups config files by type; FileTypeRegistry maps extensions; SettingsFiles groups paths per source type.",
   "role": "backend",
-  "visibility": "internal",
+  "visibility": "semi-public",
   "stability": "stable",
-  "audiences": ["maintainers", "contributors"],
+  "audiences": [
+    "maintainers"
+  ],
   "doc_priority": "internal-note",
   "confidence": "high",
   "public_api": [
     "SettingsFileHandler",
+    "SettingsFiles"
+  ],
+  "key_classes": [
     "SettingsFiles",
-    "SettingsFileHandler.separate_config_files",
-    "SettingsFileHandler.validate_config_files_exist",
-    "SettingsFileHandler.format_config_file_list",
-    "SettingsFileHandler.format_config_file_tuple",
-    "FileTypeRegistry.register_type"
+    "FileType",
+    "FileTypeRegistry",
+    "SettingsFileHandler"
   ],
-  "key_classes": ["SettingsFileHandler", "SettingsFiles", "FileTypeRegistry"],
-  "key_functions": [
-    "SettingsFileHandler.separate_config_files",
-    "SettingsFileHandler.validate_config_files_exist"
-  ],
+  "key_functions": [],
   "dependencies": [],
   "dependents": [
+    "mountainash_settings.settings.app.app_settings",
+    "mountainash_settings.settings.app.app_settings_templates",
     "mountainash_settings.settings.base_settings",
+    "mountainash_settings.settings_cache.settings_functions",
+    "mountainash_settings.settings_parameters",
     "mountainash_settings.settings_parameters.settings_parameters"
   ],
   "extension_points": [
-    "FileTypeRegistry.register_type() — add new config file extensions"
+    "FileTypeRegistry.register_type for new extensions"
   ],
-  "lifecycle_notes": [
-    "Handles dotfiles (e.g. .env) by stripping leading dot and looking up the remainder in the registry"
+  "lifecycle_notes": [],
+  "documentation_hooks": [
+    "docs/migration-0.1.md"
   ],
-  "documentation_hooks": [],
   "examples": [],
   "tests": [
-    "tests/test_settings_parameters/test_filehandler.py"
+    "tests/settings_cache/test_settings_manager.py",
+    "tests/settings_parameters/test_filehandler.py"
   ],
   "risks": [],
   "open_questions": [],
   "evidence": [
-    {"kind": "import", "path": "src/mountainash_settings/settings/base_settings.py", "detail": "Imported and used for config file separation"},
-    {"kind": "test", "path": "tests/test_settings_parameters/test_filehandler.py", "detail": "Dedicated test file"}
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/settings_parameters/__init__.py",
+      "detail": "SettingsFileHandler exported"
+    },
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/settings_parameters/__init__.py",
+      "detail": "SettingsFiles exported"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings/app/app_settings.py",
+      "detail": "imports mountainash_settings.settings_parameters.filehandler"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings/app/app_settings_templates.py",
+      "detail": "imports mountainash_settings.settings_parameters.filehandler"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings/base_settings.py",
+      "detail": "imports mountainash_settings.settings_parameters.filehandler"
+    },
+    {
+      "kind": "test",
+      "path": "tests/settings_cache/test_settings_manager.py",
+      "detail": "exercises module behaviour"
+    },
+    {
+      "kind": "test",
+      "path": "tests/settings_parameters/test_filehandler.py",
+      "detail": "exercises module behaviour"
+    }
   ],
-  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
   "manual": {
     "notes": "",
     "editorial_status": "",

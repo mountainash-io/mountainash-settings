@@ -1,0 +1,72 @@
+{
+  "id": "mountainash_settings.settings_cache._context",
+  "path": "src/mountainash_settings/settings_cache/_context.py",
+  "summary": "Private structural settings contexts: _StructuralKey from SettingsParameters, one captured source snapshot per key, and per-materialization cache frames that produce isolated results without retaining them; tracks secret-sensitive field names value-free.",
+  "role": "orchestration",
+  "visibility": "private",
+  "stability": "evolving",
+  "audiences": [
+    "maintainers"
+  ],
+  "doc_priority": "internal-note",
+  "confidence": "high",
+  "public_api": [],
+  "key_classes": [
+    "_StructuralKey",
+    "_CacheFrame",
+    "_SettingsContext"
+  ],
+  "key_functions": [
+    "cache_materialization_frame",
+    "bind_cache_frame_instance",
+    "consume_cache_frame",
+    "initialization_defaults_for_instance",
+    "current_cache_assignment_recorder"
+  ],
+  "dependencies": [
+    "mountainash_settings.profiles.profile",
+    "mountainash_settings.resolve",
+    "mountainash_settings.secrets.backend",
+    "mountainash_settings.settings.base_settings",
+    "mountainash_settings.settings_cache.sources",
+    "mountainash_settings.settings_parameters"
+  ],
+  "dependents": [
+    "mountainash_settings.settings.app.app_settings",
+    "mountainash_settings.settings.base_settings",
+    "mountainash_settings.settings_cache.settings_manager"
+  ],
+  "extension_points": [],
+  "lifecycle_notes": [
+    "Sources are captured once per structural key; every get materializes a fresh instance"
+  ],
+  "documentation_hooks": [],
+  "examples": [],
+  "tests": [],
+  "risks": [],
+  "open_questions": [],
+  "evidence": [
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings/app/app_settings.py",
+      "detail": "imports mountainash_settings.settings_cache._context"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings/base_settings.py",
+      "detail": "imports mountainash_settings.settings_cache._context"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings_cache/settings_manager.py",
+      "detail": "imports mountainash_settings.settings_cache._context"
+    }
+  ],
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
+  "manual": {
+    "notes": "",
+    "editorial_status": "",
+    "owner": "",
+    "manual_summary": ""
+  }
+}

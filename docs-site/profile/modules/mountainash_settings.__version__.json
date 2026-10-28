@@ -1,29 +1,52 @@
 {
   "id": "mountainash_settings.__version__",
   "path": "src/mountainash_settings/__version__.py",
-  "summary": "Single-string module defining the package version string using CalVer (YY.MM.MICRO). Currently at 26.4.2.",
-  "role": "backend",
+  "summary": "Defines the package __version__ string re-exported from the package root.",
+  "role": "public-api",
   "visibility": "public",
   "stability": "stable",
-  "audiences": ["users", "maintainers"],
+  "audiences": [
+    "users",
+    "maintainers"
+  ],
   "doc_priority": "reference-only",
   "confidence": "high",
-  "public_api": ["__version__"],
+  "public_api": [
+    "__version__"
+  ],
   "key_classes": [],
   "key_functions": [],
   "dependencies": [],
-  "dependents": ["mountainash_settings"],
+  "dependents": [
+    "mountainash_settings"
+  ],
   "extension_points": [],
   "lifecycle_notes": [],
   "documentation_hooks": [],
   "examples": [],
-  "tests": [],
+  "tests": [
+    "tests/test_public_api.py"
+  ],
   "risks": [],
   "open_questions": [],
   "evidence": [
-    {"kind": "symbol", "path": "src/mountainash_settings/__init__.py", "detail": "__version__ re-exported from package root"}
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "__version__ exported"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "imports mountainash_settings.__version__"
+    },
+    {
+      "kind": "test",
+      "path": "tests/test_public_api.py",
+      "detail": "exercises module behaviour"
+    }
   ],
-  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
   "manual": {
     "notes": "",
     "editorial_status": "",
