@@ -8,21 +8,18 @@ version: 0.08
 
 # MountainAsh Base Settings
 
-## Summary
-
-This chapter covers the core MountainAshBaseSettings class that forms the heart of the framework. You will learn how it extends Pydantic BaseSettings with a custom model config, a post-init lifecycle for template resolution and secrets, source customization for controlling where configuration is loaded from, the validate_assignment invariant with its object setattr bypass, settings source priority ordering, environment prefix overrides, and config file parameter declarations.
+`MountainAshBaseSettings` is the base class for every settings class in the package. It extends Pydantic's `BaseSettings` with a custom model config, a post-init lifecycle for template resolution and secrets, a customized source chain, the `validate_assignment` invariant (with a deliberate `object.__setattr__` bypass for framework bookkeeping), a defined source priority, environment prefix overrides, and config file declarations.
 
 ---
 
 ## The Central Abstraction
 
-The `MountainAshBaseSettings` class is the single most important type in the framework. Every settings class you define -- whether for database connections, API clients, application configuration, or connection profiles -- inherits from this class. It extends Pydantic's `BaseSettings` with five capabilities that standard `BaseSettings` does not provide: multi-format file loading, template expansion, secrets resolution, a structured caching layer, and a unified parameter interface.
+The `MountainAshBaseSettings` class is the single most important type in the framework. Every settings class -- whether for database connections, API clients, application configuration, or connection profiles -- inherits from this class. It extends Pydantic's `BaseSettings` with five capabilities that standard `BaseSettings` does not provide: multi-format file loading, template expansion, secrets resolution, a structured caching layer, and a unified parameter interface.
 
-Before construction reaches Pydantic's `BaseSettings.__init__`, `MountainAshBaseSettings` creates and merges a `SettingsParameters` object, separates and validates config files, privately captures accepted attribute inputs in source form, resolves secret references for live validation, and configures the model's file sources. After construction completes, it records value-free source facts for diagnostics and runs a post-init lifecycle hook.
+Before construction reaches Pydantic's `BaseSettings.__init__`, `MountainAshBaseSettings` creates and merges a `SettingsParameters` object, separates and validates config files, privately captures accepted attribute inputs in source form, resolves secret references for live validation, and sets up this invocation's file sources. After construction completes, it records value-free source facts for diagnostics and runs a post-init lifecycle hook.
 
 <!-- concept:13 -->
 <!-- concept:14 -->
-<!-- concept:19 -->
 ## MountainAshBaseSettings Class
 
 The class declares `SETTINGS_SOURCE_` meta-fields that record value-free provenance such as files, environment prefix, provider, and accepted input names. These fields support diagnostics without publishing a second tree of constructor values.
@@ -42,8 +39,6 @@ class MyAppSettings(MountainAshBaseSettings):
     database_port: int = Field(default=5432)
     debug: bool = Field(default=False)
 
-<!-- concept:20 -->
-<!-- concept:21 -->
 # Instantiate with a config file and runtime overrides
 settings = MyAppSettings(
     config_files=["config.yaml", ".env"],
@@ -51,7 +46,7 @@ settings = MyAppSettings(
 )
 ```
 
-The class also provides a `get_settings()` class method that integrates with the caching layer, and an `extract_settings_parameters()` instance method that returns a fresh, source-form reconstruction handle for trusted code. It is not a general diagnostics export and performs no source or backend reads.
+The class also provides a `get_settings()` class method that integrates with the caching layer, and an `extract_settings_parameters()` instance method that returns a fresh, source-form reconstruction handle for trusted code. It is not a general diagnostics export and performs no source or backend reads. When a selected secret store is a `SecretWriter`, `persist()` and `persist_key()` write a local record through it; see the [secrets chapter](../05-secrets-resolution/index.md).
 
 #### Diagram: MountainAshBaseSettings Construction Pipeline
 
@@ -63,7 +58,7 @@ Type: workflow
 **Library:** vis-network<br/>
 **Status:** Specified
 
-A directed graph showing the construction pipeline: input (config_files, settings_parameters, kwargs) flows through `SettingsParameters.create()`, `merge()`, `FileHandler.separate_config_files()`, `validate_config_files_exist()`, private source-form capture, `resolve_references_in_dict()`, `super().__init__()`, value-free metadata publication, `resolve_references_in_model_tree()`, and finally `post_init()`. Each node is clickable to show what happens at that stage. Edges are labeled with the data flowing between stages. Learning objective: Trace the complete construction pipeline of a `MountainAshBaseSettings` instance (Bloom: Analyze).
+A directed graph showing the construction pipeline: input (config_files, settings_parameters, kwargs) flows through `SettingsParameters.create()`, `merge()`, `FileHandler.separate_config_files()`, `validate_config_files_exist()`, private source-form capture, `resolve_references_in_dict()`, `super().__init__()`, value-free metadata publication, `resolve_references_in_model_tree()`, and finally `post_init()`. Each node is clickable to show what happens at that stage. Edges are labeled with the data flowing between stages. 
 </details>
 
 ## Settings Model Config
@@ -116,15 +111,16 @@ This ordering keeps a backend reference out of public provenance while preservin
 
 mountainash-settings customizes the Pydantic settings source chain by overriding `settings_customise_sources()`. This class method controls which configuration sources are consulted and in what order. The default implementation adds YAML, TOML, and JSON file sources that standard `BaseSettings` does not provide.
 
-The customized source chain is:
+The customized source chain (built by the shared `_cache_default_sources()` helper, so direct construction and cached retrieval use the same order) is:
 
 1. **Init settings** -- values passed as kwargs to the constructor
 2. **Environment settings** -- values from environment variables
-3. **Dotenv settings** -- values from `.env` files
-4. **YAML config** -- values from `.yaml` / `.yml` files
-5. **TOML config** -- values from `.toml` files
-6. **JSON config** -- values from `.json` files
-7. **File secret settings** -- values from a secrets directory
+3. **Dotenv settings** -- values from `.env` files, using the configured environment prefix
+4. **Unprefixed dotenv settings** -- the same `.env` files read again with no prefix
+5. **YAML config** -- values from `.yaml` / `.yml` files
+6. **TOML config** -- values from `.toml` files
+7. **JSON config** -- values from `.json` files
+8. **File secret settings** -- values from a secrets directory
 
 ```python
 @classmethod
@@ -136,18 +132,32 @@ def settings_customise_sources(
     dotenv_settings: PydanticBaseSettingsSource,
     file_secret_settings: PydanticBaseSettingsSource,
 ) -> Tuple[PydanticBaseSettingsSource, ...]:
+    # The shared helper returns the chain listed above:
     return (
         init_settings,
         env_settings,
         dotenv_settings,
-        YamlConfigSettingsSource(settings_cls),
-        TomlConfigSettingsSource(settings_cls),
-        JsonConfigSettingsSource(settings_cls),
+        unprefixed_dotenv_settings,  # same env files, env_prefix=""
+        YamlConfigSettingsSource(settings_cls, deep_merge=True),
+        TomlConfigSettingsSource(settings_cls, deep_merge=True),
+        JsonConfigSettingsSource(settings_cls, deep_merge=True),
         file_secret_settings,
     )
 ```
 
-Sources earlier in the tuple take precedence over later ones. This means explicitly passed kwargs always win, environment variables override file-based config, and file-based config overrides the secrets directory.
+The snippet condenses `_cache_default_sources()`; the hook itself delegates to it. Sources earlier in the tuple take precedence over later ones. This means explicitly passed kwargs always win, environment variables override file-based config, and file-based config overrides the secrets directory. The YAML, TOML and JSON sources use `deep_merge=True`, so nested mappings from several files of the same type merge key by key rather than the last file replacing whole sections.
+
+During direct construction, the YAML, TOML and JSON paths for that invocation travel through an invocation-local source frame, not through `model_config`. The class-level `model_config` is shared and is never mutated by construction.
+
+<!-- concept:114 -->
+## Cache-Safe Settings Sources
+
+`settings_customise_sources()` only governs direct construction. Cached retrieval through `get_settings()` does not invoke it: the cache builds the configured sources itself so that a customization hook is never run implicitly. Two things follow for classes that change the source chain:
+
+- **`settings_capture_sources(cls, sources)`** is the cache-safe hook. The base implementation returns `sources` unchanged; a subclass overrides it to declare the source order the cache should use. A class that overrides `settings_customise_sources()` without also overriding `settings_capture_sources()` is rejected at cached retrieval with a `ValueError`.
+- **`CacheableSettingsSource`** (exported from `mountainash_settings`) is the base class a custom source must extend to take part in cached retrieval. It requires `capture()`, which reads the source's structural values once, and a static `project()`, which returns terminal values for each materialization without performing I/O. Custom sources that are not `CacheableSettingsSource` instances are rejected by cached retrieval; the built-in sources are handled by the cache directly.
+
+Direct construction is unaffected by this restriction. For how structural contexts are captured and reused, see the [caching chapter](../09-caching-settings-management-and-app-settings/index.md).
 
 <!-- concept:17 -->
 ## Validate Assignment Invariant
@@ -185,18 +195,20 @@ The bypass exists for two reasons. First, meta-fields contain framework bookkeep
 !!! warning "When to use object.__setattr__"
     The bypass pattern should only be used for framework-internal bookkeeping fields. User-facing configuration fields must always go through normal assignment to maintain the validate_assignment invariant. Misusing the bypass on domain fields would silently break type safety.
 
+<!-- concept:19 -->
 ## Settings Source Priority
 
 The **settings source priority** defines which configuration source wins when the same field is defined in multiple places. mountainash-settings follows a clear precedence hierarchy where more specific, more explicit sources override less specific ones:
 
 1. **Constructor kwargs** (highest priority -- explicit always wins)
 2. **Environment variables** (runtime environment)
-3. **Dotenv files** (`.env` -- environment-like but file-based)
-4. **YAML files** (structured config)
-5. **TOML files** (structured config)
-6. **JSON files** (structured config)
-7. **Secrets directory** (lowest file priority)
-8. **Field defaults** (lowest priority -- fallback only)
+3. **Dotenv files** (`.env`, read with the configured prefix -- environment-like but file-based)
+4. **Unprefixed dotenv files** (the same `.env` files read with no prefix)
+5. **YAML files** (structured config)
+6. **TOML files** (structured config)
+7. **JSON files** (structured config)
+8. **Secrets directory** (lowest file priority)
+9. **Field defaults** (lowest priority -- fallback only)
 
 This ordering reflects a practical philosophy: the closer a value is to the code invoking it, the higher its priority. A developer passing `debug=True` as a kwarg should always win over a YAML file that says `debug: false`. An environment variable set by a deployment tool should override what is checked into version control.
 
@@ -210,9 +222,10 @@ Type: infographic
 **Library:** p5.js<br/>
 **Status:** Specified
 
-A vertical waterfall diagram showing the 8 priority levels from highest (top) to lowest (bottom). Each level is a colored horizontal bar with the source name. An interactive "value" token can be dragged to any level -- when released, the diagram shows which levels would be checked and which would be skipped based on the priority ordering. A field name dropdown lets the user select different fields to see which sources supply values for that field. Learning objective: Predict which configuration source will supply a field's value given multiple conflicting definitions (Bloom: Apply).
+A vertical waterfall diagram showing the 9 priority levels from highest (top) to lowest (bottom). Each level is a colored horizontal bar with the source name. An interactive "value" token can be dragged to any level -- when released, the diagram shows which levels would be checked and which would be skipped based on the priority ordering. A field name dropdown lets the user select different fields to see which sources supply values for that field.
 </details>
 
+<!-- concept:20 -->
 ## Env Prefix Override
 
 The **env prefix override** allows each settings class to scope its environment variable lookups to a specific prefix string. Without a prefix, a field named `host` reads the environment variable `HOST`. With a prefix of `DB_`, it reads `DB_HOST` instead.
@@ -238,6 +251,7 @@ settings = CacheSettings(settings_parameters=params)
 
 The prefix is passed through to Pydantic's `_env_prefix` init parameter, which handles the actual environment variable lookup logic.
 
+<!-- concept:21 -->
 ## Config Files Parameter
 
 The **config files parameter** is the primary mechanism for declaring which configuration files a settings instance should load. It accepts a flexible set of input types -- a single path string, a `UPath` object, a list of paths, or a tuple of paths -- and processes them through the `FileHandler` to separate, validate, and categorize them by extension.
@@ -263,7 +277,7 @@ settings = MySettings(config_files=[
 
 The config_files parameter supports the `UPath` universal path type, which means configuration files can reside on local filesystems, S3 buckets, GCS, Azure Blob Storage, or any filesystem that `fsspec` supports. This is a significant capability for cloud-native applications that store configuration in object storage.
 
-When multiple files are provided, they are processed according to the source priority chain. A value defined in an earlier-listed YAML file does not necessarily win over a later-listed one -- instead, the priority is determined by the source type (env > dotenv > yaml > toml > json). Within the same source type, files are loaded in the order provided.
+When multiple files are provided, they are processed according to the source priority chain. Priority between files of different types is determined by the source type (env > dotenv > yaml > toml > json). Within the same type, files are grouped without being reordered, and because structured sources deep-merge, a later-listed file overrides the leaf values of an earlier-listed one while keys defined only in earlier files are retained.
 
 #### Diagram: Config Files Processing Flow
 
@@ -275,7 +289,7 @@ Type: workflow
 **Library:** vis-network<br/>
 **Status:** Specified
 
-A directed graph showing how a list of mixed config files flows through the processing pipeline: input list enters FileHandler.separate_config_files(), which dispatches to FileTypeRegistry.identify() for each file, groups them into SettingsFiles(env_files, yaml_files, toml_files, json_files), validates existence, and then assigns each group to the appropriate model_config key or BaseSettings init parameter. Clicking on a file type node shows example file content. Learning objective: Trace how mixed configuration file inputs are categorized and routed to the correct Pydantic settings source (Bloom: Analyze).
+A directed graph showing how a list of mixed config files flows through the processing pipeline: input list enters FileHandler.separate_config_files(), which dispatches to FileTypeRegistry.identify() for each file, groups them into SettingsFiles(env_files, yaml_files, toml_files, json_files), validates existence, and then hands the groups to the settings sources for this invocation: the env files go to the `_env_file` init parameter, and the YAML, TOML and JSON files go through the invocation-local source frame (the class `model_config` is not modified). Clicking on a file type node shows example file content.
 </details>
 
 ## Meta-Field Traceability
@@ -311,16 +325,5 @@ Type: diagram
 **Library:** vis-network<br/>
 **Status:** Specified
 
-A UML-style class diagram showing MountainAshBaseSettings inheriting from BaseSettings. The class box is divided into three sections: meta-fields (SETTINGS_SOURCE_*), constructor parameters, and methods (post_init, get_settings, extract_settings_parameters, init_setting_from_template, format_template_from_settings, update_settings_from_dict, settings_customise_sources, __hash__). Hovering over each method shows its docstring. Clicking on the inheritance arrow shows which methods are inherited vs overridden. Learning objective: Identify the structural components and extension points of MountainAshBaseSettings (Bloom: Understand).
+A UML-style class diagram showing MountainAshBaseSettings inheriting from BaseSettings. The class box is divided into three sections: meta-fields (SETTINGS_SOURCE_*), constructor parameters, and methods (post_init, get_settings, extract_settings_parameters, init_setting_from_template, format_template_from_settings, update_settings_from_dict, settings_customise_sources, __hash__). Hovering over each method shows its docstring. Clicking on the inheritance arrow shows which methods are inherited vs overridden.
 </details>
-
-## Key Takeaways
-
-- **MountainAshBaseSettings** is the framework's central class, extending Pydantic BaseSettings with file loading, templates, secrets, and caching.
-- **Settings Model Config** establishes `validate_assignment=True` and `extra="ignore"` as the behavioral contract for all settings classes.
-- **Post Init Lifecycle** provides a hook after all sources are loaded, enabling template expansion that safely references other fields.
-- **Source Customization** adds YAML, TOML, and JSON sources to the standard BaseSettings source chain.
-- **Validate Assignment Invariant** guarantees type safety on every field mutation, not just at construction.
-- **Object Setattr Bypass** is reserved exclusively for internal meta-fields that should not trigger validation or appear in model dumps.
-- **Settings Source Priority** follows a clear hierarchy: explicit kwargs beat environment variables, which beat file-based config, which beats defaults.
-- **Env Prefix Override** scopes environment variable lookups to prevent collisions between multiple settings classes in shared environments.
