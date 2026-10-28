@@ -32,6 +32,22 @@ class TestResolveReferencesInDict:
             resolve_references_in_dict({"TOKEN": "secret:multiple"}, store)
         assert resolve_references_in_dict({"TOKEN": "secret:multiple.refresh"}, store) == {"TOKEN": "three"}
 
+    def test_missing_field_error_does_not_disclose_record_key_names(self):
+        sentinel_key = "SENTINEL_sibling_key_name"
+        sentinel_value = "SENTINEL-sibling-value"
+        store = MemorySecretStore()
+        store.set("db", {sentinel_key: sentinel_value, "other": "x"})
+        with pytest.raises(KeyError) as excinfo:
+            resolve_references_in_dict({"PASSWORD": "secret:db.password"}, store)
+        exc = excinfo.value
+        for text in (str(exc), repr(exc), repr(exc.args), repr(exc.__dict__)):
+            assert sentinel_key not in text
+            assert sentinel_value not in text
+            assert "Available" not in text
+        # The caller-supplied reference parts remain, so the error is actionable.
+        assert "'password'" in str(exc)
+        assert "'db'" in str(exc)
+
     def test_flat_dict_resolves_prefixed_value(self, resolving_secret_store):
         data = {"PASSWORD": "secret:db.password"}
         result = resolve_references_in_dict(data, resolving_secret_store)

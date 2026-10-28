@@ -864,11 +864,17 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
 
 
     def _build_template_mapping(self, template_str: str) -> Dict[str, Any]:
-        """Build field mapping for template formatting."""
+        """Build field mapping for template formatting.
+
+        Only declared model fields are admitted. Private attributes (such as
+        the raw reconstruction kwargs, which can hold plaintext secrets),
+        methods and dunder attributes are never renderable from a template.
+        """
         mapping = {}
+        declared_fields = type(self).model_fields
         for _, field_name, _, _ in Formatter().parse(template_str):
             if field_name:
-                if hasattr(self, field_name):
+                if field_name in declared_fields:
                     mapping[field_name] = getattr(self, field_name)
                 else:
                     raise AttributeError(f"The object does not have an attribute named '{field_name}'")
