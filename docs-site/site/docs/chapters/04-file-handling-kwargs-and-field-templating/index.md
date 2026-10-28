@@ -204,9 +204,10 @@ The syntax leverages Python's built-in `string.Formatter` class for parsing. The
 ```python
 def _build_template_mapping(self, template_str: str) -> Dict[str, Any]:
     mapping = {}
+    declared_fields = type(self).model_fields
     for _, field_name, _, _ in Formatter().parse(template_str):
         if field_name:
-            if hasattr(self, field_name):
+            if field_name in declared_fields:
                 mapping[field_name] = getattr(self, field_name)
             else:
                 raise AttributeError(
@@ -216,11 +217,11 @@ def _build_template_mapping(self, template_str: str) -> Dict[str, Any]:
     return mapping
 ```
 
-If a template references a field that does not exist on the instance, an `AttributeError` is raised immediately -- templates fail fast rather than producing silently incorrect values.
+Only declared model fields can be referenced: private attributes (such as the raw reconstruction kwargs), methods and dunder attributes are never renderable. If a template references a name that is not a declared field, an `AttributeError` is raised immediately -- templates fail fast rather than producing silently incorrect values.
 
 ## Field Name Placeholder
 
-A **field name placeholder** is a single `{FIELD_NAME}` reference within a template string. The placeholder name must match an attribute name on the settings instance exactly (case-sensitive). Multiple placeholders can appear in a single template, and they can be interspersed with literal text:
+A **field name placeholder** is a single `{FIELD_NAME}` reference within a template string. The placeholder name must match a declared field name on the settings class exactly (case-sensitive). Multiple placeholders can appear in a single template, and they can be interspersed with literal text:
 
 - `"{RUNDATE}"` -- single placeholder, resolves to the field value directly
 - `"{RUNDATE}T{RUNTIME}"` -- two placeholders with a literal `T` separator

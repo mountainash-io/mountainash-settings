@@ -15,7 +15,7 @@ Tests cover:
 
 import pytest
 from typing import Any, List, Optional
-from pydantic import Field
+from pydantic import Field, SecretStr
 
 from mountainash_settings import (
     MountainAshBaseSettings,
@@ -31,6 +31,12 @@ class TemplateSettings(MountainAshBaseSettings):
     ENVIRONMENT: str = Field(default="dev")
     LOG_FILE: str = Field(default="logs/{APP_NAME}_{ENVIRONMENT}.log")
     DATA_PATH: str = Field(default="/data/{APP_NAME}")
+
+
+class SecretTemplateSettings(MountainAshBaseSettings):
+    """Settings class holding a secret in the private raw-kwargs store."""
+    APP_NAME: str = Field(default="myapp")
+    API_KEY: SecretStr = Field(default=SecretStr(""))
 
 
 class CustomPostInitSettings(MountainAshBaseSettings):
@@ -212,6 +218,55 @@ class TestBuildTemplateMapping:
         assert "APP_NAME" in mapping
         assert "ENVIRONMENT" in mapping
         assert len(mapping) == 2
+
+
+class TestTemplateMappingAdmitsOnlyDeclaredFields:
+    """F-2 (W4): templates must not render private/non-field attributes."""
+
+    SENTINEL = "SENTINEL-t0p-s3cret-4f2a"
+
+    @pytest.fixture
+    def settings(self):
+        return SecretTemplateSettings(APP_NAME="x", API_KEY=self.SENTINEL)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "_settings_reconstruction_kwargs",
+            "_settings_secret_store",
+            "__pydantic_private__",
+            "__dict__",
+            "model_config",
+            "model_dump",
+            "__class__",
+        ],
+    )
+    def test_non_field_attributes_are_rejected(self, settings, name):
+        for render in (
+            settings.format_template_from_settings,
+            settings.init_setting_from_template,
+        ):
+            with pytest.raises(AttributeError) as excinfo:
+                render("{" + name + "}")
+            assert self.SENTINEL not in str(excinfo.value)
+            assert self.SENTINEL not in repr(excinfo.value)
+            assert self.SENTINEL not in repr(excinfo.value.__dict__)
+
+    @pytest.mark.unit
+    def test_sentinel_secret_never_leaks_via_template_or_errors(self, settings):
+        assert self.SENTINEL not in repr(settings)
+        assert self.SENTINEL not in str(settings)
+        # A declared SecretStr field renders masked, never the plaintext.
+        assert settings.format_template_from_settings("{API_KEY}") == "**********"
+        with pytest.raises(AttributeError) as excinfo:
+            settings.format_template_from_settings("{_settings_reconstruction_kwargs}")
+        for text in (str(excinfo.value), repr(excinfo.value), repr(excinfo.value.__dict__)):
+            assert self.SENTINEL not in text
+
+    @pytest.mark.unit
+    def test_declared_fields_still_render(self, settings):
+        assert settings.format_template_from_settings("{APP_NAME}-{SETTINGS_CLASS_NAME}") == "x-SecretTemplateSettings"
 
 
 class TestFormatTemplateFromSettings:

@@ -42,7 +42,7 @@ def _resolve_value(ref: str, store: "SecretReader | None") -> str:
     if result is None:
         raise KeyError(f"Secret not found for key: {key!r}")
     if field not in result:
-        raise KeyError(f"Field {field!r} not found in secret {key!r}. Available: {list(result.keys())}")
+        raise KeyError(f"Field {field!r} not found in secret {key!r}")
     return str(result[field])
 
 
