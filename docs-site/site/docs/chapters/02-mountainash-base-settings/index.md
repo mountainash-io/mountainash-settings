@@ -48,19 +48,6 @@ settings = MyAppSettings(
 
 The class also provides a `get_settings()` class method that integrates with the caching layer, and an `extract_settings_parameters()` instance method that returns a fresh, source-form reconstruction handle for trusted code. It is not a general diagnostics export and performs no source or backend reads. When a selected secret store is a `SecretWriter`, `persist()` writes a local record through it, and `persist_key()` derives its default key; see the [secrets chapter](../05-secrets-resolution/index.md).
 
-#### Diagram: MountainAshBaseSettings Construction Pipeline
-
-<iframe src="../../sims/base-settings-pipeline/main.html" width="100%" height="550px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>MountainAshBaseSettings Construction Pipeline</summary>
-Type: workflow
-**sim-id:** base-settings-pipeline<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-A directed graph showing the construction pipeline: input (config_files, settings_parameters, kwargs) flows through `SettingsParameters.create()`, `merge()`, `FileHandler.separate_config_files()`, `validate_config_files_exist()`, private source-form capture, `resolve_references_in_dict()`, `super().__init__()`, value-free metadata publication, `resolve_references_in_model_tree()`, and finally `post_init()`. Each node is clickable to show what happens at that stage. Edges are labeled with the data flowing between stages. 
-</details>
-
 ## Settings Model Config
 
 The `model_config` attribute is declared as a `SettingsConfigDict` with four key settings that establish the behavioral contract for every settings class in the framework:
@@ -212,19 +199,6 @@ The **settings source priority** defines which configuration source wins when th
 
 This ordering reflects a practical philosophy: the closer a value is to the code invoking it, the higher its priority. A developer passing `debug=True` as a kwarg should always win over a YAML file that says `debug: false`. An environment variable set by a deployment tool should override what is checked into version control.
 
-#### Diagram: Source Priority Waterfall
-
-<iframe src="../../sims/source-priority-waterfall/main.html" width="100%" height="500px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Source Priority Waterfall</summary>
-Type: infographic
-**sim-id:** source-priority-waterfall<br/>
-**Library:** p5.js<br/>
-**Status:** Specified
-
-A vertical waterfall diagram showing the 9 priority levels from highest (top) to lowest (bottom). Each level is a colored horizontal bar with the source name. An interactive "value" token can be dragged to any level -- when released, the diagram shows which levels would be checked and which would be skipped based on the priority ordering. A field name dropdown lets the user select different fields to see which sources supply values for that field.
-</details>
-
 <!-- concept:20 -->
 ## Env Prefix Override
 
@@ -279,19 +253,6 @@ The config_files parameter accepts strings and `UPath` objects, and preserves th
 
 When multiple files are provided, they are processed according to the source priority chain. Priority between files of different types is determined by the source type (env > dotenv > yaml > toml > json). Within the same type, files are grouped without being reordered, and because structured sources deep-merge, a later-listed file overrides the leaf values of an earlier-listed one while keys defined only in earlier files are retained.
 
-#### Diagram: Config Files Processing Flow
-
-<iframe src="../../sims/config-files-processing/main.html" width="100%" height="450px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Config Files Processing Flow</summary>
-Type: workflow
-**sim-id:** config-files-processing<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-A directed graph showing how a list of mixed config files flows through the processing pipeline: input list enters FileHandler.separate_config_files(), which dispatches to FileTypeRegistry.identify() for each file, groups them into SettingsFiles(env_files, yaml_files, toml_files, json_files), validates existence, and then hands the groups to the settings sources for this invocation: the env files go to the `_env_file` init parameter, and the YAML, TOML and JSON files go through the invocation-local source frame (the class `model_config` is not modified). Clicking on a file type node shows example file content.
-</details>
-
 ## Meta-Field Traceability
 
 After construction completes, the instance carries value-free source facts that help diagnose configuration setup:
@@ -314,16 +275,3 @@ constructor value tree. Domain fields remain intentional model data: use
 `SecretStr` for Pydantic's normal masking, and do not treat `model_dump()` as
 an arbitrary-secret redactor. Code that deliberately needs reconstruction can
 call `extract_settings_parameters()` in a trusted context.
-
-#### Diagram: MountainAshBaseSettings Class Structure
-
-<iframe src="../../sims/base-settings-class-structure/main.html" width="100%" height="500px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>MountainAshBaseSettings Class Structure</summary>
-Type: diagram
-**sim-id:** base-settings-class-structure<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-A UML-style class diagram showing MountainAshBaseSettings inheriting from BaseSettings. The class box is divided into three sections: meta-fields (SETTINGS_SOURCE_*), constructor parameters, and methods (post_init, get_settings, extract_settings_parameters, init_setting_from_template, format_template_from_settings, update_settings_from_dict, settings_customise_sources, __hash__). Hovering over each method shows its docstring. Clicking on the inheritance arrow shows which methods are inherited vs overridden.
-</details>

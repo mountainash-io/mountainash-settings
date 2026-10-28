@@ -46,19 +46,6 @@ The `kwargs` field carries field inputs only. `get_attribute_settings_kwargs()` 
 
 `config_files` accepts a single `str` or `UPath`, a sequence of either, or `None` (the `ConfigFilesInput` alias; `ConfigPath` is `str | UPath`). Source selection is by explicit parameters such as `env_prefix` and `secrets_dir`, never by underscore keys in `kwargs`.
 
-#### Diagram: SettingsParameters Field Classification
-
-<iframe src="../../sims/settings-params-fields/main.html" width="100%" height="450px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>SettingsParameters Field Classification</summary>
-Type: diagram
-**sim-id:** settings-params-fields<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-A partition diagram showing the six SettingsParameters fields divided into two groups: structural (config_files, settings_class, env_prefix, secrets_dir, secret_store) and runtime (kwargs). Within kwargs, a secondary partition shows accepted field inputs versus rejected controls (underscore-prefixed names, undeclared schema controls, and structural selectors). Clicking on each field shows its type annotation and role. A toggle button switches between "cache identity view" (highlighting structural) and "override view" (highlighting runtime).
-</details>
-
 <!-- concept:24 -->
 <!-- concept:25 -->
 ## Structural Fields
@@ -193,19 +180,6 @@ def merge(cls,
 
 The `prioritise_base` flag inverts the default precedence. Normally, `other` values win over `base` values (last-writer-wins). When `prioritise_base=True`, `base` values win -- useful when a higher-level parameter set should not be overridden by a lower-level one.
 
-#### Diagram: Merge Framework Strategy Router
-
-<iframe src="../../sims/merge-framework-router/main.html" width="100%" height="500px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Merge Framework Strategy Router</summary>
-Type: workflow
-**sim-id:** merge-framework-router<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-A directed graph showing two SettingsParameters inputs flowing into a central "merge()" router node. From the router, arrows lead to strategy nodes: "Ordered File Merge" (for config_files), "Validate Match" (for settings_class), "Scalar Last Wins" (for env_prefix and secrets_dir), "Secret Store Last Non-None" (for secret_store), and "Shallow Dict Merge" (for kwargs). Each strategy node is clickable to show a before/after example. A toggle switches between prioritise_base=False and prioritise_base=True to show how precedence changes.
-</details>
-
 <!-- concept:29 -->
 ## Ordered File List Merge
 
@@ -306,19 +280,6 @@ Each field type has semantics that dictate how it is combined, which determines 
 
 **Kwargs use a shallow dict merge** because keyword arguments are a partial specification. A base layer might define `{host: "localhost", port: 5432}` while an override layer specifies `{port: 5433, debug: True}`. The dict merge preserves `host` from base, applies the `port` override from other, and adds the new `debug` key. Top-level keys are the unit of override.
 
-#### Diagram: Merge Strategy Decision Tree
-
-<iframe src="../../sims/merge-strategy-decision/main.html" width="100%" height="450px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Merge Strategy Decision Tree</summary>
-Type: workflow
-**sim-id:** merge-strategy-decision<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-A decision tree showing how the merge method selects a strategy for each field. The root node asks "Which field?" and branches to five leaf strategies: config_files -> Ordered File Merge, settings_class -> Validate Match, env_prefix/secrets_dir -> Scalar Last Wins (truthiness), secret_store -> Last Non-None, kwargs -> Shallow Dict Merge. Each leaf shows the rationale. A "prioritise_base" toggle at the top flips the precedence direction for applicable strategies. Clicking a leaf shows before/after examples with real values.
-</details>
-
 ## Putting It Together: Structural Contexts and Runtime Materialization
 
 The structural/runtime split, custom hash, create factory, and merge framework
@@ -360,16 +321,3 @@ work.
 | Custom hash/eq | Normalize the five structural selectors |
 | Create/merge | Build a caller's structural and runtime input set |
 | Result ownership | Isolate every returned object graph |
-
-#### Diagram: Caching Flow with Structural/Runtime Split
-
-<iframe src="../../sims/caching-split-flow/main.html" width="100%" height="500px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Caching Flow with Structural/Runtime Split</summary>
-Type: microsim
-**sim-id:** caching-split-flow<br/>
-**Library:** p5.js<br/>
-**Status:** Specified
-
-The planned simulation represents settings requests carrying structural and runtime data. Structural data selects a private source context; each request materializes a separately owned result from the pinned baseline plus its runtime inputs. It must not portray a cached settings instance, a shallow overlay, or a source reload.
-</details>

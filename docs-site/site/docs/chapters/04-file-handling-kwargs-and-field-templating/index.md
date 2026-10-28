@@ -99,19 +99,6 @@ Entries supplied as strings stay normalized strings; entries supplied as `UPath`
 
 After categorization, the `MountainAshBaseSettings` constructor validates that all referenced files exist on disk (or the target filesystem) by calling `validate_config_files_exist()` for each category. This fail-fast behavior catches configuration errors at construction time rather than at the point where a missing value is first accessed.
 
-#### Diagram: File Categorization Pipeline
-
-<iframe src="../../sims/file-categorization-pipeline/main.html" width="100%" height="450px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>File Categorization Pipeline</summary>
-Type: workflow
-**sim-id:** file-categorization-pipeline<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-A directed flow showing mixed file inputs entering a pipeline of stages: normalization and first-seen deduplication, FileTypeRegistry.identify() dispatch, and group_files_by_type() bucketing. Output flows into four colored lanes (env=green, yaml=blue, toml=purple, json=orange). Clicking a file in the input list highlights its path through the pipeline. Dragging new file names into the input area runs them through the pipeline interactively. Shows how a mixed file list is categorized into typed buckets by the FileHandler.
-</details>
-
 <!-- concept:41 -->
 ## UPath Config Paths
 
@@ -260,19 +247,6 @@ def post_init(self, template_settings_parameters=None,
 
 The `Profile` class uses an automated version: it iterates over all `ParameterSpec` entries that declare a `template` attribute and calls `init_setting_from_template()` for each one, applying templates only when the field was not explicitly supplied to that call (see [Template Priority Rules](#template-priority-rules) below for the exact, origin-aware eligibility rule). Fields it derives are recorded in the private `_profile_derived_field_names` set so that a later `reinitialise=True` pass knows which fields it may recompute.
 
-#### Diagram: Template Expansion Timeline
-
-<iframe src="../../sims/template-expansion-timeline/main.html" width="100%" height="450px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Template Expansion Timeline</summary>
-Type: microsim
-**sim-id:** template-expansion-timeline<br/>
-**Library:** vis-timeline<br/>
-**Status:** Specified
-
-A horizontal timeline showing the construction lifecycle with seven labeled stages. Template-related events are highlighted: placeholder fields receive their values from config sources at stage 4, template expansion occurs at stage 7 (post_init). Users can click each stage to see the state of a sample settings instance at that point -- showing which fields have values and which are still placeholders. A "Step Through" button advances through the stages one at a time. Shows the state of field values at each stage of the construction lifecycle.
-</details>
-
 <!-- concept:42 -->
 ## Template Priority Rules
 
@@ -337,16 +311,3 @@ class PipelineSettings(MountainAshBaseSettings):
 ```
 
 The ordering within `post_init()` is the responsibility of the subclass author. Templates must be resolved in dependency order -- a field that references another template-derived field must come after that field's resolution. Resolution is a single ordered pass using ordinary `str.format()`: there is no recursive expansion and no cycle detection. A template that references a field not yet resolved reads that field's current value at that moment. In a mutually referencing pair, `A = "a-{B}"` resolved before `B = "b-{A}"` yields `A == "a-None"` and `B == "b-a-None"`, not an error, so dependency order matters.
-
-#### Diagram: Nested Template Resolution Graph
-
-<iframe src="../../sims/nested-template-graph/main.html" width="100%" height="450px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Nested Template Resolution Graph</summary>
-Type: graph-model
-**sim-id:** nested-template-graph<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-A directed acyclic graph showing fields as nodes and template references as edges. Source fields (RUNDATE, RUNTIME) are at the top, first-level derived fields (RUNDATETIME) in the middle, and second-level derived fields (OUTPUT_DIR) at the bottom. Clicking a node shows its template string and current resolved value. Hovering over an edge shows which placeholder in the template references which field. A "Resolve" button animates the resolution in topological order. A "Change RUNDATE" slider lets users modify the source value and see how all derived fields update. Shows how template dependency chains resolve in declaration order.
-</details>

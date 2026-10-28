@@ -185,19 +185,6 @@ DEBUG=true
 API_KEY=sk-abc123
 ```
 
-#### Diagram: Configuration Format Comparison
-
-<iframe src="../../sims/config-format-comparison/main.html" width="100%" height="500px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Configuration Format Comparison</summary>
-Type: chart
-**sim-id:** config-format-comparison<br/>
-**Library:** Chart.js<br/>
-**Status:** Specified
-
-A radar chart comparing the four configuration formats across five dimensions: human readability, nesting support, type safety, ecosystem adoption, and comment support. Each format is a colored polygon on the radar. Hovering over a vertex shows the specific score and a brief explanation. Clicking a format name in the legend toggles its visibility. 
-</details>
-
 <!-- concept:9 -->
 ## Environment Variables
 
@@ -289,19 +276,6 @@ mountainash-settings uses `SecretStr` in two key contexts. First, the secrets re
 
 `SecretStr` masks the value in `print`, `repr` and `model_dump()` output for the fields declared with that type. It is not general redaction: a `secret:` reference can resolve into a field declared as plain `str`, and that field is not masked, and `model_dump()` does not redact arbitrary sensitive values. Declare credential fields as `SecretStr` and see the secrets resolution chapter for the resolution rules.
 
-#### Diagram: SecretStr Lifecycle
-
-<iframe src="../../sims/secretstr-lifecycle/main.html" width="100%" height="400px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>SecretStr Lifecycle</summary>
-Type: workflow
-**sim-id:** secretstr-lifecycle<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-A linear workflow showing the lifecycle of a secret value: raw string input enters Pydantic, is wrapped as SecretStr during validation, is masked in print/dump operations, and is explicitly unwrapped via get_secret_value() at the consumption boundary. Each node is clickable to show the string representation at that stage. A toggle button switches between "safe" view (masked) and "debug" view (showing actual values). 
-</details>
-
 ## Bringing It All Together
 
 The framework extends `BaseSettings` (not `BaseModel`) to inherit environment variable loading, adds file handler classes that leverage the file formats, uses `model_config` to enforce `validate_assignment=True` across all settings, wires field validators through `ParameterSpec`, uses a decorator for profile registration, and protects declared secret fields with `SecretStr`.
@@ -319,16 +293,3 @@ The following table maps each foundation concept to where it appears in the moun
 | Python Decorators | Registry decorator for profile registration |
 | Discriminated Unions | Pydantic feature available to your own models; not used by the package |
 | SecretStr Type | Secrets resolution, ParameterSpec.secret flag |
-
-#### Diagram: Foundation Concept Dependency Map
-
-<iframe src="../../sims/foundation-dependency-map/main.html" width="100%" height="550px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Foundation Concept Dependency Map</summary>
-Type: graph-model
-**sim-id:** foundation-dependency-map<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-An interactive directed graph showing the foundation concepts as nodes, with edges indicating dependencies (e.g., BaseSettings depends on BaseModel; SecretStr depends on BaseModel). Nodes are colored by theme: blue for Pydantic primitives, green for file formats, orange for Python features. Clicking a node highlights its dependents (downstream concepts) and prerequisites (upstream concepts). Dragging nodes rearranges the layout.
-</details>

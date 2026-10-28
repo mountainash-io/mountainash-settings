@@ -70,18 +70,6 @@ References can appear in any value position -- top-level fields, nested dictiona
 
 <!-- concept:46 -->
 <!-- concept:47 -->
-#### Diagram: Secret Reference Resolution Flow
-
-<iframe src="../../sims/secret-reference-flow/main.html" width="100%" height="500px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Secret Reference Resolution Flow</summary>
-Type: workflow
-**sim-id:** secret-reference-flow<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-A directed graph showing how a secret reference string flows through the resolution pipeline: the string "secret:db.prod.pw" enters, the prefix "secret:" is stripped, the remainder splits at the last dot into record key "db.prod" and field "pw", the registered record store returns the record, the field is selected, and the resolved value replaces the reference in the data structure.
-</details>
 
 ## Two Pass Resolution
 
@@ -165,19 +153,6 @@ def resolve_references_in_model_tree(
 
 Every top-level field except the meta-fields (`SETTINGS_SOURCE_*`, `SETTINGS_CLASS`, `SETTINGS_CLASS_NAME`) is passed through the same recursive engine used by `resolve_references_in_dict()`, so strings, `SecretStr` values, nested models and containers all follow one set of rules. If a field changed, the new value is assigned with `setattr`.
 
-#### Diagram: Two-Pass Resolution Pipeline
-
-<iframe src="../../sims/two-pass-resolution/main.html" width="100%" height="550px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Two-Pass Resolution Pipeline</summary>
-Type: microsim
-**sim-id:** two-pass-resolution<br/>
-**Library:** p5.js<br/>
-**Status:** Specified
-
-An animated simulation of the two-pass pipeline. The left panel shows a settings class with five fields, each populated from a different source (kwarg, env var, YAML, .env, default). Values containing "secret:" prefix are highlighted in red. Pass 1 animates: kwargs references resolve (turn green). Then BaseSettings.__init__ runs (remaining fields populate). Pass 2 animates: model tree references resolve (turn green). Users can toggle which fields contain secret references and see how the two passes handle each case. A counter shows total resolver calls per pass.
-</details>
-
 <!-- concept:111 -->
 ## Local Record Stores
 
@@ -260,16 +235,3 @@ This rebuild pattern ensures that even deeply nested, frozen model configuration
 
 !!! note "Performance consideration"
     The rebuild reconstructs the entire nested model even if only one field within it contains a reference. For deeply nested models with many fields, this has a measurable cost. However, it runs only during construction, and only when references are actually present.
-
-#### Diagram: Frozen Model Rebuild Process
-
-<iframe src="../../sims/frozen-model-rebuild/main.html" width="100%" height="450px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Frozen Model Rebuild Process</summary>
-Type: workflow
-**sim-id:** frozen-model-rebuild<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-A step-by-step workflow showing the rebuild process for a nested frozen model: (1) detect BaseModel field, (2) inspect each field recursively (unwrapping SecretStr), (3) check whether any reference resolved, (4) collect the resolved field values, (5) validate a new model instance from them, (6) assign the new instance to the parent field. Clicking each step shows the data at that stage. A toggle allows users to switch between a model with references (full rebuild path) and one without (early exit at step 3, original object kept).
-</details>
