@@ -22,7 +22,7 @@ Before construction reaches Pydantic's `BaseSettings.__init__`, `MountainAshBase
 <!-- concept:14 -->
 ## MountainAshBaseSettings Class
 
-The class declares `SETTINGS_SOURCE_` meta-fields that record value-free provenance such as files, environment prefix, provider, and accepted input names. These fields support diagnostics without publishing a second tree of constructor values.
+The class declares `SETTINGS_SOURCE_` meta-fields that record value-free provenance such as files, environment prefix, secrets directory, and accepted input names. These fields support diagnostics without publishing a second tree of constructor values.
 
 The constructor signature accepts three positional-style parameters beyond the standard `**kwargs`:
 
@@ -46,7 +46,7 @@ settings = MyAppSettings(
 )
 ```
 
-The class also provides a `get_settings()` class method that integrates with the caching layer, and an `extract_settings_parameters()` instance method that returns a fresh, source-form reconstruction handle for trusted code. It is not a general diagnostics export and performs no source or backend reads. When a selected secret store is a `SecretWriter`, `persist()` and `persist_key()` write a local record through it; see the [secrets chapter](../05-secrets-resolution/index.md).
+The class also provides a `get_settings()` class method that integrates with the caching layer, and an `extract_settings_parameters()` instance method that returns a fresh, source-form reconstruction handle for trusted code. It is not a general diagnostics export and performs no source or backend reads. When a selected secret store is a `SecretWriter`, `persist()` writes a local record through it, and `persist_key()` derives its default key; see the [secrets chapter](../05-secrets-resolution/index.md).
 
 #### Diagram: MountainAshBaseSettings Construction Pipeline
 
@@ -267,15 +267,15 @@ settings = MySettings(config_files=[
     ".env"
 ])
 
-# Using UPath for cloud-compatible paths
+# UPath objects are accepted alongside strings
 from upath import UPath
 settings = MySettings(config_files=[
-    UPath("s3://my-bucket/config.yaml"),
+    UPath("./config/base.yaml"),
     UPath("./local.env")
 ])
 ```
 
-The config_files parameter supports the `UPath` universal path type, which means configuration files can reside on local filesystems, S3 buckets, GCS, Azure Blob Storage, or any filesystem that `fsspec` supports. This is a significant capability for cloud-native applications that store configuration in object storage.
+The config_files parameter accepts strings and `UPath` objects, and preserves the form it was given (see [UPath Config Paths](../04-file-handling-kwargs-and-field-templating/index.md#upath-config-paths)). Path normalisation calls `expanduser()`, so it is documented for local paths only.
 
 When multiple files are provided, they are processed according to the source priority chain. Priority between files of different types is determined by the source type (env > dotenv > yaml > toml > json). Within the same type, files are grouped without being reordered, and because structured sources deep-merge, a later-listed file overrides the leaf values of an earlier-listed one while keys defined only in earlier files are retained.
 

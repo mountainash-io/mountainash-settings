@@ -8,7 +8,7 @@ version: 0.08
 
 # Pydantic and Configuration Foundations
 
-mountainash-settings is a typed, multi-source configuration layer built on Pydantic. This page describes the Pydantic and file-format building blocks it depends on: `BaseModel` and `BaseSettings`, field validators, model configuration, the supported configuration file formats (YAML, TOML, JSON, .env), environment variables, Python decorators, discriminated unions, and the `SecretStr` type.
+mountainash-settings is a typed, multi-source configuration layer built on Pydantic. It depends on these building blocks: `BaseModel` and `BaseSettings`, field validators, model configuration, the supported configuration file formats (YAML, TOML, JSON, .env), environment variables, Python decorators, discriminated unions, and the `SecretStr` type.
 
 ---
 
@@ -176,7 +176,7 @@ JSON (JavaScript Object Notation) is the lingua franca of data interchange. Whil
 
 ### Env File Format
 
-The `.env` format is a simple key-value format where each line contains a variable assignment. It originated in the twelve-factor app methodology and is widely used with Docker, CI/CD systems, and local development tools. Unlike the hierarchical formats above, `.env` files are flat. Pydantic BaseSettings can express nesting with a delimiter convention (like double underscores), but mountainash-settings direct construction disables nested-delimiter parsing (see Environment Variables below).
+The `.env` format is a simple key-value format where each line contains a variable assignment. It originated in the twelve-factor app methodology and is widely used with Docker, CI/CD systems, and local development tools. Unlike the hierarchical formats above, `.env` files are flat. Pydantic BaseSettings can express nesting with a delimiter convention (like double underscores), but MountainAshBaseSettings sets no `env_nested_delimiter`, so nested-delimiter parsing is off by default (see Environment Variables below).
 
 ```
 # .env
@@ -210,7 +210,7 @@ Environment variables have two notable limitations that the file-based formats a
 - They are flat key-value pairs with no native nesting
 - All values are strings, requiring the consumer to handle type conversion
 
-Pydantic's type coercion converts string values to their declared Python types. Pydantic BaseSettings can also split nested model values on a configurable delimiter (e.g. `__`), but mountainash-settings direct construction passes `_env_nested_delimiter=None`, so nested-delimiter parsing is disabled there; supply nested structure through the YAML, TOML or JSON file sources instead.
+Pydantic's type coercion converts string values to their declared Python types. Pydantic BaseSettings can also split nested model values on a configurable delimiter (e.g. `__`), but MountainAshBaseSettings sets no `env_nested_delimiter`, so nested-delimiter parsing is off by default. Setting `env_nested_delimiter` in the class `model_config` enables it for both direct construction and cached retrieval.
 
 <!-- concept:10 -->
 ## Python Decorators
@@ -310,7 +310,7 @@ The following table maps each foundation concept to where it appears in the moun
 
 | Foundation Concept | Framework Usage |
 |-------------------|-----------------|
-| Pydantic BaseModel | Base class for SettingsParameters, ProfileSpec, ParameterSpec |
+| Pydantic BaseModel | Base of `MountainAshBaseSettings` (via `BaseSettings`) and of nested settings models. `SettingsParameters`, `ProfileSpec` and `ParameterSpec` are frozen dataclasses, not models. |
 | Pydantic BaseSettings | Parent of MountainAshBaseSettings |
 | Field Validators | Wired via ParameterSpec.validator in dynamic field installation |
 | Model Config | Declared on MountainAshBaseSettings with validate_assignment=True |

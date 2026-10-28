@@ -11,7 +11,7 @@ description: 'Documentation for mountainash-settings — typed configuration for
 for supported names, target adapters and MountainAsh-only cached retrieval. The chapters in this documentation
 describe the 0.1 source; the migration guide lists what changed from 0.x.
 
-Define fully-typed application settings with Pydantic, load configuration from YAML, TOML, JSON, or .env files, and retrieve a cached instance with a single call.
+Define fully-typed application settings with Pydantic, load configuration from YAML, TOML, JSON, or .env files, and retrieve a validated instance with a single call, reusing captured source inputs.
 
 ## About This Documentation
 

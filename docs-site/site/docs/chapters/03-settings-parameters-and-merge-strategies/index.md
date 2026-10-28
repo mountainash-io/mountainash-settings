@@ -122,7 +122,7 @@ def __hash__(self):
     return hash(hashable_attrs)
 ```
 
-The `__eq__` method mirrors this logic exactly -- two `SettingsParameters` are equal if and only if their structural fields match. This contract enables the `lru_cache` decorator (which uses `__hash__` for lookup and `__eq__` for collision resolution) to correctly identify cache hits even when kwargs differ.
+The `__eq__` method mirrors this logic exactly -- two `SettingsParameters` are equal if and only if their structural fields match. The same structural selectors also form the `SettingsManager`'s private context key (`_StructuralKey`), so requests that differ only in kwargs select the same captured source context.
 
 The `config_files` field requires special handling because lists are not hashable. The implementation converts them to a tuple via `SettingsFileHandler.format_config_file_tuple()` before hashing. That normalisation expands `~`, removes duplicates and keeps first-seen order; it does not sort. File order is therefore part of the structural key: later files take precedence over earlier ones for structured sources, so `["a.yaml", "b.yaml"]` and `["b.yaml", "a.yaml"]` are different requests with different precedence. They compare unequal and select different source contexts:
 
@@ -347,10 +347,11 @@ as another reference.
 
 `reinitialise` is a keyword-only cached-retrieval control, not structural
 identity, source reload, or refresh. Profile origin-aware eligibility and
-validated template derivation (MAS-SEC-005) and invocation-local
-direct-constructor source framing (MAS-SEC-004) are both delivered; common
-error handling (MAS-SEC-006) and context/provider lifecycle refresh remain
-separate, later work.
+validated template derivation (MAS-SEC-005), invocation-local
+direct-constructor source framing (MAS-SEC-004), and common error
+handling (MAS-SEC-006), which sanitises validation errors on fields resolved from a reference, are
+all delivered; context/provider lifecycle refresh remains separate, later
+work.
 
 | Component | Role in Cached Retrieval |
 |-----------|--------------------------|
@@ -370,5 +371,5 @@ Type: microsim
 **Library:** p5.js<br/>
 **Status:** Specified
 
-The planned simulation represents settings requests carrying structural and runtime data. Structural data selects a private source context; each request materializes a separately owned result from the pinned baseline plus its runtime inputs. It must not portray a cached settings instance, a shallow overlay, or a source reload. The textbook simulation has not been regenerated here: the documented textbook-refresh tooling remains unavailable.
+The planned simulation represents settings requests carrying structural and runtime data. Structural data selects a private source context; each request materializes a separately owned result from the pinned baseline plus its runtime inputs. It must not portray a cached settings instance, a shallow overlay, or a source reload.
 </details>

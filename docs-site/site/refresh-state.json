@@ -12,42 +12,42 @@
   },
   "chapter_state": {
     "01-pydantic-and-configuration-foundations": {
-      "content_hash": "sha256:90b7fa1b91acaf38da7c9693e5ce8066b9f8de0a49d0abcf526f83668a2bcccc",
-      "word_count": 2290,
+      "content_hash": "sha256:fe77d5c78956da3034167c708bb3cdf6479450c58bc24a75f83cccd45c33ded6",
+      "word_count": 2305,
       "has_concept_markers": true,
       "last_generated": "2026-10-28",
       "generator_version": "textbook-refresh@d31fb89a"
     },
     "02-mountainash-base-settings": {
-      "content_hash": "sha256:12f7af05200ae62fbfd101f748266d3263e0d3ee448bc1eab921324c158f088c",
-      "word_count": 2426,
+      "content_hash": "sha256:ac1e3487037197b4130da01848e43a51710f4d5f6d3a605bdb60387098a96cd8",
+      "word_count": 2418,
       "has_concept_markers": true,
       "last_generated": "2026-10-28",
       "generator_version": "textbook-refresh@d31fb89a"
     },
     "03-settings-parameters-and-merge-strategies": {
-      "content_hash": "sha256:e10509efa6a265c2a5667a6aaa4a8ef4de52a0e29205ebd9efca85da80b25cf9",
-      "word_count": 2460,
+      "content_hash": "sha256:1e253090ae813de7d04f42112acfc06bf347188202f151df37f2fe47cb22d2bc",
+      "word_count": 2455,
       "has_concept_markers": true,
       "last_generated": "2026-10-28",
       "generator_version": "textbook-refresh@d31fb89a"
     },
     "04-file-handling-kwargs-and-field-templating": {
-      "content_hash": "sha256:7df1ba5adca511556b532384d38cdf0555ff27c7719bc756a385f86ad56f1fb6",
+      "content_hash": "sha256:7496586cc0ae1430f003d78687b43fa6398eaff2aced8077199785c6ed0794d9",
       "word_count": 2814,
       "has_concept_markers": true,
       "last_generated": "2026-10-28",
       "generator_version": "textbook-refresh@d31fb89a"
     },
     "05-secrets-resolution": {
-      "content_hash": "sha256:fed7584cd28e5dd228c058de8232c2fdaad2ccd3215c9b3748cc7341c5dac42f",
-      "word_count": 2341,
+      "content_hash": "sha256:07fd08ee498145edccc99ab5dcff6bc2a3d27f4e42ec76902933fe8087b24345",
+      "word_count": 2343,
       "has_concept_markers": true,
       "last_generated": "2026-10-28",
       "generator_version": "textbook-refresh@d31fb89a"
     },
     "06-connection-profiles": {
-      "content_hash": "sha256:12a16938f656e2e916fa8c949777a936c87a4ab0eb46e3d6b6ffda51150b05c8",
+      "content_hash": "sha256:c8032d046f6a6f7486dcba39eedcacf1fa1afdb5acf8c05fb3be5dc3917819a9",
       "word_count": 3005,
       "has_concept_markers": true,
       "last_generated": "2026-10-28",
@@ -61,15 +61,15 @@
       "generator_version": "textbook-refresh@d31fb89a"
     },
     "08-authentication-system": {
-      "content_hash": "sha256:55717a642fd7e9f7a3a07b1d75ff36a9c8c09b8e380c681d11627ebbcb1a54e4",
-      "word_count": 614,
+      "content_hash": "sha256:a531a784d01d69986b75cf6b7a67b466f64e48a4cd0cc0914e940177382fc73a",
+      "word_count": 624,
       "has_concept_markers": true,
       "last_generated": "2026-10-28",
       "generator_version": "textbook-refresh@d31fb89a"
     },
     "09-caching-settings-management-and-app-settings": {
-      "content_hash": "sha256:f53cf5d46ec8cbcd9f00491a56f40443ee818a459121214aaea472d2cdfa4523",
-      "word_count": 1548,
+      "content_hash": "sha256:41f28db6a872e3a29142a88331b4a85858c528b4bd59623356a9797c85a2b79c",
+      "word_count": 1524,
       "has_concept_markers": true,
       "last_generated": "2026-10-28",
       "generator_version": "textbook-refresh@d31fb89a"
@@ -83,7 +83,7 @@
   },
   "faq_state": {
     "question_count": 50,
-    "content_hash": "sha256:60a4754f5c44fa6e3e5e845b2fd0f5baf45050a7cdbe806d30fa2e724b342685"
+    "content_hash": "sha256:f6e1cafd01c7a22a8741f718177bcf950f86825b0ef757ccabda7aa00147eb42"
   },
   "refresh_history": [
     {

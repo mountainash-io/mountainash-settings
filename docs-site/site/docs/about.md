@@ -9,7 +9,7 @@ description: 'About the Mountainash Settings manual — scope, authorship, licen
 
 **Mountainash Settings** is a practitioner manual for `mountainash-settings`, a typed configuration framework for Python applications built on Pydantic v2. It is a companion to the library's API reference, not a replacement for it: where the reference states what a class or function does, this manual explains why it exists, how its pieces fit together, and what happens under the hood when settings are loaded, merged, and resolved.
 
-The manual is organized into [9 chapters](chapters/index.md), from Pydantic and configuration-file foundations to caching, settings management, and the `AppSettings` convenience class. It covers the merge framework that reconciles configuration from multiple sources, the field-templating syntax used to derive values like connection strings and log paths, the two-pass secrets resolution pipeline that resolves `secret:path/to/value` references from a bound `secret_store`, the connection profile system (`ProfileSpec` or native `ProfileField` declarations with target-aware `emit()`), and the authentication boundary (authentication itself lives in `mountainash-auth-client`). For audience and scope, see the [Package Overview](course-description.md).
+The manual is organized into [9 chapters](chapters/index.md), from Pydantic and configuration-file foundations to caching, settings management, and the `AppSettings` convenience class. It covers the merge framework that reconciles configuration from multiple sources, the field-templating syntax used to derive values like connection strings and log paths, the two-pass secrets resolution pipeline that resolves `secret:record.field` references from a bound `secret_store`, the connection profile system (`ProfileSpec` or native `ProfileField` declarations with target-aware `emit()`), and the authentication boundary (authentication itself lives in `mountainash-auth-client`). For audience and scope, see the [Package Overview](course-description.md).
 
 ## What This Manual Is Not
 
@@ -21,7 +21,7 @@ This manual and the `mountainash-settings` library are written and maintained by
 
 ## Relationship to the Code Repository
 
-`mountainash-settings` is developed in the open at [github.com/mountainash-io/mountainash-settings](https://github.com/mountainash-io/mountainash-settings). Every page in this manual carries an edit link back to its source file in that repository's `docs/` directory, so corrections can be proposed as pull requests directly against the page you are reading.
+`mountainash-settings` is developed in the open at [github.com/mountainash-io/mountainash-settings](https://github.com/mountainash-io/mountainash-settings). Every page in this manual carries an edit link back to its source file under `docs-site/site/docs/` in that repository, so corrections can be proposed as pull requests directly against the page you are reading.
 
 The library is part of the broader [mountainash](https://github.com/mountainash-io/mountainash) project, a collection of typed Python libraries for data engineering and platform development. Within that ecosystem, `mountainash-settings` is the configuration layer: other mountainash packages depend on it for settings management, connection-profile configuration, and secrets resolution, rather than each reimplementing those concerns independently.
 

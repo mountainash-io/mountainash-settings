@@ -71,7 +71,7 @@ Calling `svc.emit()` here raises `ValueError: Service is target-scoped; call emi
 
 ## Migrating From 0.x
 
-Code written against 0.x that imports any of the following will fail to import on 0.1; look for these names and move to `mountainash-auth-client`:
+Code written against 0.x that uses any of the following fails on 0.1 (`ImportError` for the module names, `TypeError` for `ProfileSpec(auth_modes=...)`, `AttributeError` for the removed methods); look for these names and move to `mountainash-auth-client`:
 
 - `auth_modes` on `ProfileSpec`, and the generated `auth` discriminated-union field
 - `auth_to_driver_kwargs()` and `Profile._auth_kwargs()`

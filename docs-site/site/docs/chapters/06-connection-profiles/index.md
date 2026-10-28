@@ -99,7 +99,7 @@ class ParameterSpec:
     tier: Literal["core", "advanced"]
     default: Any = MISSING
     description: str = ""
-    driver_key: str | None = None
+    driver_key: str | dict[Hashable, str] | None = field(default=None, hash=False)  # excluded from the hash so dict-scoped specs stay hashable
     secret: bool = False
     transform: Callable[[Any], Any] | None = None
     validator: Callable[[Any], Any] | None = None

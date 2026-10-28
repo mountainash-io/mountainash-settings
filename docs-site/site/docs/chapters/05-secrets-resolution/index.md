@@ -93,7 +93,9 @@ The **two-pass resolution** pipeline is the core architectural pattern of the se
 The two-pass design is necessary because configuration values arrive through different channels. Kwargs are available before construction as a plain dictionary, so they can be resolved early. But values loaded from config files and environment variables are not available until after `BaseSettings.__init__` populates the model fields -- so those must be resolved in a second pass over the live model tree.
 
 ```python
-# Inside MountainAshBaseSettings.__init__:
+# Inside MountainAshBaseSettings.__init__ (equivalent to; the implementation calls
+# _resolve_dict_with_changed_fields, which also returns the changed field names
+# used for error sanitisation):
 
 # Pass 1: resolve secret references in kwargs
 valid_attribute_kwargs = resolve_references_in_dict(valid_attribute_kwargs, local_settings_params.secret_store)
@@ -129,7 +131,7 @@ The pass calls `resolve_references_in_model_tree()`, which handles four kinds of
 - **Nested BaseModel instances** -- each field is inspected recursively, and the model is rebuilt only if a reference was resolved inside it
 - **dict, list and tuple containers** -- traversed recursively; only containers that hold a changed value are rebuilt (a tuple stays a tuple), unchanged containers are returned as the same object
 
-A resolved top-level field is then assigned back to the instance with `setattr`, so `validate_assignment=True` revalidates it. If resolution or revalidation fails for a field that carried a reference, the raised `ValueError` names the model and field but never the resolved value.
+A resolved top-level field is then assigned back to the instance with `setattr`, so `validate_assignment=True` revalidates it. If revalidation of a resolved value fails for a field that carried a reference, the raised `ValueError` names the model and field but never the resolved value.
 
 The model tree pass deliberately skips meta-fields (those starting with `SETTINGS_SOURCE_` and the `SETTINGS_CLASS` / `SETTINGS_CLASS_NAME` fields). These contain infrastructure data, not configuration values, and should never be treated as secret references.
 

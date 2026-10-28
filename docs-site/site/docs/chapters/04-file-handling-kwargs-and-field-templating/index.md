@@ -77,7 +77,7 @@ The `identify()` method handles two distinct cases. For regular files with exten
 <!-- concept:34 -->
 ## File Categorization
 
-**File categorization** is the process of sorting a mixed list of configuration files into their respective type buckets. The `separate_config_files()` method orchestrates this in four steps:
+**File categorization** is the process of sorting a mixed list of configuration files into their respective type buckets. The `separate_config_files()` method orchestrates this in three steps:
 
 1. Normalize each input (expanding `~` home directory references) and deduplicate on the normalized path, keeping the first occurrence and its position
 2. Group the remaining files by type using `group_files_by_type()`

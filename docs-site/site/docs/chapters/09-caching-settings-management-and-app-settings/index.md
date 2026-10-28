@@ -88,7 +88,7 @@ Type: diagram
 **Library:** vis-network<br/>
 **Status:** Specified
 
-The planned diagram represents public and direct-manager entry points selecting one structural context, ordered source capture, and fresh owned materialization for every caller. It must not portray `_get_settings`, an instance LRU, a raw manager dictionary, or a shallow overlay. The textbook-refresh tooling remains unavailable, so the specified simulation has not been regenerated.
+The planned diagram represents public and direct-manager entry points selecting one structural context, ordered source capture, and fresh owned materialization for every caller. It must not portray `_get_settings`, an instance LRU, a raw manager dictionary, or a shallow overlay.
 </details>
 
 ## Structural Context Identity
@@ -132,8 +132,8 @@ lifecycle rotation mechanism. Profile origin-aware eligibility and validated
 template derivation are delivered (MAS-SEC-005; see the [Field Templating
 chapter](../04-file-handling-kwargs-and-field-templating/index.md#template-priority-rules)).
 Invocation-local direct-constructor source framing is delivered
-(MAS-SEC-004). Shared secret-validation errors remain MAS-SEC-006, and
-provider/context refresh remains separate lifecycle work.
+(MAS-SEC-004), and shared secret-validation error sanitisation is delivered
+(MAS-SEC-006). Provider/context refresh remains separate lifecycle work.
 
 `extract_settings_parameters()` on a live instance is controlled reconstruction. It returns a `SettingsParameters` carrying the structural selectors (including the bound `secret_store`) and a fresh, independently owned copy of the accepted constructor and update inputs in source form; a `secret:` reference stays a reference. It does not reread files, environment variables, or secret backends, and it raises `TypeError` when the source inputs have no faithful independently owned reconstruction.
 
@@ -287,7 +287,7 @@ Type: diagram
 **Library:** vis-network<br/>
 **Status:** Specified
 
-The planned hierarchy diagram may show cached retrieval attached to `get_settings()`, but it must show a structural context and fresh result materialization rather than a returned cached instance or shallow overlay. The textbook-refresh tooling remains unavailable, so this specified simulation has not been regenerated.
+The planned hierarchy diagram may show cached retrieval attached to `get_settings()`, but it must show a structural context and fresh result materialization rather than a returned cached instance or shallow overlay.
 </details>
 
 ## The Complete Caching Picture
