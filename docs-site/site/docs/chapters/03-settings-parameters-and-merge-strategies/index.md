@@ -1,6 +1,6 @@
 ---
 title: Settings Parameters and Merge Strategies
-description: The SettingsParameters dataclass covering structural/runtime field separation, custom hash semantics for caching, the create factory, and the three merge strategies.
+description: The SettingsParameters dataclass covering structural/runtime field separation, custom hash semantics for caching, the create factory, and the per-field merge strategies.
 generated_by: claude skill chapter-content-generator
 date: 2026-06-03
 version: 0.08
@@ -8,9 +8,7 @@ version: 0.08
 
 # Settings Parameters and Merge Strategies
 
-## Summary
-
-This chapter introduces the SettingsParameters class that controls how settings instances are constructed and cached. You will learn about the structural/runtime field split, custom hash and equality semantics for cache key generation, the parameter create factory, and the merge framework with its three strategies: file list union, scalar last-wins, and dict deep-merge.
+`SettingsParameters` is the frozen dataclass that describes a settings request and keys the settings cache. It splits its fields into structural selectors, which define a private source context, and runtime `kwargs`, which stay invocation-local. It overrides hash and equality to cover only the structural fields, provides a `create()` factory that normalises caller input, and provides `merge()`, which combines two parameter sets with a per-field strategy: ordered file-list merge, last-wins scalars, a settings-class match check, and a shallow `kwargs` merge.
 
 ---
 
@@ -29,22 +27,24 @@ The `SettingsParameters` class is a frozen dataclass (immutable after constructi
 ```python
 @dataclass(frozen=True)
 class SettingsParameters:
-    config_files:     Optional[List[str|UPath]|Tuple[str|UPath]] = None
-    settings_class:   Optional[Type[BaseSettings]] = None
-    env_prefix:       Optional[str] = None
-    secrets_dir:      Optional[str] = None
-    kwargs:           Optional[Dict[str, Any]] = None
-    secret_store:     Optional["SecretReader"] = None
+    config_files:   ConfigFilesInput = None   # str | UPath | Sequence[str | UPath] | None
+    settings_class: type[MountainAshBaseSettings] | None = None
+    env_prefix:     Optional[str] = None
+    secrets_dir:    Optional[str] = None
+    kwargs:         Optional[Dict[str, Any]] = field(default=None, repr=False)
+    secret_store:   Optional["SecretReader"] = field(default=None, repr=False, compare=False, hash=False)
 ```
 
 The frozen nature is significant. Because instances are immutable, they can safely be used as dictionary keys and cache lookup parameters. The `@dataclass(frozen=True)` decorator generates `__hash__` and `__eq__` methods by default, but `SettingsParameters` overrides both to implement its custom caching strategy. Its `kwargs` field is omitted from the generated representation, so ordinary diagnostics do not print runtime values; explicit access and serialization remain intentional, trusted operations.
 
-The class also declares two reserved kwarg lists that it uses to separate Pydantic-internal parameters from user-facing attribute kwargs:
+The `kwargs` field carries field inputs only. `get_attribute_settings_kwargs()` keeps the keys that name a field of the settings class (or a validation alias path of a field) and drops the rest. It rejects, with a value-free `ValueError`, two kinds of control before any source opens:
 
-- `_reserved_pydantic_kwargs` -- parameters like `_env_prefix`, `_env_file`, `_secrets_dir` that Pydantic BaseSettings accepts in its `__init__`
-- `_reserved_pydantic_modelconfig_kwargs` -- parameters like `extra`, `arbitrary_types_allowed` that modify the model config at construction time
+- Every underscore-prefixed name (`_env_prefix`, `_env_file`, `_secrets_dir`, and any other name pydantic-settings accepts with a leading underscore). The rule is the leading underscore, not an enumerated list.
+- The schema-control names `extra`, `arbitrary_types_allowed` and `validate_default`, unless the settings class declares a field of that name. Model configuration belongs on the class's `model_config`, not in a request.
 
-This separation ensures that when a caller passes `_env_ignore_empty=True` alongside `database_host="localhost"`, the framework routes each parameter to its correct destination.
+`get_cache_runtime_kwargs()` applies the same rejection for cached retrieval, and additionally rejects the structural selectors and `reinitialise` when they appear inside `kwargs` (`config_files`, `settings_class`, `env_prefix`, `secrets_dir`, `secret_store`). It raises `ValueError("Cached retrieval does not accept source or schema controls")` and otherwise returns the supplied runtime inputs unchanged.
+
+`config_files` accepts a single `str` or `UPath`, a sequence of either, or `None` (the `ConfigFilesInput` alias; `ConfigPath` is `str | UPath`). Source selection is by explicit parameters such as `env_prefix` and `secrets_dir`, never by underscore keys in `kwargs`.
 
 #### Diagram: SettingsParameters Field Classification
 
@@ -56,7 +56,7 @@ Type: diagram
 **Library:** vis-network<br/>
 **Status:** Specified
 
-A partition diagram showing the six SettingsParameters fields divided into two groups: structural (config_files, settings_class, env_prefix, secrets_dir, secret_store) and runtime (kwargs). Within kwargs, a secondary partition shows the three kwarg categories: pydantic_modelconfig_kwargs, pydantic_settings_kwargs, and attribute_settings_kwargs. Clicking on each field shows its type annotation and role. A toggle button switches between "cache identity view" (highlighting structural) and "override view" (highlighting runtime). Learning objective: Classify SettingsParameters fields by their role in caching vs runtime behavior (Bloom: Analyze).
+A partition diagram showing the six SettingsParameters fields divided into two groups: structural (config_files, settings_class, env_prefix, secrets_dir, secret_store) and runtime (kwargs). Within kwargs, a secondary partition shows accepted field inputs versus rejected controls (underscore-prefixed names, undeclared schema controls, and structural selectors). Clicking on each field shows its type annotation and role. A toggle button switches between "cache identity view" (highlighting structural) and "override view" (highlighting runtime).
 </details>
 
 <!-- concept:24 -->
@@ -69,8 +69,8 @@ The structural fields are:
 
 | Field | Type | Purpose |
 |-------|------|---------|
-| `config_files` | `Optional[Tuple[str\|UPath]]` | Configuration files that define this settings identity |
-| `settings_class` | `Optional[Type[BaseSettings]]` | The class to instantiate |
+| `config_files` | `ConfigFilesInput` (a tuple of `str \| UPath` after `create()`) | Configuration files that define this settings identity; order is part of the identity |
+| `settings_class` | `type[MountainAshBaseSettings] \| None` | The class to instantiate |
 | `env_prefix` | `Optional[str]` | Environment variable prefix scope |
 | `secrets_dir` | `Optional[str]` | Directory for pydantic-settings file-based secrets |
 | `secret_store` | `Optional[SecretReader]` | Directly bound secret reader/writer, tested by object identity |
@@ -124,7 +124,13 @@ def __hash__(self):
 
 The `__eq__` method mirrors this logic exactly -- two `SettingsParameters` are equal if and only if their structural fields match. This contract enables the `lru_cache` decorator (which uses `__hash__` for lookup and `__eq__` for collision resolution) to correctly identify cache hits even when kwargs differ.
 
-The `config_files` field requires special handling because lists are not hashable. The implementation converts them to a sorted tuple of strings via `SettingsFileHandler.format_config_file_tuple()` before hashing. This normalization also ensures that `["a.yaml", "b.yaml"]` and `["b.yaml", "a.yaml"]` hash to the same value -- file order within the same priority level does not affect identity.
+The `config_files` field requires special handling because lists are not hashable. The implementation converts them to a tuple via `SettingsFileHandler.format_config_file_tuple()` before hashing. That normalisation expands `~`, removes duplicates and keeps first-seen order; it does not sort. File order is therefore part of the structural key: later files take precedence over earlier ones for structured sources, so `["a.yaml", "b.yaml"]` and `["b.yaml", "a.yaml"]` are different requests with different precedence. They compare unequal and select different source contexts:
+
+```python
+ab = SettingsParameters.create(config_files=["a.yaml", "b.yaml"])
+ba = SettingsParameters.create(config_files=["b.yaml", "a.yaml"])
+print(ab == ba)   # False
+```
 
 ## Parameter Create Factory
 
@@ -144,8 +150,7 @@ def create(cls,
     resolved_config_files = SettingsFileHandler.format_config_file_tuple(
         config_files
     )
-    resolved_kwargs = SettingsKwargsHandler.format_kwargs_dict(kwargs) \
-        if kwargs else None
+    resolved_kwargs = SettingsKwargsHandler.format_kwargs_dict(kwargs)
 
     return cls(
         config_files=resolved_config_files,
@@ -157,7 +162,7 @@ def create(cls,
     )
 ```
 
-The factory performs two normalizations. First, it converts `config_files` from any accepted input format (single string, UPath, list, tuple) into a canonical tuple. Second, it extracts `**kwargs` from the caller's keyword arguments and wraps them into the `kwargs` dict field. This design allows callers to pass configuration values naturally:
+The factory performs two normalizations. First, it converts `config_files` from any accepted input format (single string, UPath, list, tuple, or `None`) into a canonical tuple; `None` becomes the empty tuple `()`. Second, it extracts `**kwargs` from the caller's keyword arguments and wraps them into a fresh `kwargs` dict; absent kwargs become `{}`, not `None`. This design allows callers to pass configuration values naturally:
 
 ```python
 # Natural calling convention -- kwargs are captured automatically
@@ -198,32 +203,37 @@ Type: workflow
 **Library:** vis-network<br/>
 **Status:** Specified
 
-A directed graph showing two SettingsParameters inputs flowing into a central "merge()" router node. From the router, five arrows lead to strategy nodes: "File List Union" (for config_files), "Validate Match" (for settings_class), "Scalar Last Wins" (for env_prefix, secrets_dir, secret_store), and "Dict Deep Merge" (for kwargs). Each strategy node is clickable to show a before/after example. A toggle switches between prioritise_base=False and prioritise_base=True to show how precedence changes. Learning objective: Select the appropriate merge strategy for each field type when combining SettingsParameters (Bloom: Apply).
+A directed graph showing two SettingsParameters inputs flowing into a central "merge()" router node. From the router, arrows lead to strategy nodes: "Ordered File Merge" (for config_files), "Validate Match" (for settings_class), "Scalar Last Wins" (for env_prefix and secrets_dir), "Secret Store Last Non-None" (for secret_store), and "Shallow Dict Merge" (for kwargs). Each strategy node is clickable to show a before/after example. A toggle switches between prioritise_base=False and prioritise_base=True to show how precedence changes.
 </details>
 
 <!-- concept:29 -->
-## File List Union Strategy
+## Ordered File List Merge
 
-For the `config_files` field, the merge framework uses a **union strategy**: files from both `base` and `other` are combined and deduplicated. The result is the sorted union of both file sets, ensuring that all configuration sources from both parameter sets are loaded.
+For the `config_files` field, the merge framework uses an **ordered, deduplicated merge**: the files of `base` come first in their original order, followed by the files of `other` that `base` did not already contain. Nothing is sorted. Because later files take precedence for structured sources, the order of the merged tuple decides which file wins a conflicting key.
 
 ```python
-# File List Union example:
+# Ordered file list merge example:
 base_params = SettingsParameters.create(config_files=["base.yaml", "shared.env"])
 other_params = SettingsParameters.create(config_files=["override.yaml", "shared.env"])
 
 merged = SettingsParameters.merge(base_params, other_params)
-# merged.config_files == ("base.yaml", "override.yaml", "shared.env")
-# Note: shared.env appears once (deduplicated), all files are sorted
+print(merged.config_files)
+# ('base.yaml', 'shared.env', 'override.yaml')
+# shared.env appears once, at the position where base first listed it
 ```
 
-This strategy reflects the philosophy that configuration files are additive -- you never want to silently drop a file that was explicitly requested. If both a base layer and an override layer reference the same file, it still appears only once in the result (deduplication prevents double-loading).
+This strategy reflects the philosophy that configuration files are additive -- you never want to silently drop a file that was explicitly requested. If both a base layer and an override layer reference the same file, it still appears only once in the result (deduplication prevents double-loading), but it keeps its earlier position, so a file shared between layers does not move to the end of the precedence order. The implementation is `SettingsFileHandler.merge_config_files()`, which concatenates the two normalised tuples and normalises again.
 
-The `prioritise_base=True` variant changes this behavior: instead of unioning, it takes `base.config_files` if non-None, otherwise falls back to `other.config_files`. This is useful when a higher-priority layer wants to declare a complete, exclusive file set.
+The `prioritise_base=True` variant changes this behavior: instead of merging, it takes `base.config_files` if non-empty, otherwise falls back to `other.config_files`. For the example above it yields `('base.yaml', 'shared.env')`. This is useful when a higher-priority layer wants to declare a complete, exclusive file set.
 
 <!-- concept:30 -->
 ## Scalar Last Wins Strategy
 
-For scalar fields (`env_prefix`, `secrets_dir`) and for `secret_store` (tested with `is None`, never truthiness), the merge framework uses a **last-wins strategy**: the `other` value takes precedence if it is non-`None`, otherwise the `base` value is retained.
+Two different rules apply, and they are not interchangeable.
+
+For the string scalars `env_prefix` and `secrets_dir`, the merge uses **truthiness**: the `other` value takes precedence if it is non-empty, otherwise the `base` value is retained (`other.value or base.value`). An empty string or `None` in `other` therefore does not clear a `base` value.
+
+For `secret_store`, the merge tests **`is None`**, never truthiness: the `other` store takes precedence if it is not `None`, otherwise the `base` store is retained. A store object that happens to be falsey still counts as bound.
 
 ```python
 # Scalar Last Wins example:
@@ -236,17 +246,26 @@ merged = SettingsParameters.merge(base_params, other_params)
 # With prioritise_base=True:
 merged = SettingsParameters.merge(base_params, other_params, prioritise_base=True)
 # merged.env_prefix == "APP_" (base wins)
+
+# An empty string in other does not clear the base value:
+merged = SettingsParameters.merge(
+    SettingsParameters.create(env_prefix="APP_"),
+    SettingsParameters.create(env_prefix=""),
+)
+# merged.env_prefix == "APP_"
 ```
+
+With `prioritise_base=True` each rule is applied with the roles swapped: `base` wins when its value is truthy (or, for `secret_store`, not `None`).
 
 The `settings_class` field receives special treatment: if both `base` and `other` declare a `settings_class` and they differ, the merge raises a `ValueError`. Two parameter sets targeting different classes cannot be meaningfully merged -- this is a conflict that requires human resolution.
 
 <!-- concept:31 -->
-## Dict Deep Merge Strategy
+## Shallow Kwargs Merge
 
-For the `kwargs` dictionary, the merge framework uses Python's dict union operator (`|`), which performs a shallow merge where `other` values override `base` values for keys that appear in both:
+For the `kwargs` dictionary, the merge framework uses Python's dict union operator (`|`), which performs a **shallow** merge: `other` values replace `base` values for keys that appear in both. Despite the heading, nothing is merged recursively. A nested dict supplied by `other` replaces the `base` nested dict as a whole.
 
 ```python
-# Dict Deep Merge example:
+# Shallow kwargs merge example:
 base_params = SettingsParameters.create(
     settings_class=MySettings,
     database_host="base-host",
@@ -264,23 +283,28 @@ merged = SettingsParameters.merge(base_params, other_params)
 #     "debug": True,                  # from other (overrides base)
 #     "timeout": 30                   # from other (not in base)
 # }
+
+# Nested values are replaced, not merged:
+b = SettingsParameters.create(nested={"a": 1, "b": 2})
+o = SettingsParameters.create(nested={"a": 9})
+SettingsParameters.merge(b, o).kwargs   # {'nested': {'a': 9}}
 ```
 
 This strategy enables layered overrides. A base parameter set might define sensible defaults for all fields, while a caller-specific parameter set overrides only the fields it cares about. Fields not mentioned in `other` are preserved from `base`.
 
-When `prioritise_base=True`, the kwargs from `base` are used if non-None, with no merging from `other`. This all-or-nothing behavior prevents partial overwrites when the base layer needs complete control.
+When `prioritise_base=True`, the kwargs from `base` are used if non-empty (otherwise those of `other`), with no merging. This all-or-nothing behavior prevents partial overwrites when the base layer needs complete control.
 
 ## Merge Strategy Selection Logic
 
-Choosing the correct merge strategy is not arbitrary -- each field type has semantics that dictate how it should be combined. Understanding why each strategy was chosen helps you predict merge behavior in complex multi-layer configurations.
+Each field type has semantics that dictate how it is combined, which determines merge behavior in multi-layer configurations.
 
-**Config files use union** because files are additive resources. A base layer that says "load base.yaml" and an override layer that says "load override.yaml" both contribute configuration. Dropping either file would lose data. The union preserves all requested files while deduplicating to prevent double-loading.
+**Config files use an ordered merge** because files are additive resources. A base layer that says "load base.yaml" and an override layer that says "load override.yaml" both contribute configuration. Dropping either file would lose data. The merge preserves all requested files in base-then-other order while deduplicating to prevent double-loading.
 
-**Scalars use last-wins** because scalars are mutually exclusive values. An env_prefix can only be one string at a time -- there is no meaningful way to "combine" `"APP_"` and `"MYAPP_"`. The most recently specified value represents the caller's intent.
+**Scalars use last-wins** because scalars are mutually exclusive values. An env_prefix can only be one string at a time -- there is no meaningful way to "combine" `"APP_"` and `"MYAPP_"`. The most recently specified non-empty value represents the caller's intent; `secret_store` uses the same direction with an `is None` test.
 
 **Settings class uses validate-match** because merging parameters for different classes would produce nonsensical results. A `DatabaseSettings` parameter set cannot be meaningfully merged with an `ApiSettings` parameter set -- the field sets are incompatible. Rather than silently producing an invalid result, the merge raises an error.
 
-**Kwargs use dict merge** because keyword arguments are a partial specification. A base layer might define `{host: "localhost", port: 5432}` while an override layer specifies `{port: 5433, debug: True}`. The dict merge preserves `host` from base, applies the `port` override from other, and adds the new `debug` key -- exactly the layered override semantics that callers expect.
+**Kwargs use a shallow dict merge** because keyword arguments are a partial specification. A base layer might define `{host: "localhost", port: 5432}` while an override layer specifies `{port: 5433, debug: True}`. The dict merge preserves `host` from base, applies the `port` override from other, and adds the new `debug` key. Top-level keys are the unit of override.
 
 #### Diagram: Merge Strategy Decision Tree
 
@@ -292,7 +316,7 @@ Type: workflow
 **Library:** vis-network<br/>
 **Status:** Specified
 
-A decision tree showing how the merge method selects a strategy for each field. The root node asks "Which field?" and branches to five leaf strategies: config_files -> File List Union, settings_class -> Validate Match, env_prefix/secrets_dir/secret_store -> Scalar Last Wins, kwargs -> Dict Merge. Each leaf shows the rationale. A "prioritise_base" toggle at the top flips the precedence direction for applicable strategies. Clicking a leaf shows before/after examples with real values. Learning objective: Select and justify the appropriate merge strategy for each SettingsParameters field type (Bloom: Evaluate).
+A decision tree showing how the merge method selects a strategy for each field. The root node asks "Which field?" and branches to five leaf strategies: config_files -> Ordered File Merge, settings_class -> Validate Match, env_prefix/secrets_dir -> Scalar Last Wins (truthiness), secret_store -> Last Non-None, kwargs -> Shallow Dict Merge. Each leaf shows the rationale. A "prioritise_base" toggle at the top flips the precedence direction for applicable strategies. Clicking a leaf shows before/after examples with real values.
 </details>
 
 ## Putting It Together: Structural Contexts and Runtime Materialization
@@ -304,8 +328,8 @@ The complete cached flow is:
 1. Caller invokes `get_settings(settings_class=X, config_files=["a.yaml"], debug=True)`.
 2. `get_settings` creates or merges a `SettingsParameters`.
 3. The five structural selectors identify a private context: config files,
-   settings class, environment prefix, secrets directory, and secrets
-   provider.
+   settings class, environment prefix, secrets directory, and bound
+   secret store.
 4. The context captures selected source inputs once, resolves source
    references before final validation, and retains separate owned source-form
    and resolved baseline trees.
@@ -348,14 +372,3 @@ Type: microsim
 
 The planned simulation represents settings requests carrying structural and runtime data. Structural data selects a private source context; each request materializes a separately owned result from the pinned baseline plus its runtime inputs. It must not portray a cached settings instance, a shallow overlay, or a source reload. The textbook simulation has not been regenerated here: the documented textbook-refresh tooling remains unavailable.
 </details>
-
-## Key Takeaways
-
-- **SettingsParameters** is a frozen dataclass that captures structural selectors and caller runtime inputs for retrieval.
-- **Structural fields** (config_files, settings_class, env_prefix, secrets_dir, secret_store's object identity) select the private source context.
-- **Runtime fields** (`kwargs`) are invocation-local complete-validation inputs; they do not enter the retained baseline.
-- **Custom Hash and Eq** deliberately exclude runtime fields so equal structural selectors share pinned source inputs, not a returned settings instance.
-- **Parameter Create Factory** normalizes flexible input types into a canonical frozen form suitable for hashing and caching.
-- **File List Union Strategy** combines config file lists from both parameter sets, deduplicating but never dropping explicitly requested files.
-- **Scalar Last Wins Strategy** gives precedence to the later (more specific) parameter set for env_prefix, secrets_dir, and secret_store.
-- **Dict Deep Merge Strategy** merges kwargs dictionaries with later values overriding earlier ones for shared keys, preserving non-conflicting keys from both.
