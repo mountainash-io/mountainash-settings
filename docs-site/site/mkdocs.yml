@@ -39,7 +39,7 @@ nav:
       - 5. Secrets Resolution: chapters/05-secrets-resolution/index.md
       - 6. Connection Profiles: chapters/06-connection-profiles/index.md
       - 7. Profile Registry and Invariants: chapters/07-profile-registry-and-invariants/index.md
-      - 8. Authentication System: chapters/08-authentication-system/index.md
+      - 8. Authentication Boundary: chapters/08-authentication-system/index.md
       - 9. Caching, Settings Management, and App Settings: chapters/09-caching-settings-management-and-app-settings/index.md
 
   - Learning Graph:

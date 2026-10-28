@@ -1,65 +1,54 @@
 ---
 title: 'Package Overview'
-description: 'Course-style overview of the Mountainash Settings manual — audience, prerequisites, learning outcomes, and syllabus'
+description: 'Package overview of mountainash-settings — what it is, what it covers, what it does not, and where it fits in the mountainash ecosystem'
 ---
 
 [← Back to Home](index.md)
 
 # Package Overview
 
-This page frames the [Mountainash Settings](index.md) manual the way a course syllabus would: who it is for, what you need to know before starting, what you will be able to do by the end, and how the material is sequenced across chapters. If you want the pitch for the library itself, start with the [Home](index.md) page; if you want to know how this manual is licensed and maintained, see [About](about.md).
+mountainash-settings is a typed configuration framework for Python applications built on Pydantic v2. It loads configuration from multiple file formats, resolves secrets transparently, supports field templating for derived values, and provides a profile system for reusable connection configurations. Structural source-context caching reuses captured inputs while each retrieval validates a fresh, independently owned result. Authentication is not part of the package: it is owned by `mountainash-auth-client` (see [Chapter 8](chapters/08-authentication-system/index.md)).
 
 ## Audience
 
-This is a manual for Python developers and platform engineers who are responsible for how their applications get configured — not just reading a value out of an environment variable, but designing a configuration system that stays correct as an application grows across environments. Three profiles get the most out of it:
+Python developers and platform engineers responsible for how applications are configured across environments: data engineers who need consistent pipeline settings across dev, staging and production; backend developers managing typed, reusable connection parameters for databases and services; and platform engineers standardising configuration and secret-reference conventions across a fleet of services. It picks up where Pydantic `BaseSettings` leaves off: secrets, connection profiles and multi-file merging.
 
-- A **data engineer** who needs pipeline settings that behave consistently across dev, staging, and production, without hand-rolled environment-variable parsing.
-- A **backend developer** who manages connection parameters for multiple databases or external services and wants those connections typed, validated, and reusable rather than copy-pasted.
-- A **platform engineer** standardizing configuration conventions across a fleet of services, including how secrets are referenced and resolved.
+Assumed knowledge: Python type annotations, dataclasses and decorators; Pydantic v2 (`BaseModel`, `BaseSettings`, validators); at least one of YAML, TOML, JSON or `.env`; and the general role of a secrets manager. [Chapter 1](chapters/01-pydantic-and-configuration-foundations/index.md) summarises the Pydantic and file-loading concepts the other chapters rely on.
 
-If you have used Pydantic's `BaseSettings` and found yourself wanting built-in support for secrets, connection profiles, and multi-file merging, this manual picks up exactly where that experience leaves off.
+## Key Capabilities
 
-## Prerequisites
+**Any config source, one base class.** YAML, TOML, JSON, .env files, and environment variables all flow into the same typed settings class. Pydantic validates everything: type coercion, required fields, constrained values. File lists merge in the order given, and kwargs merge shallowly with later values winning.
 
-Before starting, you should be comfortable with:
+**Fields that build on each other.** Template syntax lets fields reference other fields: `log_file = 'logs/{APP_NAME}/{RUNDATE}.log'`. Connection strings build from host, port and database fields; paths compose from base directories and environment-specific suffixes.
 
-- Python type annotations, dataclasses, and decorators
-- Pydantic v2 fundamentals — `BaseModel`, `BaseSettings`, and field validators
-- At least one structured configuration format (YAML, TOML, JSON, or `.env`)
-- The general shape of secrets management — you do not need to have administered Vault, AWS SSM, or Azure Key Vault, but you should know why teams use them
+**Secrets that resolve themselves.** Write `secret:path/to/value` in a config file or environment variable. A `secret_store` bound directly to the settings parameters (any `SecretReader`, or a `SecretWriter` for `persist()`) supplies the records, and the reference resolves before Pydantic validation, so the settings class sees the real value. Settings ships local record stores (filesystem, memory, namespaced); external secret managers such as Vault, AWS SSM or Azure Key Vault integrate by implementing the store protocols. There is no secrets registry and no bundled cloud provider.
 
-Chapter 1 is a deliberate on-ramp: it reviews the Pydantic and configuration-loading concepts the rest of the book assumes, including discriminated unions and `SecretStr`, so gaps in that prerequisite list are recoverable early rather than compounding later.
+**Connection profiles that know their targets.** A profile is declared with an explicit `ProfileSpec` or with native `ProfileField` declarations on the class. Pydantic fields and template wiring are installed automatically, and `emit(target, base=)` together with `__adapters__` renders target-specific driver keyword arguments.
 
-## Learning Outcomes
+**Authentication kept at the boundary.** Authentication models, auth-mode selection and credential rendering live in `mountainash-auth-client`. Settings supplies the generic pieces an auth layer plugs into: profile declarations, secret handling and target adapters.
 
-By working through this manual, you will be able to:
+**Source caching for pipelines.** `get_settings()` reuses a private structural source context while validating each invocation into a fresh, independently owned result. Runtime overrides stay invocation-local, including on the first call.
 
-1. Define typed settings classes on `MountainAshBaseSettings` that validate configuration at startup and fail fast on bad input.
-2. Load and merge configuration from multiple files and environment variables with predictable, well-understood priority rules.
-3. Derive fields from other fields using `{FIELD_NAME}` template syntax — connection strings, log paths, output directories — without writing custom derivation code.
-4. Wire up a secrets provider (Vault, AWS SSM, Azure Key Vault, or a custom one) so `secret:path/to/value` references resolve transparently before validation runs.
-5. Build reusable connection profiles for databases, storage backends, and APIs using `ProfileSpec`, typed parameters and target-specific adapters.
-6. Select and configure the right authentication mode from a discriminated union of 10+ auth kinds, each with `SecretStr`-protected credentials.
-7. Cache settings instances with `get_settings()` so an application constructs each configuration once and reuses it efficiently, while still supporting per-call runtime overrides.
+## Chapters
 
-## Syllabus
+Full descriptions are on the [Chapters](chapters/index.md) page.
 
-The manual proceeds as 9 chapters, each building on the concepts introduced before it. Full descriptions live on the [Chapters](chapters/index.md) page; in outline, the progression is:
-
-| # | Chapter | Focus |
-|---|---------|-------|
-| 1 | Pydantic and Configuration Foundations | Prerequisite Pydantic and file/env-loading concepts |
+| # | Chapter | Documents |
+|---|---------|-----------|
+| 1 | Pydantic and Configuration Foundations | Pydantic and file/env-loading concepts the package builds on |
 | 2 | MountainAsh Base Settings | The `MountainAshBaseSettings` class and its lifecycle |
 | 3 | Settings Parameters and Merge Strategies | Structural vs. runtime parameters, the merge framework |
 | 4 | File Handling, Kwargs, and Field Templating | Multi-format loading and `{FIELD_NAME}` templating |
-| 5 | Secrets Resolution | The secrets registry and two-pass resolution pipeline |
-| 6 | Connection Profiles | `ProfileSpec`, `ParameterSpec`, dynamic field installation |
+| 5 | Secrets Resolution | `secret_store` binding, record-store protocols, two-pass resolution, local stores |
+| 6 | Connection Profiles | `ProfileSpec`, `ParameterSpec`, native `ProfileField` declarations, target-aware `emit()` |
 | 7 | Profile Registry and Invariants | Registration, duplicate prevention, invariant testing |
-| 8 | Authentication System | `AuthSpec`, the auth-mode discriminated union, driver dispatch |
+| 8 | Authentication Boundary | What settings does not implement, and how credentials are rendered through adapters |
 | 9 | Caching, Settings Management, and App Settings | Structural source-context reuse, fresh owned materialization, `SettingsManager`, `AppSettings` |
 
-Together the chapters cover all 110 concepts in the manual's [learning graph](learning-graph/index.md), sequenced so no chapter depends on material introduced later. Out of scope, deliberately: application-specific business logic, cloud IAM setup, secrets-engine administration, database driver internals, and Pydantic internals beyond what `mountainash-settings` extends.
+## Scope
 
-## Where to Start
+Out of scope: application-specific business logic, cloud IAM setup, secrets-engine administration, database driver internals, authentication models and flows, and Pydantic internals beyond what `mountainash-settings` extends.
 
-Read the chapters in order — the merge framework in Chapter 3 depends on the base-settings lifecycle from Chapter 2, the templating in Chapter 4 depends on the merge framework, and secrets, profiles, and auth in Chapters 5 through 8 all build on the file- and field-handling introduced in Chapter 4. Begin at [Chapter 1](chapters/01-pydantic-and-configuration-foundations/index.md) or, if the prerequisites above are already second nature, skip ahead to [Chapter 2](chapters/02-mountainash-base-settings/index.md).
+## Ecosystem
+
+mountainash-settings is part of the [mountainash](https://github.com/mountainash-io/mountainash) project, a collection of typed Python libraries for data engineering and platform development. It is the configuration layer other mountainash packages depend on for settings management, connection configuration and secrets resolution; authentication is provided by the separate `mountainash-auth-client` package.
