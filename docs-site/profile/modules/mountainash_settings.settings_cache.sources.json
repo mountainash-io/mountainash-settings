@@ -1,0 +1,74 @@
+{
+  "id": "mountainash_settings.settings_cache.sources",
+  "path": "src/mountainash_settings/settings_cache/sources.py",
+  "summary": "CacheableSettingsSource: a PydanticBaseSettingsSource whose capture() runs once at context initialization and whose project() produces terminal values per materialization without I/O.",
+  "role": "protocol",
+  "visibility": "public",
+  "stability": "evolving",
+  "audiences": [
+    "extension-authors",
+    "maintainers"
+  ],
+  "doc_priority": "useful",
+  "confidence": "high",
+  "public_api": [
+    "CacheableSettingsSource"
+  ],
+  "key_classes": [
+    "CacheableSettingsSource"
+  ],
+  "key_functions": [],
+  "dependencies": [],
+  "dependents": [
+    "mountainash_settings",
+    "mountainash_settings.settings_cache",
+    "mountainash_settings.settings_cache._context"
+  ],
+  "extension_points": [
+    "Subclass to make a custom settings source cache-safe"
+  ],
+  "lifecycle_notes": [],
+  "documentation_hooks": [
+    "docs/advanced-usage.md"
+  ],
+  "examples": [],
+  "tests": [
+    "tests/settings_cache/test_settings_manager.py"
+  ],
+  "risks": [],
+  "open_questions": [],
+  "evidence": [
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "CacheableSettingsSource exported"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "imports mountainash_settings.settings_cache.sources"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings_cache/__init__.py",
+      "detail": "imports mountainash_settings.settings_cache.sources"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings_cache/_context.py",
+      "detail": "imports mountainash_settings.settings_cache.sources"
+    },
+    {
+      "kind": "test",
+      "path": "tests/settings_cache/test_settings_manager.py",
+      "detail": "exercises module behaviour"
+    }
+  ],
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
+  "manual": {
+    "notes": "",
+    "editorial_status": "",
+    "owner": "",
+    "manual_summary": ""
+  }
+}

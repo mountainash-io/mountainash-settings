@@ -1,56 +1,81 @@
 {
   "id": "mountainash_settings.profiles.registry",
   "path": "src/mountainash_settings/profiles/registry.py",
-  "summary": "Registry is a mutable, name-keyed store of ProfileDescriptors and their DescriptorProfile classes. Consumer domains instantiate one Registry per domain, then use registry.register() or the @registry.decorator() pattern. Prevents duplicate registrations with clear error messages.",
+  "summary": "Registry is a per-domain, name-keyed registry of ProfileSpecs and Profile classes with optional stricter spec_type/profile_type bases, a register decorator, and spec/class lookup.",
   "role": "public-api",
   "visibility": "public",
   "stability": "stable",
-  "audiences": ["extension-authors", "maintainers", "contributors"],
+  "audiences": [
+    "users",
+    "extension-authors",
+    "maintainers"
+  ],
   "doc_priority": "essential",
   "confidence": "high",
   "public_api": [
-    "Registry",
-    "Registry.register",
-    "Registry.decorator",
-    "Registry.get_descriptor",
-    "Registry.get_settings_class",
-    "Registry.descriptors"
+    "Registry"
   ],
-  "key_classes": ["Registry"],
-  "key_functions": [
-    "register",
-    "decorator",
-    "get_descriptor",
-    "get_settings_class"
+  "key_classes": [
+    "Registry"
   ],
+  "key_functions": [],
   "dependencies": [
-    "mountainash_settings.profiles.descriptor"
+    "mountainash_settings.profiles.profile",
+    "mountainash_settings.profiles.spec"
   ],
   "dependents": [
+    "mountainash_settings.profiles",
     "mountainash_settings.profiles.invariants"
   ],
   "extension_points": [
-    "_snapshot_for_tests / _reset_for_tests — test seams for registry state isolation"
+    "spec_type and profile_type constrain what a domain registry accepts"
   ],
-  "lifecycle_notes": [
-    "Registry is not a singleton — each domain creates its own instance",
-    "register() raises ValueError on duplicate descriptor.name — prevents accidental double-registration",
-    "get_descriptor() and get_settings_class() raise KeyError with helpful 'Known: ...' hints"
-  ],
+  "lifecycle_notes": [],
   "documentation_hooks": [
-    "Usage pattern: REGISTRY = Registry('name'); register = REGISTRY.decorator(); @register(DESCRIPTOR) class MyProfile(DescriptorProfile): ..."
+    "docs/migration-0.1.md",
+    "docs/profile-spec-pattern.md",
+    "docs/typing.md"
   ],
   "examples": [],
   "tests": [
-    "tests/unit/profiles/test_registry.py"
+    "tests/profiles/test_api_removal.py",
+    "tests/profiles/test_class_completion.py",
+    "tests/profiles/test_emit.py",
+    "tests/profiles/test_generated_consumers.py",
+    "tests/profiles/test_invariants.py",
+    "tests/profiles/test_registry.py",
+    "tests/test_public_api.py"
   ],
   "risks": [],
   "open_questions": [],
   "evidence": [
-    {"kind": "symbol", "path": "src/mountainash_settings/__init__.py", "detail": "Registry in __all__"},
-    {"kind": "test", "path": "tests/unit/profiles/test_registry.py", "detail": "Registry CRUD tests"}
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "Registry exported"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/profiles/__init__.py",
+      "detail": "imports mountainash_settings.profiles.registry"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/profiles/invariants.py",
+      "detail": "imports mountainash_settings.profiles.registry"
+    },
+    {
+      "kind": "test",
+      "path": "tests/profiles/test_api_removal.py",
+      "detail": "exercises module behaviour"
+    },
+    {
+      "kind": "test",
+      "path": "tests/profiles/test_class_completion.py",
+      "detail": "exercises module behaviour"
+    }
   ],
-  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
   "manual": {
     "notes": "",
     "editorial_status": "",

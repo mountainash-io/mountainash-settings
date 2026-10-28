@@ -1,0 +1,50 @@
+{
+  "id": "mountainash_settings.profiles._projection",
+  "path": "src/mountainash_settings/profiles/_projection.py",
+  "summary": "Projects effective Pydantic fields of a generated profile into ParameterSpecs, applying ProfileField options (driver_key, tier, transform, template), secret detection and output-key collision validation.",
+  "role": "orchestration",
+  "visibility": "private",
+  "stability": "evolving",
+  "audiences": [
+    "maintainers"
+  ],
+  "doc_priority": "internal-note",
+  "confidence": "high",
+  "public_api": [],
+  "key_classes": [],
+  "key_functions": [
+    "project_parameters"
+  ],
+  "dependencies": [
+    "mountainash_settings.profiles._declaration",
+    "mountainash_settings.profiles.fields",
+    "mountainash_settings.profiles.spec",
+    "mountainash_settings.settings.base_settings"
+  ],
+  "dependents": [
+    "mountainash_settings.profiles.profile"
+  ],
+  "extension_points": [],
+  "lifecycle_notes": [],
+  "documentation_hooks": [],
+  "examples": [],
+  "tests": [],
+  "risks": [
+    "Output-key collisions between fields raise at class completion"
+  ],
+  "open_questions": [],
+  "evidence": [
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/profiles/profile.py",
+      "detail": "imports mountainash_settings.profiles._projection"
+    }
+  ],
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
+  "manual": {
+    "notes": "",
+    "editorial_status": "",
+    "owner": "",
+    "manual_summary": ""
+  }
+}

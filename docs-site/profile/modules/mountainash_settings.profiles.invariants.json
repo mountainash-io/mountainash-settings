@@ -1,44 +1,71 @@
 {
   "id": "mountainash_settings.profiles.invariants",
   "path": "src/mountainash_settings/profiles/invariants.py",
-  "summary": "Provides descriptor_invariants_for(registry) — a factory that returns a parametrised pytest class covering all descriptors in the given Registry. Each registered descriptor automatically gets invariant checks: name is lowercase, parameter names are UPPERCASE, driver_keys are unique, auth_modes are non-empty AuthSpec subclasses, and provider_type is not None.",
+  "summary": "spec_invariants_for(registry) returns a pytest class parameterised over every spec in a Registry so consumer domains get invariant coverage for each registration.",
   "role": "test-support",
   "visibility": "public",
   "stability": "stable",
-  "audiences": ["contributors", "extension-authors", "maintainers"],
+  "audiences": [
+    "extension-authors",
+    "maintainers"
+  ],
   "doc_priority": "useful",
   "confidence": "high",
   "public_api": [
-    "descriptor_invariants_for"
+    "spec_invariants_for"
   ],
   "key_classes": [],
   "key_functions": [
-    "descriptor_invariants_for"
+    "spec_invariants_for"
   ],
   "dependencies": [
     "mountainash_settings.profiles.registry",
-    "mountainash_settings.auth.base"
+    "mountainash_settings.profiles.spec"
   ],
-  "dependents": [],
-  "extension_points": [],
+  "dependents": [
+    "mountainash_settings.profiles"
+  ],
+  "extension_points": [
+    "Consumers drop spec_invariants_for(MY_REGISTRY) into their own test suite"
+  ],
   "lifecycle_notes": [
-    "pytest is a lazy import — keeps the module importable in non-test environments",
-    "Returns a dynamically named class: TestDescriptorInvariants_{registry.name}"
+    "pytest is imported lazily when the helper is called"
   ],
   "documentation_hooks": [
-    "Drop `TestMyInvariants = descriptor_invariants_for(MY_REGISTRY)` into any test module to get free coverage of all registered descriptors"
+    "docs/advanced-usage.md",
+    "docs/migration-0.1.md",
+    "docs/profile-spec-pattern.md"
   ],
   "examples": [],
   "tests": [
-    "tests/unit/profiles/test_invariants.py"
+    "tests/profiles/test_emit.py",
+    "tests/profiles/test_invariants.py"
   ],
   "risks": [],
   "open_questions": [],
   "evidence": [
-    {"kind": "symbol", "path": "src/mountainash_settings/__init__.py", "detail": "descriptor_invariants_for in __all__"},
-    {"kind": "test", "path": "tests/unit/profiles/test_invariants.py", "detail": "Invariant factory tests"}
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "spec_invariants_for exported"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/profiles/__init__.py",
+      "detail": "imports mountainash_settings.profiles.invariants"
+    },
+    {
+      "kind": "test",
+      "path": "tests/profiles/test_emit.py",
+      "detail": "exercises module behaviour"
+    },
+    {
+      "kind": "test",
+      "path": "tests/profiles/test_invariants.py",
+      "detail": "exercises module behaviour"
+    }
   ],
-  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
   "manual": {
     "notes": "",
     "editorial_status": "",

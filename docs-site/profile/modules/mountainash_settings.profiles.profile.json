@@ -1,65 +1,104 @@
 {
   "id": "mountainash_settings.profiles.profile",
   "path": "src/mountainash_settings/profiles/profile.py",
-  "summary": "DescriptorProfile is a MountainAshBaseSettings subclass that auto-generates pydantic fields from a __descriptor__ (ProfileDescriptor) at class-creation time via __pydantic_init_subclass__. It also assembles a discriminated auth union field. Provides _default_kwargs() for 1:1 driver-key mappings and _auth_kwargs() for auth dispatch.",
+  "summary": "Profile is the generic MountainAshBaseSettings subclass for declarative settings profiles: either an explicit __spec__ installs fields, or class headers plus native fields generate a descriptive spec. Provides profile_name, provider_type, template resolution in post_init, and emit(target) producing SDK kwargs through driver_key renames and per-target Adapter callables.",
   "role": "public-api",
   "visibility": "public",
-  "stability": "stable",
-  "audiences": ["users", "extension-authors", "maintainers", "contributors"],
+  "stability": "evolving",
+  "audiences": [
+    "users",
+    "extension-authors",
+    "maintainers",
+    "broader-hype"
+  ],
   "doc_priority": "essential",
   "confidence": "high",
   "public_api": [
-    "DescriptorProfile",
-    "DescriptorProfile.__descriptor__",
-    "DescriptorProfile.__adapter__",
-    "DescriptorProfile.profile_name",
-    "DescriptorProfile.backend",
-    "DescriptorProfile.provider_type",
-    "DescriptorProfile._default_kwargs",
-    "DescriptorProfile._auth_kwargs",
-    "DescriptorProfile.post_init"
+    "Adapter",
+    "Profile"
   ],
-  "key_classes": ["DescriptorProfile"],
-  "key_functions": [
-    "_default_kwargs",
-    "_auth_kwargs",
-    "post_init"
+  "key_classes": [
+    "Profile"
   ],
+  "key_functions": [],
   "dependencies": [
-    "mountainash_settings.settings.base_settings",
-    "mountainash_settings.profiles.descriptor",
-    "mountainash_settings.auth"
+    "mountainash_settings",
+    "mountainash_settings.profiles._declaration",
+    "mountainash_settings.profiles._metaclass",
+    "mountainash_settings.profiles._projection",
+    "mountainash_settings.profiles.fields",
+    "mountainash_settings.profiles.lookup",
+    "mountainash_settings.profiles.spec",
+    "mountainash_settings.resolve"
   ],
   "dependents": [
-    "mountainash_settings.profiles.registry"
+    "mountainash_settings.profiles",
+    "mountainash_settings.profiles.registry",
+    "mountainash_settings.settings_cache._context"
   ],
   "extension_points": [
-    "__adapter__ class variable — if set, takes over the full output pipeline (replaces _default_kwargs + _auth_kwargs)",
-    "_auth_kwargs() — override in domain subclasses to customise auth-to-driver mapping",
-    "post_init() — inherits template auto-wiring; extend in domain subclasses"
+    "__adapters__ mapping of target -> Adapter(profile, kwargs) -> kwargs",
+    "__spec__ class attribute",
+    "Class-header options for generated specs"
   ],
   "lifecycle_notes": [
-    "__pydantic_init_subclass__ fires at class-creation time — fields are materialised before any instance is created",
-    "Intermediate subclasses (no __descriptor__ in their own __dict__) are skipped",
-    "model_rebuild(force=True) is called after field installation — necessary for pydantic v2 to register dynamic annotations"
+    "Generated specs are completed and published once via model_rebuild"
   ],
   "documentation_hooks": [
-    "Domain adapters declare __descriptor__ = MY_DESCRIPTOR and optionally __adapter__ = my_adapter_fn",
-    "auth field is a discriminated union keyed on 'kind' literal — one pydantic model per auth mode"
+    "README.md",
+    "docs/advanced-usage.md",
+    "docs/migration-0.1.md",
+    "docs/profile-spec-pattern.md",
+    "docs/quickstart.md",
+    "docs/typing.md"
   ],
   "examples": [],
   "tests": [
-    "tests/unit/profiles/test_profile.py"
+    "tests/profiles/test_emit.py",
+    "tests/profiles/test_profile.py"
   ],
   "risks": [
-    "Dynamic field installation via model_fields mutation and model_rebuild() is not officially documented in pydantic v2 — may need adjustment on pydantic upgrades"
+    "emit() fails closed on target-scoped profiles when no target is passed"
   ],
   "open_questions": [],
   "evidence": [
-    {"kind": "symbol", "path": "src/mountainash_settings/__init__.py", "detail": "DescriptorProfile in __all__"},
-    {"kind": "test", "path": "tests/unit/profiles/test_profile.py", "detail": "Profile instantiation and field tests"}
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "Adapter exported"
+    },
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "Profile exported"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/profiles/__init__.py",
+      "detail": "imports mountainash_settings.profiles.profile"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/profiles/registry.py",
+      "detail": "imports mountainash_settings.profiles.profile"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings_cache/_context.py",
+      "detail": "imports mountainash_settings.profiles.profile"
+    },
+    {
+      "kind": "test",
+      "path": "tests/profiles/test_emit.py",
+      "detail": "exercises module behaviour"
+    },
+    {
+      "kind": "test",
+      "path": "tests/profiles/test_profile.py",
+      "detail": "exercises module behaviour"
+    }
   ],
-  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
   "manual": {
     "notes": "",
     "editorial_status": "",
