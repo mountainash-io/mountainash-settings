@@ -16,7 +16,8 @@
     {
       "matchManagers": ["github-actions"],
       "groupName": "github dependencies",
-      "automerge": true,
+      "pinDigests": true,
+      "automerge": false,
       "schedule": ["after 5pm on Saturday"],
       "commitMessagePrefix": "chore(github dependencies):"
     },
