@@ -1,6 +1,6 @@
 ---
 title: 'Package Overview'
-description: 'Package overview of mountainash-settings — what it is, what it covers, what it does not, and where it fits in the mountainash ecosystem'
+description: 'Package overview of mountainash-settings — what it is, what it covers and where it fits in the mountainash ecosystem'
 ---
 
 [← Back to Home](index.md)
@@ -44,10 +44,6 @@ Full descriptions are on the [Chapters](chapters/index.md) page.
 | 7 | Profile Registry and Invariants | Registration, duplicate prevention, invariant testing |
 | 8 | Authentication Boundary | What settings does not implement, and how credentials are rendered through adapters |
 | 9 | Caching, Settings Management, and App Settings | Structural source-context reuse, fresh owned materialization, `SettingsManager`, `AppSettings` |
-
-## Scope
-
-Out of scope: application-specific business logic, cloud IAM setup, secrets-engine administration, database driver internals, authentication models and flows, and Pydantic internals beyond what `mountainash-settings` extends.
 
 ## Ecosystem
 

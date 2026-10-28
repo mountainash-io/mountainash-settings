@@ -114,19 +114,6 @@ class NativePG(Profile, name="postgresql", provider_type="postgresql",
     DATABASE: str
 ```
 
-#### Diagram: Decorator Registration Flow
-
-<iframe src="../../sims/decorator-registration-flow/main.html" width="100%" height="450px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Decorator Registration Flow</summary>
-Type: workflow
-**sim-id:** decorator-registration-flow<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-A directed flow showing the `@register` decoration process: (1) Python evaluates class body (installs __spec__), (2) @register decorator invoked with the class, (3) decorator reads cls.__spec__, (4) type constraints validated (spec_type, profile_type), (5) completed-profile and generated-spec checks, (6) duplicate check against _specs, (7) spec and class added to registry dictionaries and cls.__spec__ set, (8) class returned unchanged. Each step is clickable to show the data at that point. Error branches show what happens when a missing own spec, type mismatch, incomplete profile or duplicate is detected.
-</details>
-
 <!-- concept:74 -->
 ## Registry Decorator Factory
 
@@ -215,19 +202,6 @@ def get_spec(self, name: str) -> ProfileSpec:
 
 The `from None` suppression ensures a clean error message without the confusing "during handling of the above exception, another exception occurred" chain. The known-names hint is especially valuable in applications with many registered profiles, where a typo in the name (e.g., `"postgresq"` instead of `"postgresql"`) can be immediately identified.
 
-#### Diagram: Registry Internal Structure
-
-<iframe src="../../sims/registry-structure/main.html" width="100%" height="500px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Registry Internal Structure</summary>
-Type: diagram
-**sim-id:** registry-structure<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-An interactive diagram showing a Registry instance with its two parallel dictionaries (_specs and _classes). Three sample profiles are registered (postgresql, mysql, redis). Clicking a profile name in either dictionary highlights the matching entry in the other dictionary and shows the spec details / class information in a side panel. The type constraint badges (spec_type, profile_type) are shown at the top with hover explanations. A search box allows filtering registered entries.
-</details>
-
 <!-- concept:78 -->
 ## Spec Invariants
 
@@ -278,19 +252,6 @@ class TestSpecInvariants:
 ```
 
 The class is dynamically renamed to `TestSpecInvariants_<registry_name>` so that pytest output clearly identifies which registry's invariants are running. Profiles registered before the call automatically get full invariant coverage -- there is no need to write individual tests for each new backend.
-
-#### Diagram: Invariant Test Coverage Matrix
-
-<iframe src="../../sims/invariant-test-matrix/main.html" width="100%" height="450px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Invariant Test Coverage Matrix</summary>
-Type: chart
-**sim-id:** invariant-test-matrix<br/>
-**Library:** Chart.js<br/>
-**Status:** Specified
-
-A heatmap-style matrix with invariant names as rows and registered profile names as columns. Each cell is green (pass), red (fail), or gray (not yet run). Clicking a cell shows the test assertion that passed or the error message that failed. Hovering over a row header shows the invariant's rule description. A "Run All" button animates the matrix filling in cell by cell. Users can add a "broken" spec via a form to see how invariant failures appear.
-</details>
 
 ## Putting It All Together
 

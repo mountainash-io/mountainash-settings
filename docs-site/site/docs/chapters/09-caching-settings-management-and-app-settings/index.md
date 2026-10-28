@@ -78,19 +78,6 @@ Source references are resolved before final validation. An explicit runtime
 baseline reference—and never replaces baseline state. Pure source projector
 output is terminal candidate data, not recursively resolved reference text.
 
-#### Diagram: Caching Layer Architecture
-
-<iframe src="../../sims/caching-layer-arch/main.html" width="100%" height="500px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Caching Layer Architecture</summary>
-Type: diagram
-**sim-id:** caching-layer-arch<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-The planned diagram represents public and direct-manager entry points selecting one structural context, ordered source capture, and fresh owned materialization for every caller. It must not portray `_get_settings`, an instance LRU, a raw manager dictionary, or a shallow overlay.
-</details>
-
 ## Structural Context Identity
 
 `SettingsParameters.__hash__()` and equality use the five structural selectors
@@ -276,19 +263,6 @@ class MyAppSettings(AppSettings):
 ```
 
 `AppSettings.get_settings()` uses the same structural-context and fresh-result contract. It pins selected source inputs while keeping runtime fields and returned mutable state invocation-local. Profile's origin-aware template derivation (MAS-SEC-005) is delivered and uses this same route.
-
-#### Diagram: AppSettings Inheritance and Integration
-
-<iframe src="../../sims/app-settings-integration/main.html" width="100%" height="500px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>AppSettings Inheritance and Integration</summary>
-Type: diagram
-**sim-id:** app-settings-integration<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-The planned hierarchy diagram may show cached retrieval attached to `get_settings()`, but it must show a structural context and fresh result materialization rather than a returned cached instance or shallow overlay.
-</details>
 
 ## The Complete Caching Picture
 

@@ -108,19 +108,6 @@ class ParameterSpec:
 
 Each `ParameterSpec` maps one-to-one to a Pydantic field on the settings class. The spec contains both the field's type information (for Pydantic) and its output mapping (for the driver kwargs). This dual role is what makes the profile system powerful -- a single declaration handles both input validation and output transformation. In the explicit-spec path the `ParameterSpec` list is the declaration and is the data-driven way to build profiles; in the native path the same `ParameterSpec` entries are generated from the class's fields (see [Native Profile Declarations](#native-profile-declarations)).
 
-#### Diagram: ParameterSpec Field Mapping
-
-<iframe src="../../sims/parameter-spec-mapping/main.html" width="100%" height="500px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>ParameterSpec Field Mapping</summary>
-Type: diagram
-**sim-id:** parameter-spec-mapping<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-A two-column diagram showing the mapping from ParameterSpec attributes (left column) to their effects on the generated Pydantic field and driver kwargs (right column). Lines connect each ParameterSpec attribute to its downstream effects: name -> field name, type -> annotation, default -> FieldInfo default, secret -> SecretStr wrapping, driver_key -> output kwargs key, validator -> AfterValidator, transform -> kwargs emit transform. Clicking each attribute shows a code example. A toggle switches between "input view" (how config values enter) and "output view" (how kwargs are emitted).
-</details>
-
 ## Parameter Name Convention
 
 The **parameter name convention** requires that all `ParameterSpec.name` values use UPPERCASE with underscores (e.g., `"HOST"`, `"SSL_CERT"`, `"DATABASE_NAME"`). This convention aligns with:
@@ -358,19 +345,6 @@ def __pydantic_init_subclass__(cls, **kwargs):
 
     cls.model_rebuild(force=True)
 ```
-
-#### Diagram: Dynamic Field Installation Sequence
-
-<iframe src="../../sims/dynamic-field-install/main.html" width="100%" height="550px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Dynamic Field Installation Sequence</summary>
-Type: microsim
-**sim-id:** dynamic-field-install<br/>
-**Library:** p5.js<br/>
-**Status:** Specified
-
-An animated sequence showing a ProfileSpec with four parameters being installed onto a blank Profile subclass. Each step shows: (1) the ParameterSpec being processed, (2) the annotation being constructed (with SecretStr/AfterValidator wrapping shown conditionally), (3) the FieldInfo being created, (4) the field being added to model_fields. After all parameters, model_rebuild() runs. Users can click each ParameterSpec to see how its attributes (secret, validator, default) affect the generated field.
-</details>
 
 <!-- concept:112 -->
 ## Native Profile Declarations
