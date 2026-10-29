@@ -7,15 +7,53 @@ description: 'Documentation for mountainash-settings: typed configuration for Py
 [← Back to Ecosystem](https://docs.mountainash.io/)
 # Mountainash Settings
 
-!!! note "0.1.0 API reset"
-    Read the [migration guide](https://github.com/mountainash-io/mountainash-settings/blob/develop/docs/migration-0.1.md)
-    for supported names, target adapters and cached retrieval. This documentation describes 0.1.
+**Typed configuration for Python, from a single script to a fleet of services.**
 
-Most applications read configuration from several places at once: a YAML file checked into the repo, environment variables set by the deployment, and passwords that must never sit in either. mountainash-settings puts all of that behind one typed class. You declare the fields once with Pydantic, point the class at your files, and get back a validated object with secrets already filled in.
+Configuration always starts small: a dictionary loaded from a YAML file. Then staging needs a different host. The deployment overrides a port through an environment variable. A database password turns up that must never be committed. Before long, three services parse the same file three different ways, and nobody is sure which value actually wins.
 
-## A first example
+mountainash-settings is the one place all of that comes together. You describe your settings once, as a typed Pydantic class. Files, environment variables and your secret store all feed into it, in an order you can predict, and every part of your code gets the same validated answer.
 
-`app.yaml` holds the defaults for an environment. The password is a reference, not a value:
+## Who it's for
+
+<div class="grid cards" markdown>
+
+-   **Application developers**
+
+    ---
+
+    Replace hand-merged YAML, `os.environ` lookups and vault calls with one class that loads YAML, TOML, JSON and `.env` files and validates the result.
+
+    [Define a settings class](chapters/02-mountainash-base-settings/index.md)
+
+-   **Data and platform engineers**
+
+    ---
+
+    Run the same class in dev, staging and production; only the files and the environment change. Secret references are safe to commit, because the real values are fetched when the settings load.
+
+    [Resolve secrets](chapters/05-secrets-resolution/index.md)
+
+-   **Teams connecting to many systems**
+
+    ---
+
+    Declare a database's or SDK's parameters once as a connection profile, then render the exact keyword arguments its driver expects. Every registered profile gets a ready-made pytest suite.
+
+    [Build connection profiles](chapters/06-connection-profiles/index.md)
+
+-   **Package and integration authors**
+
+    ---
+
+    Plug in Vault, AWS SSM or Azure Key Vault by implementing a small store protocol, or build your own profile registry for a family of backends.
+
+    [Implement a secret store](chapters/05-secrets-resolution/index.md#record-store-protocols)
+
+</div>
+
+## See it work
+
+`app.yaml` holds an environment's defaults. The password is a reference, not a value:
 
 ```yaml
 DB_HOST: db.internal
@@ -23,7 +61,7 @@ DB_PORT: 5432
 DB_PASSWORD: secret:db.prod.password
 ```
 
-The deployment sets `APP_DB_PORT=6543`. The application declares its settings and asks for them:
+The deployment sets `APP_DB_PORT=6543`, and the application asks for its settings:
 
 ```python
 from pydantic import SecretStr
@@ -51,20 +89,13 @@ print(settings.DB_PASSWORD)                     # **********
 print(settings.DB_PASSWORD.get_secret_value())  # s3cret
 ```
 
-The host comes from the file, the port from the environment, and the password from the secret store. Pydantic validated all three, so `DB_PORT` is an `int`. In production you swap `MemorySecretStore` for the filesystem store or your own adapter; the settings class does not change.
-
-## Why use it
-
-If you write applications, you stop hand-merging dictionaries from `yaml.safe_load`, `os.environ` and a vault client. YAML, TOML, JSON, `.env` files and environment variables all feed the same class, with a documented rule for which value wins. `get_settings()` reads your files once and hands every caller a freshly validated copy, so one module mutating its settings never leaks into another.
-
-If you run data platforms, the same class works in dev, staging and production; only the files and the environment change. Secret references live safely in version control because they resolve at construction time, before validation, and the resolved values stay masked as `SecretStr`.
-
-If you connect to many systems, a connection profile declares a database's or SDK's parameters once, with types, defaults and validators, and `emit()` renders the exact keyword arguments the driver expects. Register your profiles and `spec_invariants_for()` gives you a pytest suite that checks every one of them, without writing the tests yourself.
-
-If you build on top of it, secret stores are plain protocols. A read-only store for Vault, AWS SSM or Azure Key Vault implements one method, `get()`, and a writable one adds `set()`, `delete()` and `transaction()`.
+The host came from the file, the port from the environment and the password from the secret store, and all three were validated. In production you swap `MemorySecretStore` for the filesystem store or your own adapter; `AppConfig` does not change.
 
 ## Where to go next
 
-- [Chapters](chapters/index.md): start with [MountainAsh base settings](chapters/02-mountainash-base-settings/index.md) to define your own class, or read [Chapter 1](chapters/01-pydantic-and-configuration-foundations/index.md) first for the Pydantic background.
-- [Package overview](course-description.md): scope, capabilities and ecosystem context.
-- [About](about.md): authorship, license and the relationship to the code repository.
+- New to the package? Start with [Chapter 2](chapters/02-mountainash-base-settings/index.md), or read [Chapter 1](chapters/01-pydantic-and-configuration-foundations/index.md) first for the Pydantic background.
+- The [package overview](course-description.md) covers scope and how the package fits into the mountainash ecosystem.
+- [About](about.md) has authorship, the license and the link to the code repository.
+
+!!! note "Upgrading from 0.x"
+    0.1.0 reset the public API. The [migration guide](https://github.com/mountainash-io/mountainash-settings/blob/develop/docs/migration-0.1.md) lists the supported names, target adapters and the new cached retrieval. This documentation describes 0.1.
