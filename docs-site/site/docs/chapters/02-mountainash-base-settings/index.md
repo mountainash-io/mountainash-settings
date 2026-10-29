@@ -1,277 +1,283 @@
 ---
-title: MountainAsh Base Settings
+title: MountainAsh base settings
 description: The core MountainAshBaseSettings class covering model config, post-init lifecycle, source customization, validation invariants, source priority, and environment prefix overrides.
 generated_by: claude skill chapter-content-generator
 date: 2026-06-03
 version: 0.08
 ---
 
-# MountainAsh Base Settings
+# MountainAsh base settings
 
-`MountainAshBaseSettings` is the base class for every settings class in the package. It extends Pydantic's `BaseSettings` with a custom model config, a post-init lifecycle for template resolution and secrets, a customized source chain, the `validate_assignment` invariant (with a deliberate `object.__setattr__` bypass for framework bookkeeping), a defined source priority, environment prefix overrides, and config file declarations.
+`MountainAshBaseSettings` is the base class for settings classes in this package. It extends Pydantic's `BaseSettings` so that a class can load values from `.env`, YAML, TOML and JSON files, environment variables and constructor arguments, with a fixed order of precedence. It validates every assignment, resolves secret references, and calls a `post_init()` hook once loading is finished.
 
 ---
 
-## The Central Abstraction
+## The central abstraction
 
-The `MountainAshBaseSettings` class is the single most important type in the framework. Every settings class -- whether for database connections, API clients, application configuration, or connection profiles -- inherits from this class. It extends Pydantic's `BaseSettings` with five capabilities that standard `BaseSettings` does not provide: multi-format file loading, template expansion, secrets resolution, a structured caching layer, and a unified parameter interface.
+Settings classes for database connections, API clients, application configuration and connection profiles all inherit from `MountainAshBaseSettings`. Compared with plain `BaseSettings`, it adds multi-format file loading, template expansion, secrets resolution, a caching layer and a unified parameter interface.
 
-Before construction reaches Pydantic's `BaseSettings.__init__`, `MountainAshBaseSettings` creates and merges a `SettingsParameters` object, separates and validates config files, privately captures accepted attribute inputs in source form, resolves secret references for live validation, and sets up this invocation's file sources. After construction completes, it records value-free source facts for diagnostics and runs a post-init lifecycle hook.
+Construction runs in a set order. The class merges the parameters you give it, validates the config files, resolves secret references in the constructor arguments, and then lets Pydantic load values from every source. Afterwards it records which sources were used, resolves secret references in the loaded values, and runs `post_init()`.
 
 <!-- concept:13 -->
 <!-- concept:14 -->
-## MountainAshBaseSettings Class
+## MountainAshBaseSettings class
 
-The class declares `SETTINGS_SOURCE_` meta-fields that record value-free provenance such as files, environment prefix, secrets directory, and accepted input names. These fields support diagnostics without publishing a second tree of constructor values.
+Subclass it and declare fields as you would on any Pydantic settings class. The constructor takes three parameters in addition to the field values, and also accepts the selector keywords `env_prefix`, `secrets_dir` and `secret_store`:
 
-The constructor signature accepts three positional-style parameters beyond the standard `**kwargs`:
-
-- `config_files` -- a path, list of paths, or tuple of paths to configuration files
-- `settings_parameters` -- an optional pre-built `SettingsParameters` instance to merge with
-- `template_settings_parameters` -- optional parameters for template resolution
+- `config_files`: a path, list of paths, or tuple of paths to configuration files
+- `settings_parameters`: an optional pre-built `SettingsParameters` instance to merge with
+- `template_settings_parameters`: optional parameters for template resolution
 
 ```python
-from mountainash_settings import MountainAshBaseSettings
+import tempfile
+from pathlib import Path
 from pydantic import Field
+from mountainash_settings import MountainAshBaseSettings
 
 class MyAppSettings(MountainAshBaseSettings):
     database_host: str = Field(default="localhost")
     database_port: int = Field(default=5432)
     debug: bool = Field(default=False)
 
-# Instantiate with a config file and runtime overrides
-settings = MyAppSettings(
-    config_files=["config.yaml", ".env"],
-    debug=True
-)
+with tempfile.TemporaryDirectory() as tmp:
+    cfg = Path(tmp) / "config.yaml"
+    cfg.write_text("database_host: db.internal\ndatabase_port: 5433\nunknown_key: ignored\n")
+
+    settings = MyAppSettings(config_files=[str(cfg)], debug=True)
+    print(settings.database_host, settings.database_port, settings.debug)
+    # db.internal 5433 True
 ```
 
-The class also provides a `get_settings()` class method that integrates with the caching layer, and an `extract_settings_parameters()` instance method that returns a fresh, source-form reconstruction handle for trusted code. It is not a general diagnostics export and performs no source or backend reads. When a selected secret store is a `SecretWriter`, `persist()` writes a local record through it, and `persist_key()` derives its default key; see the [secrets chapter](../05-secrets-resolution/index.md).
+The YAML file supplies the host and port, the `debug=True` argument overrides the default, and the undeclared `unknown_key` is ignored.
 
-## Settings Model Config
+The class also provides a `get_settings()` class method that integrates with the caching layer, and an `extract_settings_parameters()` instance method that returns the `SettingsParameters` needed to rebuild the instance, with `secret:` references left unresolved. When a selected secret store is a `SecretWriter`, `persist()` writes a local record through it, and `persist_key()` derives its default key; see the [secrets chapter](../05-secrets-resolution/index.md).
 
-The `model_config` attribute is declared as a `SettingsConfigDict` with four key settings that establish the behavioral contract for every settings class in the framework:
+## Settings model config
 
-```python
-model_config = SettingsConfigDict(
-    extra="ignore",
-    validate_default=False,
-    arbitrary_types_allowed=True,
-    validate_assignment=True,
-)
-```
+Every settings class inherits a `model_config` with four settings:
 
-Each setting serves a specific architectural purpose:
+| Config key | Value | Effect |
+|-----------|-------|--------|
+| `extra` | `"ignore"` | Config files can contain fields the class does not declare without raising errors |
+| `validate_default` | `False` | `Field(default=None)` placeholders are not validated |
+| `arbitrary_types_allowed` | `True` | `UPath`, custom enums and other non-standard types can be used as field annotations |
+| `validate_assignment` | `True` | Fields are validated again when they are modified after construction |
 
-| Config Key | Value | Architectural Purpose |
-|-----------|-------|----------------------|
-| `extra` | `"ignore"` | Allows config files to contain fields not declared on the class without raising errors |
-| `validate_default` | `False` | Avoids validating `Field(default=None)` declarations that serve as placeholders |
-| `arbitrary_types_allowed` | `True` | Permits `UPath`, custom enums, and other non-standard types as field annotations |
-| `validate_assignment` | `True` | Ensures type safety is maintained when fields are modified after construction |
-
-The `extra="ignore"` setting is particularly important for forward compatibility. Configuration files often evolve faster than the code that reads them -- a shared YAML file might contain fields intended for multiple services. By ignoring extras rather than raising errors, mountainash-settings allows graceful degradation.
+The `extra="ignore"` setting matters for forward compatibility. Configuration files often change faster than the code that reads them, and a shared YAML file might contain fields meant for several services. Ignoring extras lets each service read only the fields it declares.
 
 <!-- concept:15 -->
-## Post Init Lifecycle
+## Post-init lifecycle
 
-The **post-init lifecycle** is a hook method called `post_init()` that runs after all settings have been loaded, validated, and persisted to the instance. This hook is where template expansion occurs -- fields whose values depend on other fields are resolved here, after all source values have been established.
+`post_init()` is a hook that runs after all settings have been loaded and validated. Fields whose values depend on other fields are resolved here, after every source has contributed its values.
 
-The base implementation of `post_init()` in `MountainAshBaseSettings` is intentionally empty. It serves as an extension point that subclasses override to implement their specific initialization logic. The `AppSettings` class, for example, uses `post_init()` to expand its `RUNDATETIME` field from a template that references `RUNDATE` and `RUNTIME`.
+The base implementation does nothing. Subclasses override it to add their own initialization logic. The `AppSettings` class, for example, uses it to build its `RUNDATETIME` field from a template that references `RUNDATE` and `RUNTIME`. A user-defined class can do the same:
 
-The lifecycle ordering is critical:
+```python
+from mountainash_settings import MountainAshBaseSettings
+
+class ReportSettings(MountainAshBaseSettings):
+    run_date: str = "2026-01-31"
+    run_time: str = "0930"
+    run_stamp: str = ""
+
+    def post_init(self, **kwargs):
+        super().post_init(**kwargs)
+        self.run_stamp = f"{self.run_date}T{self.run_time}"
+
+settings = ReportSettings(run_time="1015")
+print(settings.run_stamp)
+# 2026-01-31T1015
+```
+
+The order of construction is:
 
 1. `SettingsParameters` are created and merged.
 2. Config files are separated and validated.
-3. Accepted attribute inputs are captured privately in source form.
-4. Secret references in the validation kwargs are resolved (first pass).
-5. `BaseSettings.__init__` runs (loads env vars, files, applies kwargs).
-6. Value-free source facts and accepted input names are published; the reconstruction recipe remains private.
-7. Secret references in the model tree are resolved (second pass).
-8. `post_init()` runs — templates expand here.
+3. Secret references in the constructor arguments are resolved (first pass).
+4. Pydantic's `BaseSettings.__init__` runs, loading environment variables and files and applying the constructor arguments.
+5. Value-free source facts and accepted input names are published.
+6. Secret references in the loaded values are resolved (second pass).
+7. `post_init()` runs, and templates expand here.
 
-This ordering keeps a backend reference out of public provenance while preserving it for controlled reconstruction. When `post_init()` executes, all live field values from all sources are available for template interpolation. A template like `"{RUNDATE}T{RUNTIME}"` can safely reference both fields because they were populated in step 5.
-
+Secret references in the constructor arguments are therefore resolved before validation, and those loaded from files or the environment after it. When `post_init()` runs, the values from every source are already in place, so a template such as `"{RUNDATE}T{RUNTIME}"` can safely reference both fields.
 
 <!-- concept:16 -->
-## Source Customization
+## Source customization
 
-mountainash-settings customizes the Pydantic settings source chain by overriding `settings_customise_sources()`. This class method controls which configuration sources are consulted and in what order. The default implementation adds YAML, TOML, and JSON file sources that standard `BaseSettings` does not provide.
+The package overrides Pydantic's `settings_customise_sources()` class method to decide which sources are consulted and in what order. Compared with standard `BaseSettings`, it adds YAML, TOML and JSON file sources. The same source order is used for direct construction and for cached retrieval:
 
-The customized source chain (built by the shared `_cache_default_sources()` helper, so direct construction and cached retrieval use the same order) is:
+1. Init settings: values passed as kwargs to the constructor
+2. Environment settings: values from environment variables
+3. Dotenv settings: values from `.env` files, using the configured environment prefix
+4. Unprefixed dotenv settings: the same `.env` files read again with no prefix
+5. YAML config: values from `.yaml` and `.yml` files
+6. TOML config: values from `.toml` files
+7. JSON config: values from `.json` files
+8. File secret settings: values from a secrets directory
 
-1. **Init settings** -- values passed as kwargs to the constructor
-2. **Environment settings** -- values from environment variables
-3. **Dotenv settings** -- values from `.env` files, using the configured environment prefix
-4. **Unprefixed dotenv settings** -- the same `.env` files read again with no prefix
-5. **YAML config** -- values from `.yaml` / `.yml` files
-6. **TOML config** -- values from `.toml` files
-7. **JSON config** -- values from `.json` files
-8. **File secret settings** -- values from a secrets directory
+Sources earlier in the list take precedence over later ones. Explicitly passed kwargs always win, environment variables override file-based config, and file-based config overrides the secrets directory. The YAML, TOML and JSON sources deep-merge, so nested mappings from several files of the same type merge key by key rather than the last file replacing whole sections.
 
-```python
-@classmethod
-def settings_customise_sources(
-    cls,
-    settings_cls: Type[BaseSettings],
-    init_settings: PydanticBaseSettingsSource,
-    env_settings: PydanticBaseSettingsSource,
-    dotenv_settings: PydanticBaseSettingsSource,
-    file_secret_settings: PydanticBaseSettingsSource,
-) -> Tuple[PydanticBaseSettingsSource, ...]:
-    # The shared helper returns the chain listed above:
-    return (
-        init_settings,
-        env_settings,
-        dotenv_settings,
-        unprefixed_dotenv_settings,  # same env files, env_prefix=""
-        YamlConfigSettingsSource(settings_cls, deep_merge=True),
-        TomlConfigSettingsSource(settings_cls, deep_merge=True),
-        JsonConfigSettingsSource(settings_cls, deep_merge=True),
-        file_secret_settings,
-    )
-```
-
-The snippet condenses `_cache_default_sources()`; the hook itself delegates to it. Sources earlier in the tuple take precedence over later ones. This means explicitly passed kwargs always win, environment variables override file-based config, and file-based config overrides the secrets directory. The YAML, TOML and JSON sources use `deep_merge=True`, so nested mappings from several files of the same type merge key by key rather than the last file replacing whole sections.
-
-During direct construction, the YAML, TOML and JSON paths for that invocation travel through an invocation-local source frame, not through `model_config`. The class-level `model_config` is shared and is never mutated by construction.
+Each construction uses its own file paths. The class-level `model_config` is shared between instances and construction never changes it.
 
 <!-- concept:114 -->
-## Cache-Safe Settings Sources
+## Cache-safe settings sources
 
 `settings_customise_sources()` only governs direct construction. Cached retrieval through `get_settings()` does not invoke it: the cache builds the configured sources itself so that a customization hook is never run implicitly. Two things follow for classes that change the source chain:
 
-- **`settings_capture_sources(cls, sources)`** is the cache-safe hook. The base implementation returns `sources` unchanged; a subclass overrides it to declare the source order the cache should use. A class that overrides `settings_customise_sources()` without also overriding `settings_capture_sources()` is rejected at cached retrieval with a `ValueError`.
-- **`CacheableSettingsSource`** (exported from `mountainash_settings`) is the base class a custom source must extend to take part in cached retrieval. It requires `capture()`, which reads the source's structural values once, and a static `project()`, which returns terminal values for each materialization without performing I/O. Custom sources that are not `CacheableSettingsSource` instances are rejected by cached retrieval; the built-in sources are handled by the cache directly.
+- `settings_capture_sources(cls, sources)` is the cache-safe hook. The base implementation returns `sources` unchanged. A subclass overrides it to declare the source order the cache should use. A class that overrides `settings_customise_sources()` without also overriding `settings_capture_sources()` is rejected at cached retrieval with a `ValueError`.
+- `CacheableSettingsSource` (exported from `mountainash_settings`) is the base class a custom source must extend to take part in cached retrieval. It requires `capture()`, which reads the source's structural values once, and a static `project()`, which returns terminal values for each materialization without performing I/O. Cached retrieval rejects custom sources that are not `CacheableSettingsSource` instances. The cache handles the built-in sources directly.
 
-Direct construction is unaffected by this restriction. For how structural contexts are captured and reused, see the [caching chapter](../09-caching-settings-management-and-app-settings/index.md).
+Direct construction is not affected by this restriction. For how structural contexts are captured and reused, see the [caching chapter](../09-caching-settings-management-and-app-settings/index.md).
 
 <!-- concept:17 -->
-## Validate Assignment Invariant
+## Validate assignment invariant
 
-The **validate_assignment invariant** is established by setting `validate_assignment=True` in the model config. This ensures that every field assignment after construction passes through Pydantic's full validation pipeline -- including type coercion, `SecretStr` wrapping, enum coercion, and any declared `AfterValidator` transforms.
-
-Without this invariant, you could bypass type safety by assigning a raw string to a `SecretStr` field after construction:
+With `validate_assignment=True` in the model config, every field assignment after construction goes through Pydantic's full validation, including type coercion, `SecretStr` wrapping, enum coercion and any declared `AfterValidator` transforms.
 
 ```python
-# With validate_assignment=True (mountainash-settings default):
-settings.api_key = "raw-secret"
-# Pydantic wraps it: settings.api_key is now SecretStr('**********')
+from pydantic import SecretStr
+from mountainash_settings import MountainAshBaseSettings
 
-# Without validate_assignment (hypothetical):
+class ApiSettings(MountainAshBaseSettings):
+    api_key: SecretStr = SecretStr("unset")
+    retries: int = 3
+
+settings = ApiSettings()
 settings.api_key = "raw-secret"
-# Field holds a plain str -- SecretStr contract is violated
+print(repr(settings.api_key))
+# SecretStr('**********')
+
+settings.retries = "5"
+print(settings.retries, type(settings.retries).__name__)
+# 5 int
+
+settings.retries = "many"
+# raises pydantic.ValidationError
 ```
 
-This invariant is the reason why mountainash-settings can guarantee type safety throughout the entire lifecycle of a settings instance, not just at construction time. Any code that mutates settings -- whether the `update_settings_from_dict()` method, runtime overrides, or direct assignment -- benefits from the same validation pipeline that runs during `__init__`.
+Without validation on assignment, a raw string assigned to a `SecretStr` field would stay a plain `str`, and the masking would be lost. The same validation applies to every way of changing settings after construction, whether that is `update_settings_from_dict()`, runtime overrides or direct assignment.
 
 <!-- concept:18 -->
-## Object Setattr Bypass
+## Object setattr bypass
 
-The **object setattr bypass** is a deliberate exception to the validate_assignment invariant. Meta-fields (those prefixed with `SETTINGS_SOURCE_`) are populated using `object.__setattr__()` rather than the normal `setattr()` mechanism. This bypasses Pydantic's validation pipeline entirely.
+There is one exception to the validate-assignment rule. The package's bookkeeping fields (`SETTINGS_SOURCE_*`, `SETTINGS_CLASS` and `SETTINGS_CLASS_NAME`) are set without validation and are not counted in `model_fields_set`, so your field validators never see them and they never look like user-supplied values.
 
-```python
-# These assignments bypass validation intentionally:
-object.__setattr__(self, "SETTINGS_SOURCE_KWARG_NAMES", accepted_input_names)
-object.__setattr__(self, "SETTINGS_CLASS", local_settings_params.settings_class)
-object.__setattr__(self, "SETTINGS_CLASS_NAME", ...)
-```
-
-The bypass exists for two reasons. First, meta-fields contain framework bookkeeping (class references, file lists, and accepted input names) that is not user-facing configuration and should not pass through field validators designed for domain values. Second, the bypass skips `__pydantic_fields_set__` tracking, keeping this bookkeeping separate from domain-field assignment. The source-form reconstruction recipe is private and is never assigned to a public meta-field.
-
-!!! warning "When to use object.__setattr__"
-    The bypass pattern should only be used for framework-internal bookkeeping fields. User-facing configuration fields must always go through normal assignment to maintain the validate_assignment invariant. Misusing the bypass on domain fields would silently break type safety.
+!!! warning "Do not use the bypass on your own fields"
+    Fields you declare should always be assigned normally so that validation runs. Using `object.__setattr__()` on a domain field would silently skip type checking.
 
 <!-- concept:19 -->
-## Settings Source Priority
+## Settings source priority
 
-The **settings source priority** defines which configuration source wins when the same field is defined in multiple places. mountainash-settings follows a clear precedence hierarchy where more specific, more explicit sources override less specific ones:
+When the same field is defined in several places, the highest-priority source wins:
 
-1. **Constructor kwargs** (highest priority -- explicit always wins)
-2. **Environment variables** (runtime environment)
-3. **Dotenv files** (`.env`, read with the configured prefix -- environment-like but file-based)
-4. **Unprefixed dotenv files** (the same `.env` files read with no prefix)
-5. **YAML files** (structured config)
-6. **TOML files** (structured config)
-7. **JSON files** (structured config)
-8. **Secrets directory** (lowest file priority)
-9. **Field defaults** (lowest priority -- fallback only)
+1. Constructor kwargs (highest priority)
+2. Environment variables
+3. Dotenv files (`.env`, read with the configured prefix)
+4. Unprefixed dotenv files (the same `.env` files read with no prefix)
+5. YAML files
+6. TOML files
+7. JSON files
+8. Secrets directory
+9. Field defaults (lowest priority, used only as a fallback)
 
-This ordering reflects a practical philosophy: the closer a value is to the code invoking it, the higher its priority. A developer passing `debug=True` as a kwarg should always win over a YAML file that says `debug: false`. An environment variable set by a deployment tool should override what is checked into version control.
-
-<!-- concept:20 -->
-## Env Prefix Override
-
-The **env prefix override** allows each settings class to scope its environment variable lookups to a specific prefix string. Without a prefix, a field named `host` reads the environment variable `HOST`. With a prefix of `DB_`, it reads `DB_HOST` instead.
-
-This mechanism solves a common problem in microservice architectures where multiple components share an environment (a Docker Compose file, a Kubernetes pod, a systemd unit). By assigning each settings class a unique prefix, collisions between `DATABASE_HOST`, `CACHE_HOST`, and `API_HOST` are avoided without requiring field names to be globally unique.
-
-The prefix is specified via the `env_prefix` parameter on `SettingsParameters`:
+The closer a value is to the code that asks for it, the higher its priority. A `debug=True` kwarg wins over a YAML file that says `debug: false`, and an environment variable set by a deployment tool overrides what is checked into version control.
 
 ```python
+import os
+import tempfile
+from pathlib import Path
+from mountainash_settings import MountainAshBaseSettings
+
+class ServiceSettings(MountainAshBaseSettings):
+    host: str = "localhost"
+    port: int = 6379
+
+with tempfile.TemporaryDirectory() as tmp:
+    cfg = Path(tmp) / "service.yaml"
+    cfg.write_text("host: from-yaml\nport: 1111\n")
+    cfgs = [str(cfg)]
+
+    print(ServiceSettings(config_files=cfgs).host)
+    # from-yaml
+    os.environ["host"] = "from-env"
+    print(ServiceSettings(config_files=cfgs).host)
+    # from-env
+    print(ServiceSettings(config_files=cfgs, host="from-kwarg").host)
+    # from-kwarg
+```
+
+<!-- concept:20 -->
+## Env prefix override
+
+An environment prefix scopes a settings class's environment variable lookups. Without a prefix, a field named `host` reads the environment variable `host`. With a prefix of `CACHE_`, it reads `CACHE_host` instead. Environment lookups are case-sensitive and use the field name exactly as declared, so a field named `HOST` reads `HOST`.
+
+Prefixes help when several components share an environment such as a Docker Compose file, a Kubernetes pod or a systemd unit. Giving each settings class its own prefix avoids collisions between variables for different components without requiring field names to be globally unique.
+
+Set the prefix with the `env_prefix` parameter on `SettingsParameters`:
+
+```python
+import os
 from mountainash_settings import MountainAshBaseSettings, SettingsParameters
 
 class CacheSettings(MountainAshBaseSettings):
     host: str = "localhost"
     port: int = 6379
 
-# Reads CACHE_HOST and CACHE_PORT from environment
-params = SettingsParameters.create(
-    settings_class=CacheSettings,
-    env_prefix="CACHE_"
-)
-settings = CacheSettings(settings_parameters=params)
-```
+os.environ["CACHE_host"] = "cache.internal"
+os.environ["CACHE_port"] = "6380"
 
-The prefix is passed through to Pydantic's `_env_prefix` init parameter, which handles the actual environment variable lookup logic.
+params = SettingsParameters.create(settings_class=CacheSettings, env_prefix="CACHE_")
+settings = CacheSettings(settings_parameters=params)
+print(settings.host, settings.port)
+# cache.internal 6380
+print(settings.SETTINGS_SOURCE_ENV_PREFIX)
+# CACHE_
+```
 
 <!-- concept:21 -->
-## Config Files Parameter
+## Config files parameter
 
-The **config files parameter** is the primary mechanism for declaring which configuration files a settings instance should load. It accepts a flexible set of input types -- a single path string, a `UPath` object, a list of paths, or a tuple of paths -- and processes them through the `FileHandler` to separate, validate, and categorize them by extension.
+The `config_files` parameter declares which configuration files an instance loads. It accepts a single path string, a `UPath` object, a list of paths, or a tuple of paths. The package sorts the paths by extension and checks that each file exists.
 
 ```python
-# Single file
-settings = MySettings(config_files="config.yaml")
-
-# Multiple files in different formats
-settings = MySettings(config_files=[
-    "base.yaml",
-    "overrides.toml",
-    ".env"
-])
-
-# UPath objects are accepted alongside strings
+import tempfile
+from pathlib import Path
 from upath import UPath
-settings = MySettings(config_files=[
-    UPath("./config/base.yaml"),
-    UPath("./local.env")
-])
+from mountainash_settings import MountainAshBaseSettings
+
+class PipelineSettings(MountainAshBaseSettings):
+    name: str = "default"
+    mode: str = "dev"
+
+with tempfile.TemporaryDirectory() as tmp:
+    base = Path(tmp) / "base.yaml"
+    base.write_text("name: base\nmode: staging\n")
+    overrides = UPath(tmp) / "overrides.toml"
+    overrides.write_text('mode = "prod"\n')
+
+    s = PipelineSettings(config_files=[str(base), overrides])
+    print(s.name, s.mode)
+    # base staging
 ```
 
-The config_files parameter accepts strings and `UPath` objects, and preserves the form it was given (see [UPath Config Paths](../04-file-handling-kwargs-and-field-templating/index.md#upath-config-paths)). Path normalisation calls `expanduser()`, so it is documented for local paths only.
+Strings and `UPath` objects can be mixed, and each keeps the form it was given (see [UPath config paths](../04-file-handling-kwargs-and-field-templating/index.md#upath-config-paths)). Path normalisation calls `expanduser()`, so config paths are documented for local paths only. Remote paths are not supported and raise `NotImplementedError`.
 
-When multiple files are provided, they are processed according to the source priority chain. Priority between files of different types is determined by the source type (env > dotenv > yaml > toml > json). Within the same type, files are grouped without being reordered, and because structured sources deep-merge, a later-listed file overrides the leaf values of an earlier-listed one while keys defined only in earlier files are retained.
+When several files are given, the source priority above decides between file types: dotenv, then YAML, then TOML, then JSON. In the example, `mode` comes from the YAML file because YAML outranks TOML, while `name` comes from the only file that sets it. Within one type, files are kept in the order given. Because structured sources deep-merge, a later-listed file overrides the leaf values of an earlier-listed one, and keys defined only in earlier files are retained.
 
-## Meta-Field Traceability
+## Meta-field traceability
 
-After construction completes, the instance carries value-free source facts that help diagnose configuration setup:
+After construction, the instance carries value-free source facts that help diagnose configuration setup:
 
-- `SETTINGS_CLASS` — the Python class used for construction
-- `SETTINGS_CLASS_NAME` — the class name as a string
-- `SETTINGS_SOURCE_ENV_FILES` — which `.env` files were loaded
-- `SETTINGS_SOURCE_ENV_PREFIX` — the environment variable prefix applied
-- `SETTINGS_SOURCE_YAML_FILES` — which YAML files were loaded
-- `SETTINGS_SOURCE_TOML_FILES` — which TOML files were loaded
-- `SETTINGS_SOURCE_JSON_FILES` — which JSON files were loaded
-- `SETTINGS_SOURCE_KWARG_NAMES` — accepted attribute-input names, in deterministic order
-- `SETTINGS_SOURCE_SECRETS_DIR` — the secrets directory path
+- `SETTINGS_CLASS`: the Python class used for construction
+- `SETTINGS_CLASS_NAME`: the class name as a string
+- `SETTINGS_SOURCE_ENV_FILES`: which `.env` files were loaded
+- `SETTINGS_SOURCE_ENV_PREFIX`: the environment variable prefix applied
+- `SETTINGS_SOURCE_YAML_FILES`: which YAML files were loaded
+- `SETTINGS_SOURCE_TOML_FILES`: which TOML files were loaded
+- `SETTINGS_SOURCE_JSON_FILES`: which JSON files were loaded
+- `SETTINGS_SOURCE_KWARG_NAMES`: names of the accepted attribute inputs, in deterministic order
+- `SETTINGS_SOURCE_SECRETS_DIR`: the secrets directory path
 
-`SETTINGS_SOURCE_KWARGS` no longer exists and has no replacement raw-value
-field. The bound `secret_store` is never a public `SETTINGS_SOURCE_*` field —
-it lives on a private attribute so it never appears in `model_dump()`, `repr()`
-or provenance diagnostics. Source facts may appear in normal diagnostics because they contain no
-constructor value tree. Domain fields remain intentional model data: use
-`SecretStr` for Pydantic's normal masking, and do not treat `model_dump()` as
-an arbitrary-secret redactor. Code that deliberately needs reconstruction can
-call `extract_settings_parameters()` in a trusted context.
+None of these fields holds a constructor value, so they are safe to include in normal diagnostics. The bound `secret_store` is not exposed as a public field and does not appear in `model_dump()`, `repr()` or the source facts.
+
+Domain fields remain ordinary model data. Use `SecretStr` for Pydantic's normal masking, and do not treat `model_dump()` as a redactor for arbitrary secrets. Code that deliberately needs reconstruction can call `extract_settings_parameters()` in a trusted context.

@@ -1,323 +1,214 @@
 ---
-title: Settings Parameters and Merge Strategies
+title: Settings parameters and merge strategies
 description: The SettingsParameters dataclass covering structural/runtime field separation, custom hash semantics for caching, the create factory, and the per-field merge strategies.
 generated_by: claude skill chapter-content-generator
 date: 2026-06-03
 version: 0.08
 ---
 
-# Settings Parameters and Merge Strategies
+# Settings parameters and merge strategies
 
-`SettingsParameters` is the frozen dataclass that describes a settings request and keys the settings cache. It splits its fields into structural selectors, which define a private source context, and runtime `kwargs`, which stay invocation-local. It overrides hash and equality to cover only the structural fields, provides a `create()` factory that normalises caller input, and provides `merge()`, which combines two parameter sets with a per-field strategy: ordered file-list merge, last-wins scalars, a settings-class match check, and a shallow `kwargs` merge.
+`SettingsParameters` is the frozen dataclass that describes a settings request. It separates structural selectors, which decide which source context a request uses, from runtime `kwargs`, which apply to a single call. Equality and hashing cover only the structural fields. `SettingsParameters.create()` normalises caller input, and `SettingsParameters.merge()` combines two parameter sets with a rule for each field.
 
 ---
 
 <!-- concept:27 -->
-## The Parameter Abstraction Layer
+## The parameter abstraction layer
 
-Between the caller who says "give me database settings from this config file with debug=True" and the actual construction of a `MountainAshBaseSettings` instance, there is an important abstraction layer: the `SettingsParameters` class. This frozen dataclass captures everything needed to construct (or retrieve from cache) a settings instance. It separates the identity of a configuration -- which files, which class, which prefix -- from the source-form runtime inputs that may change on each access.
+A caller asks for database settings from a config file with `debug=True`. Between that request and the `MountainAshBaseSettings` instance sits `SettingsParameters`. It records which files, which class and which prefix identify the configuration, and it carries the runtime inputs that may change on every call.
 
-`SettingsParameters` drives structural context identity. Requests with different runtime inputs share pinned source state, while every retrieval receives a fresh owned instance after complete invocation validation.
+Requests that differ only in runtime inputs share the same pinned source state. Each retrieval still returns a fresh instance that is validated for that call.
 
 <!-- concept:23 -->
-## SettingsParameters Class
+## SettingsParameters class
 
-The `SettingsParameters` class is a frozen dataclass (immutable after construction) with six fields that together describe how to build a settings instance:
+`SettingsParameters` is immutable after construction and has six fields:
 
-```python
-@dataclass(frozen=True)
-class SettingsParameters:
-    config_files:   ConfigFilesInput = None   # str | UPath | Sequence[str | UPath] | None
-    settings_class: type[MountainAshBaseSettings] | None = None
-    env_prefix:     Optional[str] = None
-    secrets_dir:    Optional[str] = None
-    kwargs:         Optional[Dict[str, Any]] = field(default=None, repr=False)
-    secret_store:   Optional["SecretReader"] = field(default=None, repr=False, compare=False, hash=False)
-```
+| Field | Type | Role |
+|-------|------|------|
+| `config_files` | `str`, `UPath`, a sequence of either, or `None` | Configuration files to load |
+| `settings_class` | `type[MountainAshBaseSettings]` or `None` | The class to instantiate |
+| `env_prefix` | `str` or `None` | Environment variable prefix |
+| `secrets_dir` | `str` or `None` | Directory for file-based secrets |
+| `kwargs` | `dict` or `None` | Runtime field inputs |
+| `secret_store` | secret reader or `None` | Directly bound secret reader/writer |
 
-The frozen nature is significant. Because instances are immutable, they can safely be used as dictionary keys and cache lookup parameters. The `@dataclass(frozen=True)` decorator generates `__hash__` and `__eq__` methods by default, but `SettingsParameters` overrides both to implement its custom caching strategy. Its `kwargs` field is omitted from the generated representation, so ordinary diagnostics do not print runtime values; explicit access and serialization remain intentional, trusted operations.
+Because instances are immutable they can be used as dictionary keys. The `kwargs` field is left out of the generated representation, so printing a `SettingsParameters` does not show runtime values.
 
-The `kwargs` field carries field inputs only. `get_attribute_settings_kwargs()` keeps the keys that name a field of the settings class (or a validation alias path of a field) and drops the rest. It rejects, with a value-free `ValueError`, two kinds of control before any source opens:
+`kwargs` carries field inputs only. Settings retrieval keeps the keys that name a field of the settings class (or a validation alias path of a field) and drops the rest. Before any source opens, it rejects two kinds of control with a `ValueError` that does not echo the value:
 
-- Every underscore-prefixed name (`_env_prefix`, `_env_file`, `_secrets_dir`, and any other name pydantic-settings accepts with a leading underscore). The rule is the leading underscore, not an enumerated list.
+- Any name with a leading underscore, such as `_env_prefix`, `_env_file` or `_secrets_dir`. The rule is the leading underscore, not a fixed list.
 - The schema-control names `extra`, `arbitrary_types_allowed` and `validate_default`, unless the settings class declares a field of that name. Model configuration belongs on the class's `model_config`, not in a request.
 
-`get_cache_runtime_kwargs()` applies the same rejection for cached retrieval, and additionally rejects the structural selectors and `reinitialise` when they appear inside `kwargs` (`config_files`, `settings_class`, `env_prefix`, `secrets_dir`, `secret_store`). It raises `ValueError("Cached retrieval does not accept source or schema controls")` and otherwise returns the supplied runtime inputs unchanged.
-
-`config_files` accepts a single `str` or `UPath`, a sequence of either, or `None` (the `ConfigFilesInput` alias; `ConfigPath` is `str | UPath`). Source selection is by explicit parameters such as `env_prefix` and `secrets_dir`, never by underscore keys in `kwargs`.
+Cached retrieval applies the same rejection. Select sources with the explicit `config_files`, `settings_class`, `env_prefix`, `secrets_dir` and `secret_store` parameters. A selector name placed inside `kwargs` is not a runtime field: it fails with an error before any source opens (a `TypeError` for a duplicated selector, or `ValueError("Cached retrieval does not accept source or schema controls")` for `reinitialise` or underscore and schema-control names).
 
 <!-- concept:24 -->
 <!-- concept:25 -->
-## Structural Fields
+## Structural fields
 
-**Structural fields** are the parameters that define a private source context. Identical structural fields select the same pinned source baseline; they do not return the same settings object.
+Structural fields define a private source context. Identical structural fields select the same pinned source baseline. They do not return the same settings object.
 
-The structural fields are:
+The structural fields are `config_files`, `settings_class`, `env_prefix`, `secrets_dir` and `secret_store`. The `secret_store` is compared by object identity. File order inside `config_files` is part of the identity.
 
-| Field | Type | Purpose |
-|-------|------|---------|
-| `config_files` | `ConfigFilesInput` (a tuple of `str \| UPath` after `create()`) | Configuration files that define this settings identity; order is part of the identity |
-| `settings_class` | `type[MountainAshBaseSettings] \| None` | The class to instantiate |
-| `env_prefix` | `Optional[str]` | Environment variable prefix scope |
-| `secrets_dir` | `Optional[str]` | Directory for pydantic-settings file-based secrets |
-| `secret_store` | `Optional[SecretReader]` | Directly bound secret reader/writer, tested by object identity |
+Two parameter sets that load the same files for the same class, with the same prefix and the same bound `secret_store` object, describe the same configuration, even if one of them passes `debug=True` as a runtime override.
 
-These five fields answer the question: "What configuration am I loading?" Two sets of parameters that load the same files, for the same class, with the same prefix and the same bound `secret_store` object represent the same logical configuration, even if one requests `debug=True` as a runtime override and the other does not.
+## Runtime fields
 
-## Runtime Fields
-
-**Runtime fields** do not affect structural identity. `kwargs` carries
-invocation-local source-form inputs. Cached retrieval resolves selected source
-references before final validation, resolves explicit runtime references once
-per invocation, and validates the complete candidate before returning an
-independently owned result.
+`kwargs` is the only runtime field. It carries inputs for one invocation and does not affect structural identity. Cached retrieval validates the complete candidate for each call and returns an independently owned result.
 
 ```python
-params_a = SettingsParameters.create(
-    settings_class=DbSettings,
-    config_files=["db.yaml"],
-    request_id="abc-123"    # runtime override
-)
-params_b = SettingsParameters.create(
-    settings_class=DbSettings,
-    config_files=["db.yaml"],
-    request_id="def-456"    # different runtime override
-)
+from mountainash_settings import SettingsParameters
 
-# params_a and params_b hash to the same value
-assert hash(params_a) == hash(params_b)
+a = SettingsParameters.create(config_files=["db.yaml"], request_id="abc-123")
+b = SettingsParameters.create(config_files=["db.yaml"], request_id="def-456")
+print(a == b, hash(a) == hash(b))   # True True
 ```
 
 <!-- concept:26 -->
-## Custom Hash And Eq
+## Custom hash and eq
 
-The `SettingsParameters` class overrides both `__hash__` and `__eq__` to implement the structural/runtime split at the Python object protocol level. The custom implementations consider only structural fields, deliberately excluding `kwargs`:
+Equality and hashing consider only the structural fields and deliberately exclude `kwargs`. The same selectors form the settings manager's private context key, so requests that differ only in kwargs select the same captured source context.
 
-```python
-def __hash__(self):
-    hashable_config_files = SettingsFileHandler.format_config_file_tuple(
-        self.config_files
-    )
-    hashable_attrs = tuple([
-        hashable_config_files,
-        self.settings_class,
-        self.env_prefix,
-        self.secrets_dir,
-        id(self.secret_store) if self.secret_store is not None else None,
-        # Deliberately exclude: self.kwargs
-    ])
-    return hash(hashable_attrs)
-```
-
-The `__eq__` method mirrors this logic exactly -- two `SettingsParameters` are equal if and only if their structural fields match. The same structural selectors also form the `SettingsManager`'s private context key (`_StructuralKey`), so requests that differ only in kwargs select the same captured source context.
-
-The `config_files` field requires special handling because lists are not hashable. The implementation converts them to a tuple via `SettingsFileHandler.format_config_file_tuple()` before hashing. That normalisation expands `~`, removes duplicates and keeps first-seen order; it does not sort. File order is therefore part of the structural key: later files take precedence over earlier ones for structured sources, so `["a.yaml", "b.yaml"]` and `["b.yaml", "a.yaml"]` are different requests with different precedence. They compare unequal and select different source contexts:
+Lists are not hashable, so `config_files` is normalised to a tuple first. The normalisation expands `~`, removes duplicates and keeps first-seen order. It does not sort. Later files take precedence over earlier ones for structured sources, so `["a.yaml", "b.yaml"]` and `["b.yaml", "a.yaml"]` are different requests with different precedence. They compare unequal and select different source contexts:
 
 ```python
+from mountainash_settings import SettingsParameters
+
 ab = SettingsParameters.create(config_files=["a.yaml", "b.yaml"])
 ba = SettingsParameters.create(config_files=["b.yaml", "a.yaml"])
 print(ab == ba)   # False
 ```
 
-## Parameter Create Factory
+## Parameter create factory
 
-The `create()` class method is the canonical way to construct a `SettingsParameters` instance. It normalizes inputs before passing them to the frozen dataclass constructor, handling the flexible input types that callers use:
-
-```python
-@classmethod
-def create(cls,
-           config_files: Optional[str|UPath|List|Tuple] = None,
-           settings_class: Optional[Type[BaseSettings]] = None,
-           env_prefix: Optional[str] = None,
-           secrets_dir: Optional[str] = None,
-           secret_store: Optional["SecretReader"] = None,
-           **kwargs: Any
-           ) -> 'SettingsParameters':
-
-    resolved_config_files = SettingsFileHandler.format_config_file_tuple(
-        config_files
-    )
-    resolved_kwargs = SettingsKwargsHandler.format_kwargs_dict(kwargs)
-
-    return cls(
-        config_files=resolved_config_files,
-        settings_class=settings_class,
-        env_prefix=env_prefix,
-        secrets_dir=secrets_dir,
-        secret_store=secret_store,
-        kwargs=resolved_kwargs
-    )
-```
-
-The factory performs two normalizations. First, it converts `config_files` from any accepted input format (single string, UPath, list, tuple, or `None`) into a canonical tuple; `None` becomes the empty tuple `()`. Second, it extracts `**kwargs` from the caller's keyword arguments and wraps them into a fresh `kwargs` dict; absent kwargs become `{}`, not `None`. This design allows callers to pass configuration values naturally:
+`SettingsParameters.create()` is the standard way to build an instance. It accepts a single string or `UPath`, a list, a tuple or `None` for `config_files`, and turns whatever it receives into a tuple. `None` becomes `()`. Every extra keyword argument is collected into `kwargs`, and absent kwargs become `{}`, not `None`.
 
 ```python
-# Natural calling convention -- kwargs are captured automatically
+from mountainash_settings import SettingsParameters
+
 params = SettingsParameters.create(
-    settings_class=MySettings,
     config_files="config.yaml",
+    env_prefix="APP_",
     database_host="localhost",
-    debug=True
+    debug=True,
 )
-# params.kwargs == {"database_host": "localhost", "debug": True}
+print(params.config_files)   # ('config.yaml',)
+print(params.env_prefix)     # APP_
+print(params.kwargs)         # {'database_host': 'localhost', 'debug': True}
+
+empty = SettingsParameters.create()
+print(empty.config_files, empty.kwargs)   # () {}
 ```
 
 <!-- concept:28 -->
-## Merge Framework
+## Merge framework
 
-The **merge framework** is implemented by the `SettingsParameters.merge()` class method. It combines two `SettingsParameters` instances -- a `base` and an `other` -- into a single merged result. This operation is fundamental to the framework's layered configuration pattern, where a base set of parameters (perhaps from a global default) is merged with a caller-specific set.
+`SettingsParameters.merge(base, other=None, prioritise_base=False)` combines two parameter sets into one. It supports layered configuration, where a base set (for example a global default) is merged with a caller-specific set. Each field has its own strategy, described in the sections below.
 
-The merge applies a different strategy to each field type, reflecting the semantics of that field:
-
-```python
-@classmethod
-def merge(cls,
-          base: 'SettingsParameters',
-          other: Optional['SettingsParameters'] = None,
-          prioritise_base: bool = False
-          ) -> 'SettingsParameters':
-```
-
-The `prioritise_base` flag inverts the default precedence. Normally, `other` values win over `base` values (last-writer-wins). When `prioritise_base=True`, `base` values win -- useful when a higher-level parameter set should not be overridden by a lower-level one.
+By default `other` wins over `base`. With `prioritise_base=True`, `base` wins instead. Use it when a higher-level parameter set should not be overridden by a lower-level one.
 
 <!-- concept:29 -->
-## Ordered File List Merge
+## Ordered file list merge
 
-For the `config_files` field, the merge framework uses an **ordered, deduplicated merge**: the files of `base` come first in their original order, followed by the files of `other` that `base` did not already contain. Nothing is sorted. Because later files take precedence for structured sources, the order of the merged tuple decides which file wins a conflicting key.
+For `config_files`, the merged tuple holds the files of `base` first, in their original order, followed by the files of `other` that `base` did not already contain. Nothing is sorted. Because later files take precedence for structured sources, this order decides which file wins a conflicting key.
 
 ```python
-# Ordered file list merge example:
-base_params = SettingsParameters.create(config_files=["base.yaml", "shared.env"])
-other_params = SettingsParameters.create(config_files=["override.yaml", "shared.env"])
+from mountainash_settings import SettingsParameters
 
-merged = SettingsParameters.merge(base_params, other_params)
-print(merged.config_files)
+base = SettingsParameters.create(config_files=["base.yaml", "shared.env"])
+other = SettingsParameters.create(config_files=["override.yaml", "shared.env"])
+
+print(SettingsParameters.merge(base, other).config_files)
 # ('base.yaml', 'shared.env', 'override.yaml')
-# shared.env appears once, at the position where base first listed it
+print(SettingsParameters.merge(base, other, prioritise_base=True).config_files)
+# ('base.yaml', 'shared.env')
 ```
 
-This strategy reflects the philosophy that configuration files are additive -- you never want to silently drop a file that was explicitly requested. If both a base layer and an override layer reference the same file, it still appears only once in the result (deduplication prevents double-loading), but it keeps its earlier position, so a file shared between layers does not move to the end of the precedence order. The implementation is `SettingsFileHandler.merge_config_files()`, which concatenates the two normalised tuples and normalises again.
+Files are additive, so a requested file is never silently dropped. A file listed by both layers appears once, at the position where `base` first listed it, so it does not move to the end of the precedence order.
 
-The `prioritise_base=True` variant changes this behavior: instead of merging, it takes `base.config_files` if non-empty, otherwise falls back to `other.config_files`. For the example above it yields `('base.yaml', 'shared.env')`. This is useful when a higher-priority layer wants to declare a complete, exclusive file set.
+With `prioritise_base=True` there is no merging. The result takes `base.config_files` if it is non-empty and otherwise falls back to `other.config_files`. A higher-priority layer can use this to declare a complete, exclusive file set.
 
 <!-- concept:30 -->
-## Scalar Last Wins Strategy
+## Scalar last wins strategy
 
 Two different rules apply, and they are not interchangeable.
 
-For the string scalars `env_prefix` and `secrets_dir`, the merge uses **truthiness**: the `other` value takes precedence if it is non-empty, otherwise the `base` value is retained (`other.value or base.value`). An empty string or `None` in `other` therefore does not clear a `base` value.
+For the string scalars `env_prefix` and `secrets_dir`, the merge uses truthiness. The `other` value wins if it is non-empty, otherwise the `base` value is kept. An empty string or `None` in `other` does not clear a `base` value.
 
-For `secret_store`, the merge tests **`is None`**, never truthiness: the `other` store takes precedence if it is not `None`, otherwise the `base` store is retained. A store object that happens to be falsey still counts as bound.
+For `secret_store`, the merge tests `is None`, never truthiness. The `other` store wins if it is not `None`, otherwise the `base` store is kept. A store object that happens to be falsey still counts as bound.
+
+With `prioritise_base=True` each rule is applied with the roles swapped. `base` wins when its value is truthy (or, for `secret_store`, not `None`).
 
 ```python
-# Scalar Last Wins example:
-base_params = SettingsParameters.create(env_prefix="APP_")
-other_params = SettingsParameters.create(env_prefix="MYAPP_")
+from mountainash_settings import MountainAshBaseSettings, SettingsParameters
 
-merged = SettingsParameters.merge(base_params, other_params)
-# merged.env_prefix == "MYAPP_" (other wins)
+base = SettingsParameters.create(env_prefix="APP_")
+other = SettingsParameters.create(env_prefix="MYAPP_")
+print(SettingsParameters.merge(base, other).env_prefix)                        # MYAPP_
+print(SettingsParameters.merge(base, other, prioritise_base=True).env_prefix)  # APP_
 
-# With prioritise_base=True:
-merged = SettingsParameters.merge(base_params, other_params, prioritise_base=True)
-# merged.env_prefix == "APP_" (base wins)
-
-# An empty string in other does not clear the base value:
-merged = SettingsParameters.merge(
-    SettingsParameters.create(env_prefix="APP_"),
-    SettingsParameters.create(env_prefix=""),
-)
-# merged.env_prefix == "APP_"
+# An empty string in other does not clear the base value
+empty = SettingsParameters.create(env_prefix="")
+print(SettingsParameters.merge(base, empty).env_prefix)                        # APP_
 ```
 
-With `prioritise_base=True` each rule is applied with the roles swapped: `base` wins when its value is truthy (or, for `secret_store`, not `None`).
+`settings_class` is checked rather than overridden. If both sets declare a class and the classes differ, the merge raises a `ValueError`. Parameter sets for different classes cannot be merged meaningfully, so the conflict is left for the caller to resolve:
 
-The `settings_class` field receives special treatment: if both `base` and `other` declare a `settings_class` and they differ, the merge raises a `ValueError`. Two parameter sets targeting different classes cannot be meaningfully merged -- this is a conflict that requires human resolution.
+```python
+class DbSettings(MountainAshBaseSettings):
+    host: str = "localhost"
+
+class ApiSettings(MountainAshBaseSettings):
+    url: str = ""
+
+try:
+    SettingsParameters.merge(
+        SettingsParameters.create(settings_class=DbSettings),
+        SettingsParameters.create(settings_class=ApiSettings),
+    )
+except ValueError as e:
+    print(e)
+# Settings class must match for merging. base: <class '__main__.DbSettings'> != other: <class '__main__.ApiSettings'>
+```
 
 <!-- concept:31 -->
-## Shallow Kwargs Merge
+## Shallow kwargs merge
 
-For the `kwargs` dictionary, the merge framework uses Python's dict union operator (`|`), which performs a **shallow** merge: `other` values replace `base` values for keys that appear in both. Despite the heading, nothing is merged recursively. A nested dict supplied by `other` replaces the `base` nested dict as a whole.
+`kwargs` are merged with the dict union operator (`|`). The merge is shallow: `other` values replace `base` values for keys present in both, and nothing is merged recursively. A nested dict from `other` replaces the `base` nested dict as a whole.
 
 ```python
-# Shallow kwargs merge example:
-base_params = SettingsParameters.create(
-    settings_class=MySettings,
-    database_host="base-host",
-    debug=False
-)
-other_params = SettingsParameters.create(
-    settings_class=MySettings,
-    debug=True,
-    timeout=30
-)
+from mountainash_settings import SettingsParameters
 
-merged = SettingsParameters.merge(base_params, other_params)
-# merged.kwargs == {
-#     "database_host": "base-host",  # from base (not in other)
-#     "debug": True,                  # from other (overrides base)
-#     "timeout": 30                   # from other (not in base)
-# }
+base = SettingsParameters.create(database_host="base-host", debug=False)
+other = SettingsParameters.create(debug=True, timeout=30)
+print(SettingsParameters.merge(base, other).kwargs)
+# {'database_host': 'base-host', 'debug': True, 'timeout': 30}
 
-# Nested values are replaced, not merged:
+# Nested values are replaced, not merged
 b = SettingsParameters.create(nested={"a": 1, "b": 2})
 o = SettingsParameters.create(nested={"a": 9})
-SettingsParameters.merge(b, o).kwargs   # {'nested': {'a': 9}}
+print(SettingsParameters.merge(b, o).kwargs)
+# {'nested': {'a': 9}}
 ```
 
-This strategy enables layered overrides. A base parameter set might define sensible defaults for all fields, while a caller-specific parameter set overrides only the fields it cares about. Fields not mentioned in `other` are preserved from `base`.
+A base set can define defaults for every field while a caller-specific set overrides only what it needs. Keys absent from `other` are kept from `base`.
 
-When `prioritise_base=True`, the kwargs from `base` are used if non-empty (otherwise those of `other`), with no merging. This all-or-nothing behavior prevents partial overwrites when the base layer needs complete control.
+With `prioritise_base=True` the kwargs of `base` are used as they are if non-empty, otherwise those of `other`, with no merging. This prevents partial overwrites when the base layer needs complete control:
 
-## Merge Strategy Selection Logic
+```python
+print(SettingsParameters.merge(base, other, prioritise_base=True).kwargs)
+# {'database_host': 'base-host', 'debug': False}
+```
 
-Each field type has semantics that dictate how it is combined, which determines merge behavior in multi-layer configurations.
+## Merge strategy selection logic
 
-**Config files use an ordered merge** because files are additive resources. A base layer that says "load base.yaml" and an override layer that says "load override.yaml" both contribute configuration. Dropping either file would lose data. The merge preserves all requested files in base-then-other order while deduplicating to prevent double-loading.
+Each strategy follows from what the field means.
 
-**Scalars use last-wins** because scalars are mutually exclusive values. An env_prefix can only be one string at a time -- there is no meaningful way to "combine" `"APP_"` and `"MYAPP_"`. The most recently specified non-empty value represents the caller's intent; `secret_store` uses the same direction with an `is None` test.
+- Config files are additive resources. If one layer loads `base.yaml` and another loads `override.yaml`, both contribute, so the merge keeps both in base-then-other order and removes duplicates.
+- Scalars are mutually exclusive. An `env_prefix` is one string, and `"APP_"` and `"MYAPP_"` cannot be combined, so the most recent non-empty value wins. `secret_store` follows the same direction with an `is None` test.
+- A `DatabaseSettings` parameter set cannot be merged with an `ApiSettings` one because their field sets are incompatible, so a class mismatch raises an error instead of producing an invalid result.
+- Kwargs are a partial specification. With `{host: "localhost", port: 5432}` in base and `{port: 5433, debug: True}` in other, the result keeps `host`, takes the new `port` and adds `debug`. Top-level keys are the unit of override.
 
-**Settings class uses validate-match** because merging parameters for different classes would produce nonsensical results. A `DatabaseSettings` parameter set cannot be meaningfully merged with an `ApiSettings` parameter set -- the field sets are incompatible. Rather than silently producing an invalid result, the merge raises an error.
+## Putting it together: structural contexts and runtime materialization
 
-**Kwargs use a shallow dict merge** because keyword arguments are a partial specification. A base layer might define `{host: "localhost", port: 5432}` while an override layer specifies `{port: 5433, debug: True}`. The dict merge preserves `host` from base, applies the `port` override from other, and adds the new `debug` key. Top-level keys are the unit of override.
-
-## Putting It Together: Structural Contexts and Runtime Materialization
-
-The structural/runtime split, custom hash, create factory, and merge framework
-identify a private source context rather than a retained settings instance.
-The complete cached flow is:
-
-1. Caller invokes `get_settings(settings_class=X, config_files=["a.yaml"], debug=True)`.
-2. `get_settings` creates or merges a `SettingsParameters`.
-3. The five structural selectors identify a private context: config files,
-   settings class, environment prefix, secrets directory, and bound
-   secret store.
-4. The context captures selected source inputs once, resolves source
-   references before final validation, and retains separate owned source-form
-   and resolved baseline trees.
-5. Every request combines that baseline with its current runtime fields and
-   validates the complete invocation.
-6. Every request receives a fresh owned result. Runtime values, including
-   explicit runtime secret references, do not become shared baseline state.
-
-Absent source fields remain absent from the retained candidate, so Pydantic
-evaluates defaults and default factories per materialization with the normal
-class validation policy. A runtime `secret:` reference resolves once for its
-invocation even if its source text equals a baseline reference. Pure source
-projection output is terminal candidate data; it is not recursively treated
-as another reference.
-
-`reinitialise` is a keyword-only cached-retrieval control, not structural
-identity, source reload, or refresh. Profile origin-aware eligibility and
-validated template derivation (MAS-SEC-005), invocation-local
-direct-constructor source framing (MAS-SEC-004), and common error
-handling (MAS-SEC-006), which sanitises validation errors on fields resolved from a reference, are
-all delivered; context/provider lifecycle refresh remains separate, later
-work.
-
-| Component | Role in Cached Retrieval |
-|-----------|--------------------------|
-| Structural fields | Select the private source context |
-| Runtime fields | Invocation-local complete-validation inputs |
-| Custom hash/eq | Normalize the five structural selectors |
-| Create/merge | Build a caller's structural and runtime input set |
-| Result ownership | Isolate every returned object graph |
+Together these give cached retrieval its shape: the five structural selectors pick a source context that reads its sources once, and every call validates its own runtime kwargs into a fresh instance. `reinitialise` does not reload sources. Validation errors on fields resolved from a `secret:` reference never echo the secret value. Chapter 9 covers [cached retrieval](../09-caching-settings-management-and-app-settings/index.md) in full.

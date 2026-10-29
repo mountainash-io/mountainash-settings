@@ -1,83 +1,97 @@
 ---
-title: Connection Profiles
+title: Connection profiles
 description: The connection profile system covering ProfileSpec, ParameterSpec, identity fields, type conventions, tiers, defaults, driver key mappings, secrets, transforms, validators, and dynamic field installation.
 generated_by: claude skill chapter-content-generator
 date: 2026-06-03
 version: 0.08
 ---
 
-# Connection Profiles
+# Connection profiles
 
-A connection profile is a reusable, typed set of settings for one external system, paired with the rules that turn those settings into driver keyword arguments. A profile is described by a `ProfileSpec` holding `ParameterSpec` entries and is realised as a `Profile` settings class, either from an explicit spec or from native Pydantic fields on the class itself. Parameters carry a name, Python type, tier, default, driver-key mapping, secret flag, transform and validator. `Profile.emit(target, base=...)` produces the kwargs for a driver. Authentication models are not part of this package; see [Authentication Boundary](../08-authentication-system/index.md).
+A connection profile is a reusable, typed set of settings for one external system, paired with the rules that turn those settings into driver keyword arguments. You declare a profile on a `Profile` settings class, either by writing a `ProfileSpec` made of `ParameterSpec` entries or by declaring native Pydantic fields with `ProfileField`. `Profile.emit(target, base=...)` returns the kwargs for a driver. Authentication models are not part of this package; see [Authentication boundary](../08-authentication-system/index.md).
 
 ---
 
-## Why Profiles Exist
+## Why profiles exist
 
-Applications that connect to external systems -- databases, message brokers, REST APIs, cloud services -- share a common pattern: they need a set of typed parameters (host, port, credentials, SSL settings) that translate into connection kwargs for a driver library. Without profiles, every team writes its own settings class for each backend, duplicating validation logic, default values, and the mapping between settings names and driver parameter names.
+Applications that connect to databases, message brokers, REST APIs or cloud services need the same kind of settings for each: host, port, credentials, SSL options. Those settings then have to be renamed and reshaped into the keyword arguments a driver library expects. Without profiles, each team writes its own settings class per backend and repeats the validation, the defaults and the name mapping.
 
-The profile system solves this by separating _what_ a backend needs (described by a `ProfileSpec`) from _how_ that translates into a Pydantic settings class (implemented by the `Profile` base class). A single declaration produces a validated, cached, template-aware settings class with zero boilerplate. A profile can be declared in two ways: by writing the `ProfileSpec` explicitly and attaching it as `__spec__`, or by declaring native Pydantic fields on a `Profile` subclass and letting the package generate the spec (see [Native Profile Declarations](#native-profile-declarations)).
+A profile separates what a backend needs (the `ProfileSpec`) from the settings class that holds the values (`Profile`). One declaration gives you a validated, cached settings class that can emit driver kwargs. You can write the `ProfileSpec` yourself and attach it as `__spec__`, or declare native fields on a `Profile` subclass and let the package generate the spec (see [Native profile declarations](#native-profile-declarations)).
 
 <!-- concept:56 -->
 <!-- concept:57 -->
 <!-- concept:59 -->
 <!-- concept:69 -->
-## ProfileSpec Class
+## ProfileSpec class
 
-**ProfileSpec** is a frozen dataclass specifying a connection profile. It is the blueprint from which a `Profile` settings class installs its Pydantic fields when the spec is written explicitly, and the descriptive record the package generates when the profile is declared with native fields. The former descriptor alias is removed in 0.1.0.
+`ProfileSpec` is a frozen, keyword-only dataclass that describes a connection profile. Written explicitly, it is the blueprint a `Profile` class turns into fields. Generated from native fields, it is a descriptive record of them. It has four fields:
 
-```python
-@dataclass(frozen=True, kw_only=True)
-class ProfileSpec:
-    name: str
-    provider_type: Any
-    parameters: list[ParameterSpec]
-    metadata: dict[str, Any] = field(default_factory=dict)
-```
+| Field | Type | Meaning |
+|-------|------|---------|
+| `name` | `str` | Short lowercase identifier, such as `"postgresql"` |
+| `provider_type` | any value except `None` | Domain classification of the system |
+| `parameters` | `list[ParameterSpec]` | The settings the profile declares |
+| `metadata` | `dict` | Optional domain information, empty by default |
 
-The spec cannot be reassigned after construction (`frozen=True`; assigning to an attribute raises `FrozenInstanceError`). Frozen is not deeply immutable: `parameters` and `metadata` are ordinary mutable containers, so treat them as read-only after construction. The `kw_only=True` constraint ensures that all fields must be passed as keyword arguments during construction, improving readability at the call site.
+All fields are passed by keyword. The spec cannot be reassigned after construction: assigning to an attribute raises `FrozenInstanceError`. It is not deeply immutable, because `parameters` and `metadata` are ordinary mutable containers, so treat them as read-only. Authentication is not declared on the spec. Credentials are ordinary parameters, typically with `secret=True`.
 
-A complete spec declares the profile's identity (`name`, `provider_type`), its parameters (as a list of `ParameterSpec` instances), and optional metadata for domain-specific information. Authentication is not declared on the spec; credentials are ordinary parameters (typically `secret=True`) and authentication models belong to the separate auth-client package (see [Authentication Boundary](../08-authentication-system/index.md)):
+This spec and profile cover a PostgreSQL connection. The sections that follow explain each option it uses.
 
 ```python
+from mountainash_settings import MISSING, ParameterSpec, Profile, ProfileSpec
+
+def validate_port(v: int) -> int:
+    if not (1 <= v <= 65535):
+        raise ValueError(f"Port must be 1-65535, got {v}")
+    return v
+
 POSTGRESQL_SPEC = ProfileSpec(
     name="postgresql",
-    provider_type=DatabaseType.POSTGRESQL,
+    provider_type="postgresql",
     parameters=[
         ParameterSpec(name="HOST", type=str, tier="core",
                       default="localhost", driver_key="host"),
         ParameterSpec(name="PORT", type=int, tier="core",
-                      default=5432, driver_key="port"),
+                      default=5432, driver_key="port", validator=validate_port),
         ParameterSpec(name="DATABASE", type=str, tier="core",
                       default=MISSING, driver_key="database"),
         ParameterSpec(name="PASSWORD", type=str, tier="core",
                       default=MISSING, driver_key="password", secret=True),
         ParameterSpec(name="SSL_MODE", type=str, tier="advanced",
                       default="prefer", driver_key="sslmode"),
+        ParameterSpec(name="CONNECT_TIMEOUT_S", type=int, tier="advanced",
+                      default=10, driver_key="connect_timeout_ms",
+                      transform=lambda s: s * 1000),
     ],
-    metadata={"default_port": 5432, "url_scheme": "postgresql"},
+    metadata={"default_port": 5432},
 )
+
+class PostgreSQLProfile(Profile):
+    __spec__ = POSTGRESQL_SPEC
+
+pg = PostgreSQLProfile(HOST="db.example.com", DATABASE="myapp",
+                       PASSWORD="example-password")
+print(pg.profile_name, pg.provider_type)
+# postgresql postgresql
+print(pg.emit())
+# {'host': 'db.example.com', 'port': 5432, 'database': 'myapp',
+#  'password': 'example-password', 'sslmode': 'prefer', 'connect_timeout_ms': 10000}
 ```
 
-## Spec Identity
+## Spec identity
 
-The **spec identity** consists of two fields that identify what system a profile connects to:
+The spec identity is the pair `name` and `provider_type`. The `name` is the lookup key in a registry. It must be non-empty, lowercase and unique within the registry, and by convention it matches the system's package name or common abbreviation.
 
-- `name` -- a short, lowercase string identifier (e.g., `"postgresql"`, `"redis"`, `"snowflake"`)
-- `provider_type` -- a domain-specific classification of the system (see below)
-
-The `name` field is the primary lookup key in the registry system. It must be unique within a given registry, lowercase, and non-empty. Conventionally, names match the system's package name or common abbreviation.
-
-Identity is enforced differently on the two declaration paths. For an explicit `ProfileSpec`, the spec invariants (see [Profile Registry and Invariants](../07-profile-registry-and-invariants/index.md)) check the name and provider type once the spec is registered. For a generated declaration, the class header is checked when the class statement runs: `name` and `provider_type` must be given together, `provider_type` must not be `None`, and `name` must be a non-empty lowercase string; otherwise the class definition raises `TypeError`.
+Identity is checked differently on the two declaration paths. For an explicit `ProfileSpec`, the spec invariants (see [Profile registry and invariants](../07-profile-registry-and-invariants/index.md)) check the name and provider type once the spec is registered. For a native declaration, the class header is checked when the `class` statement runs: `name` and `provider_type` must be given together, `provider_type` must not be `None`, and `name` must be a non-empty lowercase string. Otherwise the class definition raises `TypeError`.
 
 <!-- concept:58 -->
-## Provider Type Field
+## Provider type field
 
-The **provider type field** is a domain-specific value that categorizes the profile within its domain. For database profiles, this might be an enum like `DatabaseType.POSTGRESQL`. For API profiles, it might be a string like `"rest_api"` or an enum member.
+The provider type is a domain-specific value that categorises the profile. For database profiles it might be an enum such as `DatabaseType.POSTGRESQL`. For API profiles it might be a string such as `"rest_api"`. It is exposed as `ProfileSpec.provider_type` and `Profile.provider_type`.
 
-The provider type is domain metadata: a secondary classification beyond the name. While the name uniquely identifies a profile within a registry, the provider type records the category the profile belongs to and is exposed as `ProfileSpec.provider_type` and `Profile.provider_type`. The `Registry` has no query API over provider types; a domain that wants to group profiles by category does so in its own code. The only package-level requirement is that it is not `None`.
+The name identifies a profile within a registry. The provider type records the category the profile belongs to. The `Registry` has no query API over provider types, so a domain that wants to group profiles by category does that in its own code. The only requirement the package makes is that the value is not `None`.
 
-| Field | Purpose | Example Values |
+| Field | Purpose | Example values |
 |-------|---------|----------------|
 | `name` | Unique registry key | `"postgresql"`, `"mysql"`, `"redis"` |
 | `provider_type` | Domain classification | `DatabaseType.POSTGRESQL`, `"rest_api"` |
@@ -87,275 +101,162 @@ The provider type is domain metadata: a secondary classification beyond the name
 <!-- concept:62 -->
 <!-- concept:63 -->
 <!-- concept:66 -->
-## ParameterSpec Class
+## ParameterSpec class
 
-The **ParameterSpec** class is a frozen dataclass that declares a single settings field within a profile. It captures everything needed to generate a Pydantic `FieldInfo`, wire up validation, configure secret handling, and map the field to a driver keyword argument:
+`ParameterSpec` is a frozen, keyword-only dataclass that declares one settings field of a profile. It maps one-to-one to a Pydantic field on the settings class and carries both the field's input side (type, default, validator, secret flag) and its output side (driver key, transform).
 
-```python
-@dataclass(frozen=True, kw_only=True)
-class ParameterSpec:
-    name: str
-    type: Any
-    tier: Literal["core", "advanced"]
-    default: Any = MISSING
-    description: str = ""
-    driver_key: str | dict[Hashable, str] | None = field(default=None, hash=False)  # excluded from the hash so dict-scoped specs stay hashable
-    secret: bool = False
-    transform: Callable[[Any], Any] | None = None
-    validator: Callable[[Any], Any] | None = None
-    template: str | None = None
-```
+| Field | Default | Meaning |
+|-------|---------|---------|
+| `name` | required | UPPERCASE settings field name |
+| `type` | required | Annotation Pydantic validates against |
+| `tier` | required | `"core"` or `"advanced"` |
+| `default` | `MISSING` | Value when no source provides one |
+| `description` | `""` | Field description |
+| `driver_key` | `None` | Output keyword name: a string, a per-target `dict`, or `None` |
+| `secret` | `False` | Store the value as `SecretStr` |
+| `transform` | `None` | Callable applied to the value on emission |
+| `validator` | `None` | Callable run after Pydantic's own validation |
+| `template` | `None` | Template string the profile resolves into the field at initialisation |
 
-Each `ParameterSpec` maps one-to-one to a Pydantic field on the settings class. The spec contains both the field's type information (for Pydantic) and its output mapping (for the driver kwargs). This dual role is what makes the profile system powerful -- a single declaration handles both input validation and output transformation. In the explicit-spec path the `ParameterSpec` list is the declaration and is the data-driven way to build profiles; in the native path the same `ParameterSpec` entries are generated from the class's fields (see [Native Profile Declarations](#native-profile-declarations)).
+The explicit `ParameterSpec` list is the data-driven way to build profiles. In the native path, the same entries are generated from the class's fields (see [Native profile declarations](#native-profile-declarations)).
 
-## Parameter Name Convention
+## Parameter name convention
 
-The **parameter name convention** requires that all `ParameterSpec.name` values use UPPERCASE with underscores (e.g., `"HOST"`, `"SSL_CERT"`, `"DATABASE_NAME"`). This convention aligns with:
+`ParameterSpec.name` values are UPPERCASE with underscores, such as `"HOST"`, `"SSL_CERT"` or `"DATABASE_NAME"`. This matches Python constant naming, the usual form of environment variable names and the meta-field naming in `MountainAshBaseSettings`.
 
-- Python constant naming conventions
-- Environment variable naming conventions (which are traditionally uppercase)
-- The existing MountainAshBaseSettings meta-field naming pattern
+The spec invariants reject a spec with a non-uppercase parameter name. Names must also be non-empty and unique within a spec. In a native declaration, a lowercase application field name raises `TypeError` at class creation.
 
-The invariant system enforces this convention: any spec with a non-uppercase parameter name will fail the `test_parameter_names_uppercase` invariant check. Names must also be non-empty and unique within a single spec (no two parameters share the same name).
+## Parameter Python type
 
-## Parameter Python Type
-
-The **parameter Python type** (`ParameterSpec.type`) declares the Pydantic annotation for the generated field. It accepts any type that Pydantic can validate against:
+`ParameterSpec.type` is the annotation of the generated field. It accepts anything Pydantic can validate:
 
 - Primitive types: `str`, `int`, `float`, `bool`
 - Optional types: `str | None`, `Optional[int]`
-- Enum types: `SSLMode`, `AuthMethod`
-- Complex types: `List[str]`, `Dict[str, Any]`
-- Pydantic models: nested `BaseModel` subclasses
+- Enum types
+- Generic containers: `List[str]`, `Dict[str, Any]`
+- Pydantic models
 
-When `secret=True`, the type is automatically wrapped as `SecretStr` during field installation, regardless of what `type` declares. This means you declare `type=str` for a password field and set `secret=True` -- the framework handles the `SecretStr` wrapping.
+With `secret=True`, the field is typed as `SecretStr` whatever `type` says. Declare `type=str` for a password and set `secret=True`.
 
-## Parameter Tier
+## Parameter tier
 
-The **parameter tier** classifies each parameter as either `"core"` or `"advanced"`:
+The tier marks a parameter as `"core"` or `"advanced"`. Core parameters are needed for basic connectivity: host, port, database name, credentials. Advanced parameters tune behaviour and have sensible defaults: SSL mode, timeouts, pool size.
 
-- **Core** parameters are essential for basic connectivity (host, port, database name, credentials)
-- **Advanced** parameters tune behavior but have sensible defaults (SSL mode, connection timeout, pool size)
+The tier is documentation metadata. It does not change runtime behaviour, but the invariants check that each parameter declares a valid one, and tooling can use it to show core parameters first.
 
-The tier serves documentation and audit purposes. It does not affect runtime behavior directly, but the invariant system validates that every parameter declares a valid tier. Tooling can use tiers to generate progressive documentation -- showing core parameters first, then revealing advanced parameters on demand.
+## Parameter default value
 
-## Parameter Default Value
-
-The **parameter default value** (`ParameterSpec.default`) specifies what value the field receives when no configuration source provides it. When a default is set, the generated Pydantic `FieldInfo` uses `Field(default=value)`:
-
-```python
-ParameterSpec(name="PORT", type=int, tier="core", default=5432)
-# Generates: PORT: int = Field(default=5432)
-```
-
-If no default is appropriate (the parameter is required), the special `MISSING` sentinel is used instead. A third value, `FACTORY_DEFAULT`, appears only in generated specs (see [FACTORY_DEFAULT](#factory_default)).
+`ParameterSpec.default` is the value the field takes when no configuration source supplies one. A parameter with `default=5432` becomes a field with that default. A parameter with no sensible default uses the `MISSING` sentinel and becomes a required field. A third value, `FACTORY_DEFAULT`, appears only in generated specs (see [FACTORY_DEFAULT](#factory_default)).
 
 <!-- concept:64 -->
-## MISSING Sentinel
+## MISSING sentinel
 
-The **MISSING sentinel** is a singleton object that indicates a parameter has no default value -- it must be explicitly provided by some configuration source. When `ParameterSpec.default` is `MISSING`, the generated field uses `Field(default=...)` (Pydantic's ellipsis marker for required fields):
-
-```python
-class Missing:
-    _instance: ClassVar[Missing | None] = None
-
-    def __new__(cls) -> Missing:
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-    def __repr__(self) -> str:
-        return "MISSING"
-
-    def __bool__(self) -> bool:
-        return False
-
-MISSING: Missing = Missing()
-```
-
-The singleton pattern ensures that identity checks (`param.default is MISSING`) work correctly. The `__bool__` returning `False` means `MISSING` is falsy, which is useful in conditional expressions but requires care -- use `is MISSING` for explicit sentinel checks rather than truthiness tests.
+`MISSING` is a singleton that marks a parameter as having no default, so a configuration source must provide it. Constructing the profile without the value raises a `ValidationError`:
 
 ```python
-# Required parameter -- must be provided
-ParameterSpec(name="DATABASE", type=str, tier="core", default=MISSING)
-# Generates: DATABASE: str = Field(default=...)
-
-# Optional parameter -- has a default
-ParameterSpec(name="PORT", type=int, tier="core", default=5432)
-# Generates: PORT: int = Field(default=5432)
+try:
+    PostgreSQLProfile(PASSWORD="example-password")   # DATABASE is MISSING
+except ValueError as exc:
+    print(type(exc).__name__)
+# ValidationError
 ```
+
+`MISSING` is falsy, so use `param.default is MISSING` rather than a truthiness test when checking for it.
 
 <!-- concept:65 -->
-## Driver Key Mapping
+## Driver key mapping
 
-The **driver key mapping** (`ParameterSpec.driver_key`) defines how a settings field name translates to the keyword argument name expected by the underlying driver library. Settings fields use UPPERCASE names (`HOST`, `SSL_CERT`), but driver libraries expect lowercase or camelCase names (`host`, `sslcert`). A bare string maps the field for every emission target, a `dict` maps it per target (`{"driver": "host", "url": "hostname"}`; a target with no entry skips the field), and `None` leaves the field out of the default output:
+`ParameterSpec.driver_key` names the keyword argument a driver expects for a settings field. Settings fields are UPPERCASE (`HOST`, `SSL_CERT`) while drivers expect names like `host` or `sslcert`. The value takes one of three forms:
 
-```python
-ParameterSpec(name="SSL_CERT", type=str, tier="advanced",
-              default=None, driver_key="sslcert")
-# Settings field: SSL_CERT = "/path/to/cert.pem"
-# Driver kwarg:   sslcert="/path/to/cert.pem"
-```
+- A string maps the field to that key for every emission target.
+- A `dict` maps it per target, such as `{"driver": "host", "url": "hostname"}`. A target with no entry skips the field.
+- `None` leaves the field out of the output.
 
-When `driver_key` is `None`, the parameter does not participate in the default kwargs output. This is appropriate for parameters that require domain-specific transformation logic rather than a simple 1:1 mapping -- an adapter function handles those cases.
-
-The `Profile._default_kwargs(target)` method uses the driver key mapping to produce the output dictionary for a target. `emit()` builds on it (see [Target-Aware Emission](#target-aware-emission)):
+Use `None` for parameters that need more than a 1:1 rename. An adapter function handles those cases (see [Target-aware emission](#target-aware-emission)).
 
 ```python
-def _default_kwargs(self, target: Hashable = None) -> dict[str, Any]:
-    out: dict[str, Any] = {}
-    for param in self.__spec__.parameters:
-        key = self._resolve_driver_key(param.driver_key, target)
-        if key is None:
-            continue
-        val = getattr(self, param.name, None)
-        if val is None:
-            continue
-        if isinstance(val, SecretStr):
-            val = val.get_secret_value()
-        if param.transform is not None:
-            val = param.transform(val)
-        out[key] = val
-    return out
+print(pg.emit())
+# 'sslmode' comes from SSL_MODE, 'database' from DATABASE, and so on.
+# {'host': 'db.example.com', 'port': 5432, 'database': 'myapp',
+#  'password': 'example-password', 'sslmode': 'prefer', 'connect_timeout_ms': 10000}
 ```
 
-## Secret Parameter Flag
+Fields whose value is `None` are omitted from the output.
 
-The **secret parameter flag** (`ParameterSpec.secret`) controls whether the generated field is typed as `SecretStr`. When `secret=True`:
+## Secret parameter flag
 
-1. The field annotation is changed from `param.type` to `SecretStr` during dynamic field installation
-2. Values are automatically wrapped by Pydantic's `SecretStr` validator on input
-3. The `_default_kwargs()` method (and therefore `emit()`) unwraps via `.get_secret_value()` on output
+`ParameterSpec.secret=True` makes the field a `SecretStr`. Pydantic wraps incoming values, `repr` masks them, and `emit()` unwraps them with `get_secret_value()` when it builds the kwargs.
 
-This flag provides a single declaration point for secret handling. The developer declares `secret=True` and the framework handles the plumbing -- wrapping, masking in `repr` output, and unwrapping at the output boundary. Because the unwrapping happens at that boundary, emitted kwargs contain plaintext credentials (see [Target-Aware Emission](#target-aware-emission)). In generated declarations the flag is derived: a field annotated with `SecretStr` (including inside `Annotated` or a union) projects to `secret=True`.
+```python
+print(pg.PASSWORD)
+# **********
+print(pg.emit()["password"])
+# example-password
+```
+
+Because the unwrapping happens at the output boundary, emitted kwargs contain plaintext credentials (see [Target-aware emission](#target-aware-emission)). In a native declaration the flag is derived: a field annotated with `SecretStr`, including inside `Annotated` or a union, projects to `secret=True`.
 
 <!-- concept:67 -->
 <!-- concept:68 -->
-## Transform Function
+## Transform function
 
-The **transform function** (`ParameterSpec.transform`) is an optional callable applied to the field value when emitting driver kwargs. It converts the settings-facing value into the format the driver expects:
+`ParameterSpec.transform` is an optional callable applied to the value on emission. It converts the settings-facing value into the form the driver expects. In the example above, `CONNECT_TIMEOUT_S=10` is emitted as `connect_timeout_ms=10000`.
 
-```python
-ParameterSpec(
-    name="SSL_ENABLED",
-    type=bool,
-    tier="advanced",
-    default=True,
-    driver_key="ssl",
-    transform=lambda v: {"ssl": True} if v else None
-)
-```
+Transforms run after `SecretStr` unwrapping and before the value goes into the output dict. Typical uses are unit conversions (seconds to milliseconds), type conversions (bool to dict) and format conversions (path string to SSL context).
 
-Transforms run inside `_default_kwargs()` (and so inside `emit()`) after `SecretStr` unwrapping but before the value is placed in the output dictionary. They are appropriate for type conversions (bool to dict), unit conversions (seconds to milliseconds), or format conversions (path string to SSL context object).
+## Validator function
 
-## Validator Function
-
-The **validator function** (`ParameterSpec.validator`) is an optional callable that Pydantic invokes during field validation via `AfterValidator`. It receives the already-typed value and can either return it (valid) or raise a `ValueError`:
+`ParameterSpec.validator` is an optional callable that Pydantic runs after its own type coercion. It receives the typed value and returns it, or raises `ValueError` to reject it. In the example above, `validate_port` rejects ports outside 1-65535:
 
 ```python
-def validate_port(v: int) -> int:
-    if not (1 <= v <= 65535):
-        raise ValueError(f"Port must be 1-65535, got {v}")
-    return v
-
-ParameterSpec(
-    name="PORT", type=int, tier="core",
-    default=5432, driver_key="port",
-    validator=validate_port
-)
+try:
+    PostgreSQLProfile(DATABASE="myapp", PASSWORD="example-password", PORT=70000)
+except ValueError as exc:
+    print(type(exc).__name__)
+# ValidationError
 ```
 
-During dynamic field installation, when a validator is present, the type annotation is wrapped with `Annotated[type, AfterValidator(validator)]`. This means the validator runs after Pydantic's built-in type coercion but before the value is stored on the instance.
+## Profile class
 
-## Profile Class
+`Profile` subclasses `MountainAshBaseSettings`, so a profile accepts keyword arguments, configuration files, environment variables and the rest of the base settings machinery. A subclass declares its profile one of two ways:
 
-**Profile** inherits from `MountainAshBaseSettings`. A subclass either sets a class-body `__spec__` (explicit path), in which case `__pydantic_init_subclass__` installs a field for each `ParameterSpec`, or uses a class header and native fields (generated path), in which case the package publishes `__spec__` from the fields once the class is complete. Target-specific `__adapters__` compose the merged base and driver-key kwargs when `emit(target)` is called; the singular adapter hook is removed in 0.1.0.
+- Set `__spec__` in the class body (explicit path). The class gets a field for each `ParameterSpec`.
+- Use a class header and native fields (generated path). The package builds `__spec__` from the fields once the class is complete.
 
-```python
-from mountainash_settings import Profile
+Target-specific `__adapters__` shape the output of `emit(target)`.
 
-class PostgreSQLProfile(Profile):
-    __spec__ = POSTGRESQL_SPEC
-
-# PostgreSQLProfile now has fields: HOST, PORT, DATABASE, PASSWORD, SSL_MODE
-# All fields are validated, typed, and cacheable
-settings = PostgreSQLProfile(
-    HOST="db.example.com",
-    DATABASE="myapp",
-    PASSWORD="example-password",
-)
-print(settings.profile_name, settings.provider_type)
-# postgresql DatabaseType.POSTGRESQL
-```
-
-The `Profile` class also provides:
-
-- `profile_name` property that returns `__spec__.name`
-- `provider_type` property that returns `__spec__.provider_type`
-- A `post_init()` override that resolves template fields from the spec
-- `_default_kwargs(target)` that produces the 1:1 driver keyword argument dictionary
-- `emit(target, base=...)` that produces the final kwargs for a target
+A profile exposes `profile_name` (the spec's `name`) and `provider_type`, resolves template fields from the spec, and provides `emit(target, base=...)`.
 
 <!-- concept:70 -->
-## Dynamic Field Installation
+## Dynamic field installation
 
-**Dynamic field installation** is the mechanism by which `Profile.__pydantic_init_subclass__()` translates the `ParameterSpec` declarations of an explicit `__spec__` into live Pydantic fields. This happens at class definition time (when the `class` statement executes), not at instance creation time. Generated declarations do not use this path: their fields already exist as native Pydantic fields, and the spec is derived from them afterwards.
-
-The installation process for each parameter:
-
-1. Reject `FACTORY_DEFAULT` (`TypeError`): it describes a native factory and cannot be installed from an explicit spec
-2. Determine the annotation: `SecretStr` if `param.secret`, else `param.type`
-3. Wrap with `AfterValidator` if `param.validator` is set
-4. Create a `FieldInfo` with the annotation, default (`...` for `MISSING`) and description, and attach the parameter's emission options (`driver_key`, `tier`, `transform`, `template`) as field metadata
-5. Add to `cls.model_fields[param.name]` and `cls.__annotations__[param.name]`
-
-After all parameters are installed, `cls.model_rebuild(force=True)` is called to regenerate Pydantic's internal validation machinery.
+For an explicit `__spec__`, the `Profile` class creates its fields when the `class` statement runs, not when an instance is created. After the class definition, each `ParameterSpec` is an ordinary Pydantic field:
 
 ```python
-@classmethod
-def __pydantic_init_subclass__(cls, **kwargs):
-    super().__pydantic_init_subclass__(**kwargs)
-    if cls._profile_declaration is not None:
-        _complete_generated_profile(cls)
-        return
-    spec = _resolve_spec(cls)
-    if spec is None:
-        return
-
-    new_fields: dict[str, tuple[Any, FieldInfo]] = {}
-
-    for param in spec.parameters:
-        if param.default is FACTORY_DEFAULT:
-            raise TypeError(...)
-        ptype = SecretStr if param.secret else param.type
-        if param.validator is not None:
-            ptype = Annotated[ptype, AfterValidator(param.validator)]
-        if param.default is MISSING:
-            info = FieldInfo(annotation=ptype, default=...,
-                             description=param.description)
-        else:
-            info = FieldInfo(annotation=ptype, default=param.default,
-                             description=param.description)
-        info.metadata.append(_ProfileOptions(...))
-        new_fields[param.name] = (ptype, info)
-
-    for name, (annotation, info) in new_fields.items():
-        cls.model_fields[name] = info
-        cls.__annotations__[name] = annotation
-
-    cls.model_rebuild(force=True)
+print(list(PostgreSQLProfile.model_fields)[-6:])
+# ['HOST', 'PORT', 'DATABASE', 'PASSWORD', 'SSL_MODE', 'CONNECT_TIMEOUT_S']
+print(PostgreSQLProfile.model_fields["PASSWORD"].annotation)
+# <class 'pydantic.types.SecretStr'>
 ```
 
+The field's annotation is `SecretStr` for secret parameters, and is wrapped with the validator for parameters that declare one. A `MISSING` default makes the field required. The parameter's driver key, tier, transform and template travel with the field and are used by `emit()`.
+
+A parameter whose default is `FACTORY_DEFAULT` cannot be installed from an explicit spec. It raises `TypeError`. Native declarations do not use this path, because their fields already exist and the spec is derived from them.
+
 <!-- concept:112 -->
-## Native Profile Declarations
+## Native profile declarations
 
-A **native profile declaration** describes the profile with ordinary Pydantic fields on a `Profile` subclass instead of a hand-written `ProfileSpec`. The package reads the fields and generates the spec, so the class is the single source of truth for validation, defaults and emission. Three pieces take part:
+A native profile declaration describes the profile with ordinary Pydantic fields on a `Profile` subclass instead of a hand-written `ProfileSpec`. The package reads the fields and generates the spec, so the class is the single source of truth for validation, defaults and emission.
 
-- **Class header** (`_declaration.py`): `class X(Profile, name=..., provider_type=...)` supplies identity. Optional header options are `driver_keys="lower"` (default every field's driver key to its lowercase name), `spec_type` (a `ProfileSpec` subclass, whose extra dataclass fields become accepted header options) and `metadata` (or those extra fields). Unknown header options raise `TypeError`. Identity is validated at class creation (see Spec Identity).
-- **`ProfileField`** (`fields.py`): a wrapper around Pydantic's `Field` that adds `driver_key`, `tier`, `transform` and `template`. Every other keyword (`ge`, `le`, `description`, `default_factory`, ...) goes to Pydantic's `Field`. Omitting `driver_key` follows the class convention (`driver_keys="lower"` gives the lowercase name, otherwise no mapping); an explicit `driver_key=None` excludes the field; a `dict` scopes the key per target. `tier` defaults to `"core"`.
-- **Projection** (`_projection.py`): each uppercase application field becomes a `ParameterSpec`. Framework fields inherited from `MountainAshBaseSettings` are skipped (and may not carry `ProfileField` options). A lowercase application field name, duplicate output keys, or more than one `ProfileField` marker on a field raises `TypeError`.
+- Class header: `class X(Profile, name=..., provider_type=...)` supplies identity. Optional header options are `driver_keys="lower"` (default each field's driver key to its lowercase name), `spec_type` (a `ProfileSpec` subclass whose extra dataclass fields become accepted header options) and `metadata`. Unknown header options raise `TypeError`.
+- `ProfileField`: a wrapper around Pydantic's `Field` that adds `driver_key`, `tier`, `transform` and `template`. Every other keyword (`ge`, `le`, `description`, `default_factory`, and so on) goes to Pydantic's `Field`. If you omit `driver_key`, the class convention applies: the lowercase name with `driver_keys="lower"`, otherwise no mapping. An explicit `driver_key=None` excludes the field, and a `dict` scopes the key per target. `tier` defaults to `"core"`.
+- Projection: each uppercase application field becomes a `ParameterSpec`. Fields inherited from `MountainAshBaseSettings` are skipped and may not carry `ProfileField` options. A lowercase application field name, duplicate output keys, or more than one `ProfileField` marker on a field raises `TypeError`.
+
+Here is the same PostgreSQL profile declared natively, created from keyword arguments and from a configuration file:
 
 ```python
+import tempfile
+from pathlib import Path
 from pydantic import SecretStr
 from mountainash_settings import Profile, ProfileField
 
@@ -368,35 +269,86 @@ class NativePG(Profile, name="postgresql", provider_type="postgresql",
     SSL_MODE: str = ProfileField(default="prefer", tier="advanced", driver_key="sslmode")
     LOCAL_NOTE: str | None = ProfileField(default=None, driver_key=None)
 
+# From keyword arguments
+pg = NativePG(DATABASE="myapp", PASSWORD="example-password")
+print(pg.emit())
+# {'host': 'localhost', 'port': 5432, 'database': 'myapp',
+#  'password': 'example-password', 'sslmode': 'prefer'}
+
+# From a configuration file, with a keyword override
+with tempfile.TemporaryDirectory() as d:
+    cfg = Path(d) / "pg.yaml"
+    cfg.write_text("HOST: db.example.com\nDATABASE: reports\nPASSWORD: from-file\n")
+    pg2 = NativePG(config_files=str(cfg), PORT=6432)
+    print(pg2.emit())
+# {'host': 'db.example.com', 'port': 6432, 'database': 'reports',
+#  'password': 'from-file', 'sslmode': 'prefer'}
+
+# The generated spec
 spec = NativePG.__spec__
 print(spec.name, spec.metadata)
 # postgresql {'default_port': 5432}
-print([(p.name, p.driver_key) for p in spec.parameters])
-# [('HOST', 'host'), ('PORT', 'port'), ('DATABASE', 'database'),
-#  ('PASSWORD', 'password'), ('SSL_MODE', 'sslmode'), ('LOCAL_NOTE', None)]
-print(NativePG(DATABASE="myapp", PASSWORD="example-password").emit())
-# {'host': 'localhost', 'port': 5432, 'database': 'myapp', 'password': 'example-password', 'sslmode': 'prefer'}
+print([(p.name, p.tier, p.driver_key, p.secret) for p in spec.parameters])
+# [('HOST', 'core', 'host', False), ('PORT', 'core', 'port', False),
+#  ('DATABASE', 'core', 'database', False), ('PASSWORD', 'core', 'password', True),
+#  ('SSL_MODE', 'advanced', 'sslmode', False), ('LOCAL_NOTE', 'core', None, False)]
 ```
 
-Compared with the explicit path: a native declaration needs no `ParameterSpec` list and gets Pydantic's own constraints, aliases and validators directly, whereas the explicit `ProfileSpec` is plain data that can be built, inspected or registered without writing a class body. The two cannot be mixed on one class: setting `__spec__` in the body of a class that has a generated declaration raises `TypeError`. A generated `__spec__` is a descriptive record of the fields; it cannot reconstruct factories, aliases or decorator validators, which stay on the owning class.
+Compared with the explicit path, a native declaration needs no `ParameterSpec` list and uses Pydantic's own constraints, aliases and validators directly. The explicit `ProfileSpec` is plain data that you can build, inspect or register without writing a class body. The two cannot be mixed on one class: setting `__spec__` in the body of a class that has a native declaration raises `TypeError`. A generated `__spec__` describes the fields but cannot reconstruct factories, aliases or decorator validators, which stay on the class.
 
 ### FACTORY_DEFAULT
 
-`FACTORY_DEFAULT` (a singleton, like `MISSING`) is the `ParameterSpec.default` recorded in a generated spec for a field declared with a `default_factory`. It says "this field has a default, produced by a factory on the owning class" without attempting to store the callable. The projection yields `MISSING` for required fields, the literal default for fields with one, and `FACTORY_DEFAULT` for factory fields. It cannot be used in an explicit spec: installing a parameter whose default is `FACTORY_DEFAULT` raises `TypeError`, directing you to declare the factory on the class.
+`FACTORY_DEFAULT` is a singleton, like `MISSING`. A generated spec records it as the default of a field declared with `default_factory`. It means the field has a default produced by a factory on the owning class, without storing the callable. Required fields project to `MISSING`, fields with a literal default project to that value, and factory fields project to `FACTORY_DEFAULT`.
+
+```python
+from pydantic import Field
+from mountainash_settings import Profile
+
+class P(Profile, name="p", provider_type="p"):
+    A: int
+    B: int = 3
+    C: list[str] = Field(default_factory=list)
+
+print({p.name: p.default for p in P.__spec__.parameters})
+# {'A': MISSING, 'B': 3, 'C': FACTORY_DEFAULT}
+```
+
+It cannot be used in an explicit spec. Installing such a parameter raises `TypeError` and tells you to declare the factory on the class.
 
 ### Delayed types and model_rebuild
 
-The spec is published only when the Pydantic model is complete. If a field annotation refers to a type that is not yet defined, the class stays incomplete: `__spec__` is `None` and instantiating it raises `TypeError` ("incomplete profile; call model_rebuild() after defining referenced types"). Calling `Profile.model_rebuild()` once the type exists completes the model and publishes the spec; a completed declaration is immutable, so further rebuilds keep the same spec. A declaration with no `name` (an intermediate base class) cannot be instantiated either; declare `name` and `provider_type` on a concrete subclass.
+The spec is published only when the Pydantic model is complete. If a field annotation refers to a type that does not exist yet, the class stays incomplete: `__spec__` is `None` and instantiating it raises `TypeError`. Call `model_rebuild()` after defining the type to complete the model and publish the spec.
+
+```python
+class Late(Profile, name="late", provider_type="late"):
+    X: "Later"
+
+print(Late.__spec__)
+# None
+try:
+    Late(X=1)
+except TypeError as exc:
+    print(exc)
+# Late: incomplete profile; call model_rebuild() after defining referenced types
+
+class Later(int): ...
+
+Late.model_rebuild()
+print(Late.__spec__.name, Late(X=Later(1)).X)
+# late 1
+```
+
+A completed declaration is immutable, so further rebuilds keep the same spec. A class with no `name` (an intermediate base class) cannot be instantiated either. Declare `name` and `provider_type` on a concrete subclass.
 
 <!-- concept:113 -->
-## Target-Aware Emission
+## Target-aware emission
 
-**`Profile.emit(target, base=...)`** turns a profile instance into the keyword arguments for one consumer (a driver, a URL builder, an SDK client). A profile can serve several consumers at once because both parts of emission are scoped by target:
+`Profile.emit(target, base=...)` turns a profile instance into the keyword arguments for one consumer, such as a driver, a URL builder or an SDK client. One profile can serve several consumers because both parts of emission are scoped by target:
 
-1. Each field's `driver_key` may be a `dict` mapping a target to the output key for that target (a bare string applies to every target).
-2. The plural class variable `__adapters__` maps a target to a two-argument callable `adapter(profile, kwargs) -> dict` that receives the profile and the already-merged kwargs and returns the final dict. The singular adapter hook is removed.
+1. A field's `driver_key` may be a `dict` mapping each target to its output key. A bare string applies to every target.
+2. The class variable `__adapters__` maps a target to a callable `adapter(profile, kwargs) -> dict`. The adapter receives the profile and the already-merged kwargs and returns the final dict.
 
-Targets are any hashable value. `base` supplies caller kwargs that the profile output is layered over (profile values win on key collisions); `emit()` takes only a shallow copy, so an adapter that changes a nested container must copy it first.
+Targets are any hashable value. `base` supplies caller kwargs that the profile output is layered over, and profile values win on key collisions. `emit()` takes only a shallow copy of `base`, so an adapter that changes a nested container must copy it first.
 
 ```python
 from pydantic import SecretStr
@@ -421,7 +373,9 @@ print(base)
 # {'app': 'reports'}
 ```
 
-**Fail-closed targeting.** A profile is target-scoped when any field uses a `dict` driver key or the class defines any `__adapters__`. On a target-scoped profile, `emit()` with no target raises `ValueError`, and so does an explicit target the profile does not know (the known targets are the adapter keys plus every key of every `dict` driver key). An explicit `None` is accepted only if `None` is itself a known target. This prevents silently emitting an empty or partial dict. A profile with only bare-string driver keys and no adapters is not target-scoped, and `emit()` with no argument returns the merged kwargs.
+### Fail-closed targeting
+
+A profile is target-scoped when any field uses a `dict` driver key or the class defines `__adapters__`. On a target-scoped profile, `emit()` with no target raises `ValueError`, and so does a target the profile does not know. The known targets are the adapter keys plus every key of every `dict` driver key. An explicit `None` is accepted only if `None` is itself a known target. This stops a profile from silently emitting an empty or partial dict. A profile with only bare-string driver keys and no adapters is not target-scoped, and `emit()` with no argument returns the merged kwargs.
 
 ```python
 for args in [(), ("other",), (None,)]:
@@ -434,4 +388,6 @@ for args in [(), ("other",), (None,)]:
 # Multi has no emission for target None; known: ['driver', 'url'].
 ```
 
-**Secrets at emission.** `SecretStr` values are unwrapped with `.get_secret_value()` while kwargs are built, before any `transform` runs, so the emitted dict (and an adapter's input) holds plaintext. Emitted kwargs may expose credentials: do not log them, include them in error messages or persist them. The instance itself still masks the value (`repr` shows `SecretStr('**********')`). Authentication models and credential rendering for specific clients belong to the auth-client package; `emit()` with `base` and `__adapters__` is the integration point (see [Authentication Boundary](../08-authentication-system/index.md)).
+### Secrets at emission
+
+`SecretStr` values are unwrapped while kwargs are built, before any `transform` runs, so the emitted dict and an adapter's input hold plaintext. Do not log emitted kwargs, include them in error messages or persist them. The instance still masks the value in `repr`. Authentication models and credential rendering for specific clients belong to the auth-client package. `emit()` with `base` and `__adapters__` is the integration point (see [Authentication boundary](../08-authentication-system/index.md)).
