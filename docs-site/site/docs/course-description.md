@@ -1,50 +1,44 @@
 ---
-title: 'Package Overview'
-description: 'Package overview of mountainash-settings — what it is, what it covers and where it fits in the mountainash ecosystem'
+title: 'Package overview'
+description: 'Package overview of mountainash-settings: what it is, what it covers and where it fits in the mountainash ecosystem'
 ---
 
 [← Back to Home](index.md)
 
-# Package Overview
+# Package overview
 
-mountainash-settings is a typed configuration framework for Python applications built on Pydantic v2. It loads configuration from multiple file formats, resolves secrets transparently, supports field templating for derived values, and provides a profile system for reusable connection configurations. Structural source-context caching reuses captured inputs while each retrieval validates a fresh, independently owned result. Authentication is not part of the package: it is owned by `mountainash-auth-client` (see [Chapter 8](chapters/08-authentication-system/index.md)).
+mountainash-settings is a typed configuration framework for Python applications built on Pydantic v2. It loads configuration from several file formats and environment variables, resolves secrets, derives field values with templates, and provides profiles for reusable connection configuration. `get_settings()` caches the inputs it reads and returns a freshly validated instance on every call. Authentication is not part of the package: it lives in `mountainash-auth-client` (see [Chapter 8](chapters/08-authentication-system/index.md)).
 
 ## Audience
 
-Python developers and platform engineers responsible for how applications are configured across environments: data engineers who need consistent pipeline settings across dev, staging and production; backend developers managing typed, reusable connection parameters for databases and services; and platform engineers standardising configuration and secret-reference conventions across a fleet of services. It picks up where Pydantic `BaseSettings` leaves off: secrets, connection profiles and multi-file merging.
+Python developers and platform engineers responsible for how applications are configured across environments: data engineers who need consistent pipeline settings across dev, staging and production, backend developers managing typed connection parameters for databases and services, and platform engineers standardising configuration and secret references across a fleet of services. The package picks up where Pydantic `BaseSettings` leaves off: secrets, connection profiles and multi-file merging.
 
-Assumed knowledge: Python type annotations, dataclasses and decorators; Pydantic v2 (`BaseModel`, `BaseSettings`, validators); at least one of YAML, TOML, JSON or `.env`; and the general role of a secrets manager. [Chapter 1](chapters/01-pydantic-and-configuration-foundations/index.md) summarises the Pydantic and file-loading concepts the other chapters rely on.
+You should be comfortable with Python type annotations and decorators, Pydantic v2 (`BaseModel`, `BaseSettings`, validators), at least one of YAML, TOML, JSON or `.env`, and the general role of a secrets manager. [Chapter 1](chapters/01-pydantic-and-configuration-foundations/index.md) summarises the Pydantic and file-loading concepts the other chapters rely on.
 
-## Key Capabilities
+## Key capabilities
 
-**Any config source, one base class.** YAML, TOML, JSON, .env files, and environment variables all flow into the same typed settings class. Pydantic validates everything: type coercion, required fields, constrained values. File lists merge in the order given, and kwargs merge shallowly with later values winning.
-
-**Fields that build on each other.** Template syntax lets fields reference other fields: `log_file = 'logs/{APP_NAME}/{RUNDATE}.log'`. Connection strings build from host, port and database fields; paths compose from base directories and environment-specific suffixes.
-
-**Secrets that resolve themselves.** Write `secret:db.prod.password` in a config file or environment variable. A `secret_store` bound directly to the settings parameters (any `SecretReader`, or a `SecretWriter` for `persist()`) supplies the records, and the reference resolves during construction (kwargs before validation, file and environment values in a second pass that revalidates), so the settings class holds the real value. Settings ships local record stores (filesystem, memory, namespaced); external secret managers such as Vault, AWS SSM or Azure Key Vault integrate by implementing the store protocols. There is no secrets registry and no bundled cloud provider.
-
-**Connection profiles that know their targets.** A profile is declared with an explicit `ProfileSpec` or with native `ProfileField` declarations on the class. Pydantic fields and template wiring are installed automatically, and `emit(target, base=)` together with `__adapters__` renders target-specific driver keyword arguments.
-
-**Authentication kept at the boundary.** Authentication models, auth-mode selection and credential rendering live in `mountainash-auth-client`. Settings supplies the generic pieces an auth layer plugs into: profile declarations, secret handling and target adapters.
-
-**Source caching for pipelines.** `get_settings()` reuses a private structural source context while validating each invocation into a fresh, independently owned result. Runtime overrides stay invocation-local, including on the first call.
+- Any config source, one base class. YAML, TOML, JSON, `.env` files and environment variables all feed the same typed settings class, and Pydantic validates the result. Within one format, later files override earlier ones; across formats a fixed priority applies (`.env`, then YAML, TOML, JSON).
+- Templated fields. A `post_init()` override can build a field from others with `init_setting_from_template("logs/{APP_NAME}/{RUNDATE}.log", ...)`, and a `Profile` field declares `template=` to have it derived automatically.
+- Secret references. Write `secret:db.prod.password` in a config file or environment variable and bind a `secret_store` to the settings. The reference is replaced with the real value when the settings are constructed. Settings ships local stores (filesystem, memory, namespaced), and external managers such as Vault, AWS SSM or Azure Key Vault plug in by implementing the store protocols.
+- Connection profiles. Declare a profile with `ProfileSpec` or with `ProfileField` declarations on a class, then call `emit(target, base=)` to get the keyword arguments a specific driver or SDK expects.
+- Cached retrieval. `get_settings()` reuses what it has already read and still validates a new instance for each call. Runtime overrides apply only to the call that supplies them.
 
 ## Chapters
 
-Full descriptions are on the [Chapters](chapters/index.md) page.
+The [Chapters](chapters/index.md) page has the full list.
 
-| # | Chapter | Documents |
-|---|---------|-----------|
-| 1 | Pydantic and Configuration Foundations | Pydantic and file/env-loading concepts the package builds on |
-| 2 | MountainAsh Base Settings | The `MountainAshBaseSettings` class and its lifecycle |
-| 3 | Settings Parameters and Merge Strategies | Structural vs. runtime parameters, the merge framework |
-| 4 | File Handling, Kwargs, and Field Templating | Multi-format loading and `{FIELD_NAME}` templating |
-| 5 | Secrets Resolution | `secret_store` binding, record-store protocols, two-pass resolution, local stores |
-| 6 | Connection Profiles | `ProfileSpec`, `ParameterSpec`, native `ProfileField` declarations, target-aware `emit()` |
-| 7 | Profile Registry and Invariants | Registration, duplicate prevention, invariant testing |
-| 8 | Authentication Boundary | What settings does not implement, and how credentials are rendered through adapters |
-| 9 | Caching, Settings Management, and App Settings | Structural source-context reuse, fresh owned materialization, `SettingsManager`, `AppSettings` |
+| # | Chapter | Covers |
+|---|---------|--------|
+| 1 | Pydantic and configuration foundations | Pydantic and file or environment loading concepts the package builds on |
+| 2 | MountainAsh base settings | Defining a settings class with `MountainAshBaseSettings` |
+| 3 | Settings parameters and merge strategies | Choosing files and kwargs, and how values merge |
+| 4 | File handling, kwargs, and field templating | Multi-format loading and `{FIELD_NAME}` templates |
+| 5 | Secrets resolution | Binding a `secret_store`, store protocols and local stores |
+| 6 | Connection profiles | `ProfileSpec`, `ProfileField` and `emit()` |
+| 7 | Profile registry and invariants | Registering profiles by name and testing their invariants |
+| 8 | Authentication boundary | What settings leaves to `mountainash-auth-client` |
+| 9 | Caching, settings management and app settings | `get_settings()`, `SettingsManager` and `AppSettings` |
 
 ## Ecosystem
 
-mountainash-settings is part of the [mountainash](https://github.com/mountainash-io/mountainash) project, a collection of typed Python libraries for data engineering and platform development. It is the configuration layer other mountainash packages depend on for settings management, connection configuration and secrets resolution; authentication is provided by the separate `mountainash-auth-client` package.
+mountainash-settings is part of the [mountainash](https://github.com/mountainash-io/mountainash) project, a collection of typed Python libraries for data engineering and platform development. Other mountainash packages use it for settings, connection configuration and secrets resolution. Authentication comes from the separate `mountainash-auth-client` package.

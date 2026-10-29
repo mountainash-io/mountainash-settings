@@ -12,64 +12,64 @@
   },
   "chapter_state": {
     "01-pydantic-and-configuration-foundations": {
-      "content_hash": "sha256:fcc7b38b3e83b87b679ac87d18769e13acb6d76b24ad390ca8c5e925683d5e06",
-      "word_count": 2061,
+      "content_hash": "sha256:a66d478a810052553ff53d8fadcc5dbc085d91569ed285cf992a86f937b046d7",
+      "word_count": 1779,
       "has_concept_markers": true,
       "last_generated": "2026-10-28",
       "generator_version": "textbook-refresh@d31fb89a"
     },
     "02-mountainash-base-settings": {
-      "content_hash": "sha256:d9cbacda472d4138ef483060ba4ee26bed3ebfed473470504494c9ce2583e337",
-      "word_count": 2059,
+      "content_hash": "sha256:b9c50a81078b3fee0a9bb0a73c1505976de223e36b06ea97b6dedfc471628216",
+      "word_count": 1788,
       "has_concept_markers": true,
       "last_generated": "2026-10-28",
       "generator_version": "textbook-refresh@d31fb89a"
     },
     "03-settings-parameters-and-merge-strategies": {
-      "content_hash": "sha256:fcf091a2639c21f462963604e59cb7a573074fdbf51be5eb5d86ed67d6aa5a22",
-      "word_count": 2088,
+      "content_hash": "sha256:3c4b27acf2fc48d808d0568c9e219b4451922da8bf48b291742408c9c26b39a3",
+      "word_count": 1263,
       "has_concept_markers": true,
       "last_generated": "2026-10-28",
       "generator_version": "textbook-refresh@d31fb89a"
     },
     "04-file-handling-kwargs-and-field-templating": {
-      "content_hash": "sha256:7496586cc0ae1430f003d78687b43fa6398eaff2aced8077199785c6ed0794d9",
-      "word_count": 2814,
+      "content_hash": "sha256:2e8df7254f238fc71220029449e7e1657091fdfdff1f688ea99e746ed0092b5a",
+      "word_count": 2016,
       "has_concept_markers": true,
       "last_generated": "2026-10-28",
       "generator_version": "textbook-refresh@d31fb89a"
     },
     "05-secrets-resolution": {
-      "content_hash": "sha256:6a3fe341edcb14bd5cae2303a5a90c76a6867509138f93d3c72c1a687c8fdc6a",
-      "word_count": 2037,
+      "content_hash": "sha256:8e6a099258d04ebd8f1d1cd4b25bf82857fb15e008328d1ec7e88922cd536443",
+      "word_count": 1877,
       "has_concept_markers": true,
       "last_generated": "2026-10-28",
       "generator_version": "textbook-refresh@d31fb89a"
     },
     "06-connection-profiles": {
-      "content_hash": "sha256:6c3c32ea979d9533843db36b0fb2ac572adc5c19400452c4353e7443c848af01",
-      "word_count": 2802,
+      "content_hash": "sha256:e875e1a657df2cc247c71851f669ba5af3052a15b9ecf3c13c25ef81beeaa32d",
+      "word_count": 2343,
       "has_concept_markers": true,
       "last_generated": "2026-10-28",
       "generator_version": "textbook-refresh@d31fb89a"
     },
     "07-profile-registry-and-invariants": {
-      "content_hash": "sha256:ea77a9154115d8785d4d1adff9e86ec876b8fafd3e193f7f0ca0db2feb67f36e",
-      "word_count": 1761,
+      "content_hash": "sha256:7457648a79a096943364c04e34c23041d6fe532ba63ed12d4a16f233d57eb6ac",
+      "word_count": 1445,
       "has_concept_markers": true,
       "last_generated": "2026-10-28",
       "generator_version": "textbook-refresh@d31fb89a"
     },
     "08-authentication-system": {
-      "content_hash": "sha256:a531a784d01d69986b75cf6b7a67b466f64e48a4cd0cc0914e940177382fc73a",
-      "word_count": 624,
+      "content_hash": "sha256:cda315f55e4a1ea46c951981c23b477d43d2800803e2df831bce30aeb5ed8f24",
+      "word_count": 561,
       "has_concept_markers": true,
       "last_generated": "2026-10-28",
       "generator_version": "textbook-refresh@d31fb89a"
     },
     "09-caching-settings-management-and-app-settings": {
-      "content_hash": "sha256:b1558838a69bec4a2e73bcce64a89e29979312e843f8b5170d07c594dd8c7566",
-      "word_count": 1404,
+      "content_hash": "sha256:3ef09c86abdb57ed614c439fc7edff46ae070d1e6394a427ce5385b08b0ce99b",
+      "word_count": 1470,
       "has_concept_markers": true,
       "last_generated": "2026-10-28",
       "generator_version": "textbook-refresh@d31fb89a"
@@ -83,7 +83,7 @@
   },
   "faq_state": {
     "question_count": 50,
-    "content_hash": "sha256:f6e1cafd01c7a22a8741f718177bcf950f86825b0ef757ccabda7aa00147eb42"
+    "content_hash": "sha256:5a31f041319957a278d0960f88a07966e13fc867c1f9e0ee88ffb858b8858322"
   },
   "refresh_history": [
     {
