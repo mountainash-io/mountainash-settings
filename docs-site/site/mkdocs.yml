@@ -28,7 +28,6 @@ copyright: 'Copyright &copy; 2024-2026 Mountain Ash Solutions Pty. Ltd. Licensed
 nav:
   - Home: index.md
   - About: about.md
-  - Package overview: course-description.md
 
   - Chapters:
       - List of chapters: chapters/index.md
@@ -74,6 +73,9 @@ theme:
 # Plugins
 plugins:
   - search
+  - redirects:
+      redirect_maps:
+        course-description.md: index.md
   # Uncomment after running `pip install "mkdocs-material[imaging]"`:
   # - social
   # Uncomment after running `pip install mkdocs-glightbox`:

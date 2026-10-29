@@ -93,8 +93,8 @@ The host came from the file, the port from the environment and the password from
 
 ## Where to go next
 
-- New to the package? Start with [Chapter 2](chapters/02-mountainash-base-settings/index.md), or read [Chapter 1](chapters/01-pydantic-and-configuration-foundations/index.md) first for the Pydantic background.
-- The [package overview](course-description.md) covers scope and how the package fits into the mountainash ecosystem.
+- New to the package? Start with [Chapter 2](chapters/02-mountainash-base-settings/index.md). The chapters assume you are comfortable with Python type annotations, Pydantic v2 models and validators, and at least one of YAML, TOML, JSON or `.env`; [Chapter 1](chapters/01-pydantic-and-configuration-foundations/index.md) covers the Pydantic background.
+- The [chapter list](chapters/index.md) shows everything the documentation covers.
 - [About](about.md) has authorship, the license and the link to the code repository.
 
 !!! note "Upgrading from 0.x"
