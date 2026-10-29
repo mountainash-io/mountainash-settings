@@ -1,11 +1,15 @@
 {
   "id": "mountainash_settings.settings_cache.settings_functions",
   "path": "src/mountainash_settings/settings_cache/settings_functions.py",
-  "summary": "Public entry-point functions for retrieving cached settings instances. get_settings() is the primary interface — it normalises inputs into a SettingsParameters, retrieves or creates a cached instance via _get_settings() (LRU-cached), then applies runtime overrides. get_settings_manager() returns the SettingsManager singleton.",
+  "summary": "get_settings() materializes an isolated settings instance from a pinned structural source context (typed overloads on settings_class); get_settings_manager() returns the process-wide SettingsManager.",
   "role": "public-api",
   "visibility": "public",
-  "stability": "stable",
-  "audiences": ["users", "maintainers", "contributors"],
+  "stability": "evolving",
+  "audiences": [
+    "users",
+    "maintainers",
+    "broader-hype"
+  ],
   "doc_priority": "essential",
   "confidence": "high",
   "public_api": [
@@ -14,44 +18,63 @@
   ],
   "key_classes": [],
   "key_functions": [
-    "get_settings",
     "get_settings_manager",
-    "_get_settings"
+    "get_settings",
+    "get_settings",
+    "get_settings",
+    "get_settings"
   ],
   "dependencies": [
-    "mountainash_settings.settings_parameters.settings_parameters",
-    "mountainash_settings.settings_cache.settings_manager"
-  ],
-  "dependents": [
     "mountainash_settings.settings.base_settings",
+    "mountainash_settings.settings_cache.settings_manager",
+    "mountainash_settings.settings_parameters.filehandler",
     "mountainash_settings.settings_parameters.settings_parameters"
   ],
+  "dependents": [
+    "mountainash_settings",
+    "mountainash_settings.settings_cache"
+  ],
   "extension_points": [],
-  "lifecycle_notes": [
-    "_get_settings() is @lru_cache(maxsize=None) — unbounded cache keyed on SettingsParameters structural hash",
-    "get_settings_manager() is also @lru_cache — returns a process-wide singleton SettingsManager",
-    "Runtime kwargs are applied after cache retrieval via apply_runtime_overrides(), never polluting the cached instance"
-  ],
+  "lifecycle_notes": [],
   "documentation_hooks": [
-    "Two-level caching: lru_cache on _get_settings() for structural identity; SettingsManager dict as secondary store",
-    "get_settings() accepts either a pre-built SettingsParameters or individual keyword arguments"
+    "docs/README_SECRETS.md",
+    "docs/advanced-usage.md",
+    "docs/typing.md"
   ],
-  "examples": [
-    "examples/basic_usage_example.py",
-    "examples/comprehensive_patterns_example.py"
-  ],
+  "examples": [],
   "tests": [
-    "tests/test_settings_manager.py"
+    "tests/settings_cache/test_settings_manager.py"
   ],
-  "risks": [
-    "lru_cache is process-global and never cleared — in long-running processes, settings changes (e.g. env var mutation) will not be picked up after first load"
-  ],
+  "risks": [],
   "open_questions": [],
   "evidence": [
-    {"kind": "symbol", "path": "src/mountainash_settings/__init__.py", "detail": "get_settings and get_settings_manager in __all__"},
-    {"kind": "test", "path": "tests/test_settings_manager.py", "detail": "Manager and function tests"}
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "get_settings exported"
+    },
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "get_settings_manager exported"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "imports mountainash_settings.settings_cache.settings_functions"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings_cache/__init__.py",
+      "detail": "imports mountainash_settings.settings_cache.settings_functions"
+    },
+    {
+      "kind": "test",
+      "path": "tests/settings_cache/test_settings_manager.py",
+      "detail": "exercises module behaviour"
+    }
   ],
-  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
   "manual": {
     "notes": "",
     "editorial_status": "",

@@ -1,301 +1,283 @@
 ---
-title: Profile Registry and Invariants
-description: The profile registry system covering the Registry class, name-keyed storage, decorator registration, duplicate prevention, lookup, descriptor invariants, and automated test generation.
+title: Profile registry and invariants
+description: The profile registry system covering the Registry class, name-keyed storage, decorator registration, duplicate prevention, lookup, spec invariants, and automated test generation.
 generated_by: claude skill chapter-content-generator
 date: 2026-06-03
 version: 0.08
 ---
 
-# Profile Registry and Invariants
+# Profile registry and invariants
 
-## Summary
-
-This chapter covers the profile registry that provides a centralized store for ProfileDescriptor instances. You will learn about the Registry class with its name-keyed store, decorator-based registration pattern, registry decorator factory for customizing registration, duplicate prevention, iteration and lookup by name, descriptor invariants that validate profile definitions, and the invariant test generator for automated testing.
+A `Registry` collects profiles under unique names for one domain. You register a profile with a class decorator, look it up by name at runtime, and get a ready-made set of pytest checks for every registered spec with `spec_invariants_for()`.
 
 ---
 
+## Why a registry
+
+An application that supports several backends, such as PostgreSQL, MySQL, Redis or Snowflake, has a `Profile` subclass for each. A config file that says `backend: postgresql` needs to be resolved to the right settings class, and two modules must not claim the same name. A `Registry` does both. A `Profile` subclass can come from either declaration path described in [Connection profiles](../06-connection-profiles/index.md): an explicit `__spec__ = ProfileSpec(...)` or a native declaration whose spec is generated from its fields.
+
+Registries are scoped to a domain. A database package has its own registry, a message broker package has another, and each has its own namespace and optional type constraints.
+
 <!-- concept:71 -->
-<!-- concept:74 -->
-<!-- concept:76 -->
-## Why a Registry
+## Registry class
 
-When an application supports multiple connection backends -- PostgreSQL, MySQL, Redis, Snowflake, BigQuery -- each backend has its own `ProfileSpec` and `Profile` subclass. Something needs to collect these registrations, prevent naming collisions, and provide runtime lookup so that a configuration file specifying `backend: postgresql` can be resolved to the correct settings class. The Registry class fills this role.
-
-Registries are domain-scoped. A database package has its own registry, a message broker package has another, and an API client package has a third. Each registry operates independently, with its own namespace and optional type constraints.
-
-## Registry Class
-
-The **Registry** class is a mutable, name-keyed store that maps profile names to their specs and settings classes. It maintains two parallel dictionaries:
-
-- `_descriptors` -- maps name strings to `ProfileSpec` instances
-- `_classes` -- maps name strings to `Profile` subclasses
-
-The constructor accepts a name (used in error messages and test IDs) plus two optional type constraints:
+`Registry` is a mutable store that maps profile names to their specs and settings classes. The constructor takes a name, used in error messages and test IDs, and two optional type constraints:
 
 ```python
-class Registry:
-    def __init__(
-        self,
-        name: str,
-        *,
-        spec_type: type[ProfileSpec] | None = None,
-        profile_type: type | None = None,
-    ) -> None:
-        self.name = name
-        self._spec_type = spec_type
-        self._profile_type = profile_type
-        self._descriptors: dict[str, ProfileSpec] = {}
-        self._classes: dict[str, type[Profile]] = {}
+from mountainash_settings import Registry
+
+DATABASES = Registry("databases")
 ```
 
-When `spec_type` is provided, every registered spec must be an instance of that type (or a subclass). When `profile_type` is provided, every registered class must be a subclass. These constraints catch accidental cross-domain registrations at registration time rather than at runtime lookup.
+`Registry` is generic over the spec and profile types, so a typed registry gives type checkers precise return types from `get_spec()` and `get_settings_class()`. Without constraints it accepts any `ProfileSpec` and `Profile`. With `spec_type` and `profile_type`, every registered spec must be an instance of `spec_type` (or a subclass) and every registered class must be a subclass of `profile_type`. A violation raises `TypeError` at registration time rather than at lookup, and the registry is left unchanged.
 
 ```python
-# Create a typed registry
-DATABASES_REGISTRY = Registry(
-    "databases",
-    spec_type=BackendSpec,         # custom subclass of ProfileSpec
-    profile_type=ConnectionProfile  # custom subclass of Profile
+from dataclasses import dataclass
+from mountainash_settings import ParameterSpec, Profile, ProfileSpec, Registry
+
+@dataclass(frozen=True, kw_only=True)
+class BackendSpec(ProfileSpec):
+    default_port: int | None = None
+
+class ConnectionProfile(Profile):
+    pass
+
+REGISTRY = Registry("databases", spec_type=BackendSpec,
+                    profile_type=ConnectionProfile)
+register = REGISTRY.decorator()
+
+SPEC = BackendSpec(
+    name="postgresql", provider_type="postgresql", default_port=5432,
+    parameters=[ParameterSpec(name="HOST", type=str, tier="core",
+                              default="localhost", driver_key="host")],
 )
+
+@register
+class PostgresProfile(ConnectionProfile):
+    __spec__ = SPEC
+
+print(REGISTRY.get_spec("postgresql").default_port)  # 5432
+
+try:
+    @register
+    class Plain(Profile, name="redis", provider_type="redis"):
+        HOST: str = "x"
+except TypeError as e:
+    print(e)  # Registry 'databases': spec_type mismatch
 ```
 
 <!-- concept:72 -->
-## Name Keyed Store
+## Name keyed store
 
-The **name-keyed store** is the core data structure: two dictionaries keyed by the `ProfileSpec.name` string. The name serves as the primary identifier for all lookup and registration operations.
+Entries are keyed by the `ProfileSpec.name` string, which is the identifier for every registration and lookup. The registry supports three access patterns:
 
-The store supports three access patterns:
+- Registration: `register(spec, cls)`, or the decorator described below
+- Lookup by name: `get_spec(name)` and `get_settings_class(name)`
+- Containment and size: `name in registry` and `len(registry)`
 
-- **Registration** -- `register(spec, cls)` adds a new entry
-- **Lookup by name** -- `get_descriptor(name)` and `get_settings_class(name)` retrieve entries
-- **Containment check** -- `name in registry` tests whether a name is registered
-
-```python
-<!-- concept:73 -->
-# After registration:
-assert "postgresql" in DATABASES_REGISTRY
-assert len(DATABASES_REGISTRY) == 1
-
-spec = DATABASES_REGISTRY.get_descriptor("postgresql")
-cls = DATABASES_REGISTRY.get_settings_class("postgresql")
-```
-
-The `descriptors` property returns a shallow copy of the specs dictionary, providing a read-only view that prevents external mutation of the registry's internal state.
-
-## Decorator Registration
-
-**Decorator registration** is the primary mechanism for adding profiles to a registry. Instead of calling `registry.register(spec, cls)` imperatively, developers use the `@register` decorator on the class definition:
+The examples in the rest of this chapter register native profiles in a registry like this:
 
 ```python
-register = DATABASES_REGISTRY.decorator()
+from mountainash_settings import Profile, ProfileField, Registry
+
+DATABASES = Registry("databases")
+register = DATABASES.decorator()
 
 @register
-class PostgreSQLProfile(ConnectionProfile):
-    __spec__ = POSTGRESQL_SPEC
+class PostgresProfile(Profile, name="postgresql", provider_type="postgresql",
+                      driver_keys="lower"):
+    HOST: str = "localhost"
+    PORT: int = ProfileField(default=5432, ge=1, le=65535)
+    DATABASE: str = "app"
+
+@register
+class RedisProfile(Profile, name="redis", provider_type="redis",
+                   driver_keys="lower"):
+    HOST: str = "localhost"
+
+print("postgresql" in DATABASES, len(DATABASES))  # True 2
+cls = DATABASES.get_settings_class("postgresql")
+spec = DATABASES.get_spec("postgresql")
+print(cls.__name__, spec.provider_type)  # PostgresProfile postgresql
 ```
 
-The bare `@register` form (without arguments) is the canonical pattern as of version 26.5.0. The decorator reads `cls.__spec__` from the class body and calls `registry.register(spec, cls)` internally. This ensures that the spec and class are always in sync -- the spec declared on the class is exactly the spec registered in the registry.
+`register(spec, cls)` validates before it stores anything, in this order:
 
-The decorator returns the class unchanged, so the decorated class can be used normally after registration. The decoration has no effect on the class's behavior -- it only adds the class to the registry's lookup tables and sets `cls.__spec__` (for the deprecation-window mirror to `cls.__descriptor__`).
+1. `spec` must be a `ProfileSpec` and an instance of the registry's `spec_type`; otherwise `TypeError` (`spec_type mismatch`).
+2. `cls` must be a `Profile` subclass and a subclass of the registry's `profile_type`; otherwise `TypeError` (`profile_type mismatch`).
+3. `cls` must be a completed profile. An intermediate native declaration (no `name`) or one whose field types are still unresolved raises `TypeError`; call `model_rebuild()` first.
+4. A natively declared profile must be registered with its own published spec (`spec is cls.__spec__`); otherwise `TypeError`.
+5. The name must be free; otherwise `ValueError` (see [Duplicate prevention](#duplicate-prevention)).
 
-#### Diagram: Decorator Registration Flow
+After a successful registration `register()` also sets `cls.__spec__` to the registered spec.
 
-<iframe src="../../sims/decorator-registration-flow/main.html" width="100%" height="450px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Decorator Registration Flow</summary>
-Type: workflow
-**sim-id:** decorator-registration-flow<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
+<!-- concept:73 -->
+## Decorator registration
 
-A directed flow showing the `@register` decoration process: (1) Python evaluates class body (installs __spec__), (2) @register decorator invoked with the class, (3) decorator reads cls.__spec__, (4) type constraints validated (spec_type, profile_type), (5) duplicate check against _descriptors, (6) spec and class added to registry dictionaries, (7) class returned unchanged. Each step is clickable to show the data at that point. Error branches show what happens when type mismatch or duplicate is detected. Learning objective: Trace the registration lifecycle from class definition through decorator execution to registry storage (Bloom: Understand).
-</details>
-
-## Registry Decorator Factory
-
-The **registry decorator factory** is the `decorator()` method on Registry that returns the `@register` decorator bound to a specific registry instance. This factory pattern allows multiple registries to coexist, each with its own decorator:
+Decorator registration is the usual way to add a profile. Instead of calling `registry.register(spec, cls)`, apply the `@register` decorator, obtained from `registry.decorator()`, to the class definition, as the examples above do. The explicit-spec path looks like this:
 
 ```python
-# Each registry produces its own decorator
-db_register = DATABASES_REGISTRY.decorator()
-mq_register = MESSAGE_QUEUE_REGISTRY.decorator()
+from mountainash_settings import ParameterSpec, Profile, ProfileSpec, Registry
+
+DATABASES = Registry("databases")
+register = DATABASES.decorator()
+
+POSTGRESQL_SPEC = ProfileSpec(
+    name="postgresql",
+    provider_type="postgresql",
+    parameters=[ParameterSpec(name="HOST", type=str, tier="core",
+                              default="localhost", driver_key="host")],
+)
+
+@register
+class PostgreSQLProfile(Profile):
+    __spec__ = POSTGRESQL_SPEC
+
+print(DATABASES.get_settings_class("postgresql").__name__)  # PostgreSQLProfile
+print(DATABASES.get_spec("postgresql") is POSTGRESQL_SPEC)  # True
+```
+
+The bare `@register` form, without arguments, is the only decorator form. The decorator reads the class's own `__spec__` and registers that spec with that class, so the spec on the class is always the spec in the registry.
+
+The decorated class must be a `Profile` subclass with its own `__spec__`: either an explicit `ProfileSpec` set in the class body, or the spec generated for a completed native declaration. A spec inherited from a base class does not count. The decorator returns the class unchanged.
+
+<!-- concept:74 -->
+## Registry decorator factory
+
+`decorator()` returns a `@register` decorator bound to one registry, so several registries can coexist, each with its own decorator:
+
+```python
+from mountainash_settings import Profile, Registry
+
+DATABASES = Registry("databases")
+BROKERS = Registry("brokers")
+db_register = DATABASES.decorator()
+mq_register = BROKERS.decorator()
 
 @db_register
-class PostgreSQLProfile(ConnectionProfile):
-    __spec__ = POSTGRESQL_SPEC
+class PostgresProfile(Profile, name="postgresql", provider_type="postgresql"):
+    HOST: str = "localhost"
 
 @mq_register
-class RabbitMQProfile(BrokerProfile):
-    __spec__ = RABBITMQ_SPEC
+class RabbitMQProfile(Profile, name="rabbitmq", provider_type="rabbitmq"):
+    HOST: str = "localhost"
+
+print(list(DATABASES.specs), list(BROKERS.specs))  # ['postgresql'] ['rabbitmq']
 ```
 
-The factory also supports a deprecated with-argument form `@register(spec)` for backwards compatibility during the 26.5.x deprecation window. This form emits a `DeprecationWarning` and validates that the passed spec matches the class's `__spec__` if both are present. The disambiguation between the two forms is based on type: if the argument is a `type` (a class), it is the bare form; if it is a `ProfileSpec` instance, it is the deprecated with-argument form.
+There is no with-argument form. Calling the decorator with a `ProfileSpec` instance, as in `@register(spec)`, raises `TypeError: Registration requires a Profile subclass`. The spec belongs in the class body as `__spec__`, or is generated from a native declaration.
 
 <!-- concept:75 -->
-## Duplicate Prevention
+## Duplicate prevention
 
-**Duplicate prevention** ensures that no two profiles register under the same name in a single registry. The `register()` method checks `_descriptors` before adding a new entry:
+No two profiles can register under the same name in one registry. A second registration raises `ValueError` that names the class already holding the name:
 
 ```python
-def register(self, spec: ProfileSpec, cls: type[Profile]) -> None:
-    if spec.name in self._descriptors:
-        existing = self._classes.get(spec.name)
-        where = (
-            f"{existing.__module__}.{existing.__qualname__}"
-            if existing is not None
-            else "<unknown class>"
-        )
-        raise ValueError(
-            f"Profile {spec.name!r} is already registered "
-            f"in {self.name} registry by {where}"
-        )
+try:
+    @register
+    class Other(Profile, name="postgresql", provider_type="postgresql"):
+        HOST: str = "x"
+except ValueError as e:
+    print(e)
+# Profile 'postgresql' is already registered in databases registry by __main__.PostgresProfile
 ```
 
-The error message includes the fully qualified name of the class that already occupies the slot, making it easy to diagnose import-order conflicts where two modules both attempt to register under the same name. This is a common issue in plugin-style architectures where multiple packages contribute to the same registry.
+The message includes the fully qualified name of the existing class, which makes import-order conflicts easy to diagnose. This is common in plugin-style setups where several packages contribute to one registry.
 
-Duplicate prevention applies per-registry. A name like `"postgresql"` can exist in both `DATABASES_REGISTRY` and `ANALYTICS_REGISTRY` without conflict, since they are separate Registry instances with independent namespaces.
+The check is per registry. A name like `"postgresql"` can exist in both a `databases` registry and an `analytics` registry, because they are separate `Registry` instances.
 
 !!! tip "Resolving duplicate registration errors"
-    If you encounter a `ValueError` about duplicate registration, check whether the same module is being imported twice (common with relative vs absolute imports) or whether two specs accidentally share the same `name` field. The error message's module path helps identify the conflict source.
+    If you get a `ValueError` about duplicate registration, check whether the same module is imported twice (common with relative and absolute imports) or whether two specs share the same `name`. The module path in the message points to the first registrant.
 
-## Registry Iteration
+<!-- concept:76 -->
+## Registry iteration
 
-**Registry iteration** is supported through the `descriptors` property and the `__len__` and `__contains__` dunder methods:
+`len()`, `in` and the `specs` property cover inspection of a registry:
 
 ```python
-# Check how many profiles are registered
-print(len(DATABASES_REGISTRY))  # e.g., 5
-
-# Iterate over all specs
-for name, spec in DATABASES_REGISTRY.descriptors.items():
-    print(f"{name}: {len(spec.parameters)} parameters")
-
-# Check membership
-if "postgresql" in DATABASES_REGISTRY:
-    spec = DATABASES_REGISTRY.get_descriptor("postgresql")
+print(len(DATABASES))                      # 2
+for name, spec in DATABASES.specs.items():
+    print(name, len(spec.parameters))      # postgresql 3, then redis 1
+if "postgresql" in DATABASES:
+    spec = DATABASES.get_spec("postgresql")
 ```
 
-The `descriptors` property returns a copy of the internal dictionary, which means iterating or modifying the returned dict does not affect the registry. The `__contains__` method checks `isinstance(name, str)` before lookup, ensuring that non-string values always return `False` rather than raising a `TypeError`.
+`specs` returns a copy of the registry's specs, so changing the returned dictionary does not affect the registry. `in` returns `False` for non-string values instead of raising.
 
 <!-- concept:77 -->
-## Registry Lookup By Name
+## Registry lookup by name
 
-**Registry lookup by name** is provided by two methods that mirror the two internal dictionaries:
+Two methods look up an entry by name:
 
-- `get_descriptor(name)` -- returns the `ProfileSpec` for the given name
-- `get_settings_class(name)` -- returns the `Profile` subclass for the given name
+- `get_spec(name)` returns the `ProfileSpec`
+- `get_settings_class(name)` returns the `Profile` subclass
 
-Both methods raise `KeyError` with a helpful message that lists all known names in the registry:
+Both raise `KeyError` for an unknown name, and the message lists the names that are registered:
 
 ```python
-def get_descriptor(self, name: str) -> ProfileSpec:
-    try:
-        return self._descriptors[name]
-    except KeyError:
-        known = ", ".join(sorted(self._descriptors)) or "<none>"
-        raise KeyError(
-            f"No profile registered under {name!r} in {self.name} "
-            f"registry. Known: {known}"
-        ) from None
+try:
+    DATABASES.get_spec("postgresq")
+except KeyError as e:
+    print(e)
+# "No profile registered under 'postgresq' in databases registry. Known: postgresql, redis"
 ```
 
-The `from None` suppression ensures a clean error message without the confusing "during handling of the above exception, another exception occurred" chain. The known-names hint is especially valuable in applications with many registered profiles, where a typo in the name (e.g., `"postgresq"` instead of `"postgresql"`) can be immediately identified.
-
-#### Diagram: Registry Internal Structure
-
-<iframe src="../../sims/registry-structure/main.html" width="100%" height="500px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Registry Internal Structure</summary>
-Type: diagram
-**sim-id:** registry-structure<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-An interactive diagram showing a Registry instance with its two parallel dictionaries (_descriptors and _classes). Three sample profiles are registered (postgresql, mysql, redis). Clicking a profile name in either dictionary highlights the matching entry in the other dictionary and shows the spec details / class information in a side panel. The type constraint badges (spec_type, profile_type) are shown at the top with hover explanations. A search box allows filtering registered entries. Learning objective: Navigate the Registry's dual-dictionary structure and understand how specs and classes are co-indexed (Bloom: Understand).
-</details>
+The known-names hint makes a typo such as `"postgresq"` easy to spot in applications with many profiles.
 
 <!-- concept:78 -->
-<!-- concept:79 -->
-## Descriptor Invariants
+## Spec invariants
 
-**Descriptor invariants** are a set of validation rules that every registered `ProfileSpec` must satisfy. They encode the naming conventions, uniqueness constraints, and structural requirements that the profile system relies on:
+Spec invariants are rules every registered `ProfileSpec` must satisfy. They cover naming conventions, uniqueness and structure:
 
-| Invariant | Rule | Failure Meaning |
+| Invariant | Rule | Failure meaning |
 |-----------|------|----------------|
 | `test_name_matches_registry_key` | `spec.name == registry_key` | Spec name and registry key are out of sync |
 | `test_name_lowercase_nonempty` | `spec.name` is lowercase and non-empty | Naming convention violated |
 | `test_parameter_names_unique` | No duplicate names in `spec.parameters` | Ambiguous field definitions |
 | `test_parameter_names_uppercase` | All parameter names are UPPERCASE and non-empty | Naming convention violated |
-| `test_driver_keys_unique` | No duplicate `driver_key` values | Ambiguous driver kwargs |
+| `test_driver_keys_unique` | No duplicate output key within any one target: bare-string `driver_key` values must be unique and must not collide with any target's key; dict `driver_key` values must be unique per target | Ambiguous driver kwargs |
 | `test_parameter_tiers_valid` | All tiers are `"core"` or `"advanced"` | Invalid tier classification |
-| `test_auth_modes_nonempty` | `spec.auth_modes` has at least one entry | Missing authentication declaration |
 | `test_provider_type_not_none` | `spec.provider_type` is not None | Missing domain classification |
 
-These invariants catch specification errors at test time, well before they could cause runtime failures. A typo in a parameter name, a forgotten auth mode declaration, or a missing provider type all produce clear test failures with descriptive messages.
+A bare-string `driver_key` applies to every emission target and a dict `driver_key` applies per named target, so uniqueness is checked per target after resolving both forms. The same key under two different targets is not a collision. Two parameters that map to the same key for one target are.
 
-## Invariant Test Generator
+These checks catch specification errors at test time: a typo in a parameter name, a duplicated driver key or a missing provider type each fail with a descriptive message. Authentication is not part of the spec (see [Authentication boundary](../08-authentication-system/index.md)), so there is no invariant for it.
 
-The **invariant test generator** is the `spec_invariants_for()` function that takes a Registry instance and returns a pytest class parameterized over every registered spec. This function is the primary integration point between the invariant system and a project's test suite:
+<!-- concept:79 -->
+## Invariant test generator
+
+`spec_invariants_for(registry)` returns a pytest test class with every invariant above, parameterized over every spec in the registry. Assign it to a `Test...` name in a test module and pytest collects it:
 
 ```python
-from mountainash_settings.profiles import spec_invariants_for
-from my_package.settings import MY_REGISTRY
+# tests/test_profile_invariants.py
+from mountainash_settings import spec_invariants_for
+from my_package.settings import MY_REGISTRY   # importing registers the profiles
 
 TestMyInvariants = spec_invariants_for(MY_REGISTRY)
 ```
 
-This single line generates one test per invariant per registered spec. If the registry contains five profiles and there are eight invariants, the generated class produces forty parameterized test cases.
+The class is named `TestSpecInvariants_<registry name>`, so pytest output shows which registry is running. For a registry holding one profile, it contains these tests, each run once per registered profile:
 
-The generator uses `pytest.mark.parametrize` to create test cases named by the profile:
-
-```python
-@pytest.mark.parametrize("name,spec", entries, ids=ids)
-class TestSpecInvariants:
-    def test_name_matches_registry_key(self, name, spec):
-        assert spec.name == name
-
-    def test_parameter_names_unique(self, name, spec):
-        names = [p.name for p in spec.parameters]
-        assert len(names) == len(set(names))
-    # ... remaining invariants
+```text
+test_driver_keys_unique
+test_name_lowercase_nonempty
+test_name_matches_registry_key
+test_parameter_names_unique
+test_parameter_names_uppercase
+test_parameter_tiers_valid
+test_provider_type_not_none
 ```
 
-The class is dynamically renamed to `TestSpecInvariants_<registry_name>` so that pytest output clearly identifies which registry's invariants are running. New profile registrations automatically get full invariant coverage -- there is no need to write individual tests for each new backend.
+Adding a new backend needs no new test code. Profiles registered before the call are covered automatically.
 
-#### Diagram: Invariant Test Coverage Matrix
+The generator reads the registry's specs once, when `spec_invariants_for()` is called. Profiles registered after that are not covered, so call it after the modules that register profiles have been imported. The returned class carries the `unit` pytest mark, and `pytest` is imported only when you call the function, so `mountainash_settings` stays importable where pytest is not installed.
 
-<iframe src="../../sims/invariant-test-matrix/main.html" width="100%" height="450px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Invariant Test Coverage Matrix</summary>
-Type: chart
-**sim-id:** invariant-test-matrix<br/>
-**Library:** Chart.js<br/>
-**Status:** Specified
+## Putting it all together
 
-A heatmap-style matrix with invariant names as rows and registered profile names as columns. Each cell is green (pass), red (fail), or gray (not yet run). Clicking a cell shows the test assertion that passed or the error message that failed. Hovering over a row header shows the invariant's rule description. A "Run All" button animates the matrix filling in cell by cell. Users can add a "broken" spec via a form to see how invariant failures appear. Learning objective: Evaluate the completeness of invariant coverage across all registered profiles in a registry (Bloom: Evaluate).
-</details>
+1. Define a `ProfileSpec` with an identity (`name`, `provider_type`) and parameters, or declare the profile natively and let the spec be generated.
+2. Create a `Profile` subclass with `__spec__ = YOUR_SPEC` (explicit path) or a `name=`/`provider_type=` class header (native path).
+3. Register it with `@register`.
+4. Add `TestInvariants = spec_invariants_for(REGISTRY)` to your test suite, after the registering modules are imported.
+5. Look the class up at runtime with `REGISTRY.get_settings_class("name")`.
 
-## Putting It All Together
-
-The registry and invariant systems work together to create a reliable, discoverable ecosystem of connection profiles. The full workflow from profile creation to validated deployment is:
-
-1. **Define a ProfileSpec** with parameters, auth modes, and identity
-2. **Create a Profile subclass** with `__spec__ = YOUR_SPEC`
-3. **Register with `@register`** on the class definition
-4. **Add `TestInvariants = spec_invariants_for(REGISTRY)`** to your test suite
-5. **Look up at runtime** via `REGISTRY.get_settings_class("name")`
-
-Each step in this workflow is supported by the framework with clear error messages and fail-fast behavior. Misspelled names produce `KeyError` with a list of known alternatives. Type constraint violations produce `TypeError` at registration time. Duplicate names produce `ValueError` with the conflicting class's location.
-
-The test seam methods (`_snapshot_for_tests` and `_reset_for_tests`) allow test suites to register temporary profiles without permanently polluting the global registry, supporting isolated test scenarios.
-
-## Key Takeaways
-
-- **Registry Class** provides a mutable, name-keyed store with optional type constraints for both specs and profile classes.
-- **Name Keyed Store** maintains two parallel dictionaries (specs and classes) indexed by the profile name string.
-- **Decorator Registration** uses bare `@register` to read `cls.__spec__` and add the class to the registry in a single declaration.
-- **Registry Decorator Factory** returns a bound decorator, enabling multiple independent registries with their own `@register` decorators.
-- **Duplicate Prevention** raises `ValueError` with the conflicting class's module path when a name collision occurs.
-- **Registry Iteration** provides read-only access via the `descriptors` property, `__len__`, and `__contains__`.
-- **Registry Lookup By Name** raises `KeyError` with a list of known names when a lookup fails, aiding quick diagnosis of typos.
-- **Invariant Test Generator** produces parameterized pytest classes that automatically cover every registered spec, ensuring new profiles get full validation for free.
+Failures surface early. A misspelled name raises `KeyError` with the known names. A type constraint violation, a missing own `__spec__` or an incomplete profile raises `TypeError` at registration. A duplicate name raises `ValueError` with the conflicting class's location.

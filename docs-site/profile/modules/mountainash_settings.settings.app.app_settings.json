@@ -1,51 +1,77 @@
 {
   "id": "mountainash_settings.settings.app.app_settings",
   "path": "src/mountainash_settings/settings/app/app_settings.py",
-  "summary": "AppSettings is a ready-made MountainAshBaseSettings subclass for application-level configuration. It pre-declares common fields: LOCALE_TIMEZONE, DEBUG, RUNDATE, RUNTIME, RUNDATETIME. Intended as a convenience base for user applications — subclass AppSettings instead of MountainAshBaseSettings for opinionated defaults.",
+  "summary": "AppSettings: a MountainAshBaseSettings subclass with LOCALE_TIMEZONE, DEBUG and run timestamps (RUNDATE, RUNTIME from clock defaults; RUNDATETIME formatted in post_init from an AppSettingsTemplates template). RUN_TIMESTAMP_SCOPE selects context or process timestamp sharing.",
   "role": "public-api",
   "visibility": "public",
   "stability": "stable",
-  "audiences": ["users", "contributors"],
+  "audiences": [
+    "users"
+  ],
   "doc_priority": "useful",
   "confidence": "high",
   "public_api": [
-    "AppSettings",
-    "AppSettings.LOCALE_TIMEZONE",
-    "AppSettings.DEBUG",
-    "AppSettings.RUNDATE",
-    "AppSettings.RUNTIME",
-    "AppSettings.RUNDATETIME"
+    "AppSettings"
   ],
-  "key_classes": ["AppSettings"],
-  "key_functions": [
-    "post_init"
+  "key_classes": [
+    "AppSettings"
   ],
+  "key_functions": [],
   "dependencies": [
-    "mountainash_settings.settings.base_settings",
-    "mountainash_settings.settings_parameters.settings_parameters",
-    "mountainash_settings.settings.app.app_settings_templates"
+    "mountainash_settings",
+    "mountainash_settings.settings.app",
+    "mountainash_settings.settings.app._timestamps",
+    "mountainash_settings.settings.app.app_settings_templates",
+    "mountainash_settings.settings_cache._context",
+    "mountainash_settings.settings_parameters.filehandler"
   ],
-  "dependents": [],
+  "dependents": [
+    "mountainash_settings.settings.app"
+  ],
   "extension_points": [
-    "post_init(): override to add application-specific derived fields"
+    "Pass template_settings_parameters with an AppSettingsTemplates subclass to override templates"
   ],
-  "lifecycle_notes": [
-    "RUNDATE and RUNTIME are set to datetime.now() at class definition time — instances created at different times will share the same date unless post_init re-evaluates",
-    "RUNDATETIME is derived in post_init from RUNDATE and RUNTIME"
+  "lifecycle_notes": [],
+  "documentation_hooks": [
+    "docs/README_SECRETS.md",
+    "docs/advanced-usage.md",
+    "docs/app-settings.md",
+    "docs/migration-0.1.md",
+    "docs/typing.md"
   ],
-  "documentation_hooks": [],
   "examples": [],
   "tests": [
-    "tests/test_app_settings.py"
+    "tests/settings/app/test_app_settings.py",
+    "tests/settings/app/test_timestamp_process.py",
+    "tests/test_config_files.py"
   ],
   "risks": [
-    "RUNDATE/RUNTIME Field defaults capture time at class import — not at instance creation. Long-running processes may produce stale timestamps."
+    "post_init docstring still describes report/response/data path fields that the class no longer declares"
   ],
   "open_questions": [],
   "evidence": [
-    {"kind": "test", "path": "tests/test_app_settings.py", "detail": "AppSettings test coverage"}
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/settings/app/__init__.py",
+      "detail": "AppSettings exported"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings/app/__init__.py",
+      "detail": "imports mountainash_settings.settings.app.app_settings"
+    },
+    {
+      "kind": "test",
+      "path": "tests/settings/app/test_app_settings.py",
+      "detail": "exercises module behaviour"
+    },
+    {
+      "kind": "test",
+      "path": "tests/settings/app/test_timestamp_process.py",
+      "detail": "exercises module behaviour"
+    }
   ],
-  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
   "manual": {
     "notes": "",
     "editorial_status": "",

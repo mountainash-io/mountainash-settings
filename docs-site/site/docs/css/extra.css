@@ -63,7 +63,7 @@
    because the SVG is applied as a mask.
 
    Footgun warning: do NOT add `theme.icon.status` to mkdocs.yml to try to
-   set these icons — that key is silently Insiders-only on the Material
+   set these icons: that key is silently Insiders-only on the Material
    community edition and the icons will fall back to the generic "i in a
    circle" indicator with no warning at build time. The CSS variables below
    are the load-bearing piece on community Material. */
@@ -76,17 +76,17 @@
 }
 
 .md-status--scaffold:after {
-  background-color: #d32f2f; /* red — scaffold, not yet implemented */
+  background-color: #d32f2f; /* red: scaffold, not yet implemented */
   -webkit-mask-image: var(--md-status--scaffold);
           mask-image: var(--md-status--scaffold);
 }
 .md-status--built:after {
-  background-color: #f57c00; /* orange — built, awaiting review */
+  background-color: #f57c00; /* orange: built, awaiting review */
   -webkit-mask-image: var(--md-status--built);
           mask-image: var(--md-status--built);
 }
 .md-status--approved:after {
-  background-color: #388e3c; /* green — approved */
+  background-color: #388e3c; /* green: approved */
   -webkit-mask-image: var(--md-status--approved);
           mask-image: var(--md-status--approved);
 }

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
@@ -7,8 +7,9 @@ name = "mountainash_settings"
 dynamic = ["version"]
 description = 'Mountain Ash - Settings'
 readme = "README.md"
-requires-python = ">=3.10"
-# license = "Proprietary"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 keywords = []
 authors = [
     { name = "Nathaniel Ramm", email = "nathaniel.ramm@discretedatascience.com" },
@@ -16,17 +17,19 @@ authors = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-    "pydantic==2.9.2",
-    "pydantic-settings==2.6.1",
-    "universal_pathlib==0.2.2",
-    "pyaml",
+    "typing_extensions>=4.12.2",
+    "pydantic>=2.10.0",
+    # Exact pin: settings-source behavior is application-visible. 2.15.0 adds
+    # structured-file deep merge. MountainAsh preserves its legacy unprefixed
+    # dotenv fallback through explicit source wiring and regression tests.
+    "pydantic-settings==2.15.0",
+    "universal_pathlib>=0.2.2",
+    "PyYAML>=6.0",
 ]
 
 [project.urls]

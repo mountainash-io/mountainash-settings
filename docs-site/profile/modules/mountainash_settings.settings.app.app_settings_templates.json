@@ -1,36 +1,57 @@
 {
   "id": "mountainash_settings.settings.app.app_settings_templates",
   "path": "src/mountainash_settings/settings/app/app_settings_templates.py",
-  "summary": "AppSettingsTemplates is a MountainAshBaseSettings subclass holding default template strings for AppSettings (e.g. RUNDATETIME_TEMPLATE). Also provides get_default_app_settings_templates() as a cached singleton factory.",
+  "summary": "AppSettingsTemplates holds RUNDATETIME_TEMPLATE ('{RUNDATE}T{RUNTIME}') used by AppSettings.post_init; get_default_app_settings_templates() returns the default instance.",
   "role": "backend",
   "visibility": "internal",
   "stability": "stable",
-  "audiences": ["maintainers", "contributors"],
+  "audiences": [
+    "maintainers"
+  ],
   "doc_priority": "skip-with-reason",
   "confidence": "high",
   "public_api": [],
-  "key_classes": ["AppSettingsTemplates"],
-  "key_functions": ["get_default_app_settings_templates"],
+  "key_classes": [
+    "AppSettingsTemplates"
+  ],
+  "key_functions": [
+    "get_default_app_settings_templates"
+  ],
   "dependencies": [
-    "mountainash_settings.settings.base_settings",
-    "mountainash_settings.settings_parameters.settings_parameters"
+    "mountainash_settings",
+    "mountainash_settings.settings_parameters.filehandler"
   ],
   "dependents": [
+    "mountainash_settings.settings.app",
     "mountainash_settings.settings.app.app_settings"
   ],
   "extension_points": [],
-  "lifecycle_notes": [
-    "get_default_app_settings_templates() is @lru_cache — returns a singleton per process"
-  ],
+  "lifecycle_notes": [],
   "documentation_hooks": [],
   "examples": [],
-  "tests": [],
+  "tests": [
+    "tests/settings/app/test_app_settings.py"
+  ],
   "risks": [],
   "open_questions": [],
   "evidence": [
-    {"kind": "import", "path": "src/mountainash_settings/settings/app/app_settings.py", "detail": "Imported by AppSettings for template defaults"}
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings/app/__init__.py",
+      "detail": "imports mountainash_settings.settings.app.app_settings_templates"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings/app/app_settings.py",
+      "detail": "imports mountainash_settings.settings.app.app_settings_templates"
+    },
+    {
+      "kind": "test",
+      "path": "tests/settings/app/test_app_settings.py",
+      "detail": "exercises module behaviour"
+    }
   ],
-  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
   "manual": {
     "notes": "skip-with-reason: implementation detail of AppSettings; not useful in user documentation",
     "editorial_status": "",

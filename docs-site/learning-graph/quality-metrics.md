@@ -26,7 +26,7 @@ These concepts have no prerequisites:
 - **8**: Env File Format
 - **9**: Environment Variables
 - **10**: Python Decorators
-- **99**: LRU Cache Decorator
+- **99**: Structural Source Context
 
 ## Dependency Chain Analysis
 

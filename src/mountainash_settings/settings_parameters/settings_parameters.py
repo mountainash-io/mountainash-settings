@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from typing import Optional, Any, Tuple, Type, List, Dict, TYPE_CHECKING
-from dataclasses import dataclass
-
-from pydantic_settings import BaseSettings
-from upath import UPath
+from typing import Optional, Any, Dict, TYPE_CHECKING
+from dataclasses import dataclass, field
 
 if TYPE_CHECKING:
-    from mountainash_settings.settings.base_settings import MountainAshBaseSettings
+    from ..secrets.backend import SecretReader
+    from ..settings.base_settings import MountainAshBaseSettings
 
-from .filehandler import SettingsFileHandler
+
+
+from .filehandler import ConfigFilesInput, SettingsFileHandler
 from .kwargshandler import SettingsKwargsHandler
 
 @dataclass(frozen=True)
@@ -44,11 +44,12 @@ class SettingsParameters():
         params2 = SettingsParameters(config_files=["config.yaml"],
                                    kwargs={"log_level": "INFO"})
     """
-    config_files:   Optional[List[str|UPath]|Tuple[str|UPath]] = None
-    settings_class: Optional[Type[BaseSettings]] = None
+    config_files:   ConfigFilesInput = None
+    settings_class: type[MountainAshBaseSettings] | None = None
     env_prefix:     Optional[str] = None
     secrets_dir:    Optional[str] = None
-    kwargs:         Optional[Dict[str,Any]] = None
+    kwargs:         Optional[Dict[str,Any]] = field(default=None, repr=False)
+    secret_store:   Optional["SecretReader"] = field(default=None, repr=False, compare=False, hash=False)
 
     # _reserved_mountainash_kwargs = ["_dummy"]
 
@@ -59,31 +60,12 @@ class SettingsParameters():
                                  "validate_default"
     ]
 
-
-    _reserved_pydantic_kwargs = ["_case_sensitive",
-                                 "_nested_model_default_partial_update",
-                                 "_env_prefix",
-                                 "_env_file",
-                                 "_env_file_encoding",
-                                 "_env_ignore_empty",
-                                 "_env_nested_delimiter",
-                                 "_env_parse_none_str",
-                                 "_env_parse_enums",
-                                 "_cli_prog_name",
-                                 "_cli_parse_args",
-                                 "_cli_settings_source",
-                                 "_cli_parse_none_str",
-                                 "_cli_hide_none_type",
-                                 "_cli_avoid_json",
-                                 "_cli_enforce_required",
-                                 "_cli_use_class_docs_for_groups",
-                                 "_cli_exit_on_error",
-                                 "_cli_prefix",
-                                 "_cli_flag_prefix_char",
-                                 "_cli_implicit_flags",
-                                 "_cli_ignore_unknown_args",
-                                 "_secrets_dir",
-                                 ]
+    # M5 (MAS-SEC-004): every underscore-prefixed kwarg -- _env_*, _cli_*,
+    # bare _secrets_dir, and any other underscore-prefixed name
+    # pydantic-settings accepts -- is rejected value-free before sources
+    # open, by the leading-underscore rule, not by an enumerated list. See
+    # get_attribute_settings_kwargs(). Only config_files/settings_class/
+    # env_prefix/secrets_dir/secret_store remain public source selectors.
 
 
 
@@ -122,6 +104,7 @@ class SettingsParameters():
             self.settings_class,
             self.env_prefix,
             self.secrets_dir,
+            id(self.secret_store) if self.secret_store is not None else None,
             # Deliberately exclude: self.kwargs
         ])
 
@@ -153,41 +136,46 @@ class SettingsParameters():
             self_hashable_config_files == other_hashable_config_files and
             self.settings_class == other.settings_class and
             self.env_prefix == other.env_prefix and
-            self.secrets_dir == other.secrets_dir
+            self.secrets_dir == other.secrets_dir and
+            self.secret_store is other.secret_store
             # Deliberately exclude: kwargs comparison
         )
 
 
-    def get_settings(self, **kwargs) -> MountainAshBaseSettings:
+    def get_settings(self, *, reinitialise: bool = False, **kwargs: Any) -> MountainAshBaseSettings:
         # Lazy import to avoid circular dependency
         from ..settings_cache import get_settings
 
         if self.settings_class is None:
             raise ValueError("Settings class is required to get settings.")
 
-        return get_settings(settings_parameters=self, **kwargs)
+        return get_settings(
+            settings_parameters=self, reinitialise=reinitialise, **kwargs,
+        )
 
 
     # Creation methods
     @classmethod
     def create(cls,
-               config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
-               settings_class: Optional[Type[BaseSettings]] = None,
+               config_files: ConfigFilesInput = None,
+               settings_class: type[MountainAshBaseSettings] | None = None,
                env_prefix: Optional[str] = None,
                secrets_dir: Optional[str] = None,
+               secret_store: Optional["SecretReader"] = None,
                **kwargs: Any
                ) -> 'SettingsParameters':
 
 
         #Combine the parameters into a single object
         resolved_config_files =  SettingsFileHandler.format_config_file_tuple(config_files)
-        resolved_kwargs =        SettingsKwargsHandler.format_kwargs_dict(kwargs) if kwargs else None
+        resolved_kwargs =        SettingsKwargsHandler.format_kwargs_dict(kwargs)
 
         return cls(
             config_files=resolved_config_files,
             settings_class=settings_class,
             env_prefix=env_prefix,
             secrets_dir=secrets_dir,
+            secret_store=secret_store,
             kwargs=resolved_kwargs
         )
 
@@ -230,8 +218,7 @@ class SettingsParameters():
         elif prioritise_base:
             merged_config_files = base.config_files or other.config_files
         else:
-            merged = set(base.config_files or ()) | set(other.config_files or ())
-            merged_config_files = tuple(sorted(str(p) for p in merged)) if merged else None
+            merged_config_files = SettingsFileHandler.merge_config_files(base.config_files, other.config_files)
 
         # Settings class: validate compatibility
         if base.settings_class is not None and other.settings_class is not None:
@@ -253,6 +240,12 @@ class SettingsParameters():
             merged_env_prefix = other.env_prefix or base.env_prefix
             merged_secrets_dir = other.secrets_dir or base.secrets_dir
 
+        # Secret store: last non-None wins (never truthiness — a falsey store stays bound)
+        if prioritise_base:
+            merged_secret_store = base.secret_store if base.secret_store is not None else other.secret_store
+        else:
+            merged_secret_store = other.secret_store if other.secret_store is not None else base.secret_store
+
         # Kwargs: merge dicts
         if base.kwargs is None and other.kwargs is None:
             merged_kwargs = None
@@ -267,6 +260,7 @@ class SettingsParameters():
             config_files=merged_config_files,
             env_prefix=merged_env_prefix,
             secrets_dir=merged_secrets_dir,
+            secret_store=merged_secret_store,
             **(merged_kwargs or {})
         )
 
@@ -274,16 +268,16 @@ class SettingsParameters():
     #Export / retrieve values
     def to_dict(self) -> Dict[str, Any]:
         return {
-            'config_files': list(self.config_files) if self.config_files else None,
+            'config_files': SettingsFileHandler.format_config_file_list(self.config_files) if self.config_files else None,
             'kwargs': self.get_all_kwargs() if self.kwargs else None,
             'settings_class': self.settings_class,
             'env_prefix': self.env_prefix,
-            'secrets_dir': self.secrets_dir
+            'secrets_dir': self.secrets_dir,
         }
 
 
     def _get_settings_kwarg_names(self,
-                             settings_class: Optional[Type[BaseSettings]] = None
+                             settings_class: type[MountainAshBaseSettings] | None = None
                              ) -> set[str]:
 
         if settings_class is None:
@@ -300,71 +294,84 @@ class SettingsParameters():
 
         return settings_kwarg_names
 
-    def _get_valid_kwarg_names(self,
-                          settings_class:    Optional[Type[BaseSettings]] = None
-                          ) -> set[str]:
-
-        if settings_class is None:
-            settings_class = self.settings_class
-        if settings_class is None:
-            return set()
-
-        settings_kwarg_names = self._get_settings_kwarg_names(settings_class)
-        valid_kwarg_names = settings_kwarg_names.union(self._reserved_pydantic_kwargs)
-
-        return valid_kwarg_names
-
-
     def get_attribute_settings_kwargs(self,
-                                        settings_class: Optional[Type[BaseSettings]] = None
+                                        settings_class: type[MountainAshBaseSettings] | None = None
                                         ) -> Dict[str, Any]:
+        """Classify direct-construction kwargs into field inputs, rejecting source/schema controls.
 
-        valid_kwarg_names = self._get_valid_kwarg_names(settings_class=settings_class)
+        Every underscore-prefixed name is rejected value-free before sources
+        open (leading-underscore rule, mirroring get_cache_runtime_kwargs()).
+        A legacy schema-control name (``extra``, ``arbitrary_types_allowed``,
+        ``validate_default``) is accepted only when the settings class
+        declares a field of that name -- otherwise it is rejected value-free
+        rather than silently mutating shared class config.
+        """
 
-        return {k: v for k, v in self.kwargs.items() if k in valid_kwarg_names} if self.kwargs else {}
+        if not self.kwargs:
+            return {}
 
+        for key in self.kwargs:
+            if key.startswith("_"):
+                raise ValueError(f"Unsupported source control kwarg: {key!r}")
 
-    def get_pydantic_settings_kwargs(self) -> Dict[str, Any]:
+        settings_class = settings_class or self.settings_class
+        field_names = self._get_settings_kwarg_names(settings_class)
+        input_names = set(field_names)
+        if settings_class is not None:
+            from mountainash_settings.resolve import _validation_paths
 
-        return {k: v for k, v in self.kwargs.items() if k in self._reserved_pydantic_kwargs} if self.kwargs else {}
+            input_names.update(
+                path[0]
+                for name, field in settings_class.model_fields.items()
+                for path in _validation_paths(name, field)
+                if isinstance(path[0], str)
+            )
 
+        result: Dict[str, Any] = {}
+        for key, value in self.kwargs.items():
+            if key in self._reserved_pydantic_modelconfig_kwargs and key not in field_names:
+                raise ValueError(
+                    f"Unsupported schema control kwarg: {key!r}. "
+                    "Configure this on the settings class's model_config instead."
+                )
+            if key in input_names:
+                result[key] = value
 
-    def get_pydantic_modelconfig_kwargs(self) -> Dict[str, Any]:
-
-        return {k: v for k, v in self.kwargs.items() if k in self._reserved_pydantic_modelconfig_kwargs} if self.kwargs else {}
+        return result
 
 
     def get_all_kwargs(self) -> Dict[str, Any]:
 
         return {k: v for k, v in self.kwargs.items()} if self.kwargs else {}
 
-    def apply_runtime_overrides(self, cached_settings: BaseSettings) -> BaseSettings:
-        """
-        Apply runtime kwargs to a cached settings object without affecting cache identity.
+    def get_cache_runtime_kwargs(
+        self, settings_class: type[MountainAshBaseSettings] | None = None,
+    ) -> Dict[str, Any]:
+        """Return runtime inputs after rejecting cache identity and source controls."""
+        settings_class = settings_class or self.settings_class
+        supplied = self.get_all_kwargs()
+        field_names = set(settings_class.model_fields) if settings_class is not None else set()
+        schema_controls = set(self._reserved_pydantic_modelconfig_kwargs)
+        structural_controls = {
+            "config_files",
+            "settings_class",
+            "env_prefix",
+            "secrets_dir",
+            "secret_store",
+            "reinitialise",
+        }
+        disallowed = {
+            name for name in supplied
+            if (
+                name in structural_controls
+                or name.startswith("_")
+                or (name in schema_controls and name not in field_names)
+            )
+        }
+        if disallowed:
+            raise ValueError("Cached retrieval does not accept source or schema controls")
+        return supplied
 
-        This method supports the caching strategy by allowing runtime parameter
-        modifications to be applied to cached settings objects. The cached object's
-        identity remains unchanged, but a modified copy is returned when runtime
-        overrides are present.
-
-        Args:
-            cached_settings: The cached BaseSettings object to apply overrides to
-
-        Returns:
-            BaseSettings: Original object if no runtime kwargs, or modified copy with overrides
-
-        Example:
-            cached = get_cached_settings(params.structural_key())
-            final_settings = params.apply_runtime_overrides(cached)
-        """
-        if self.kwargs:
-            # Create a copy and apply runtime overrides
-            settings_copy = cached_settings.model_copy()
-            override_kwargs = self.get_attribute_settings_kwargs()
-            if override_kwargs:
-                settings_copy.update_settings_from_dict(settings_dict=override_kwargs)
-            return settings_copy
-        return cached_settings
 
 
 

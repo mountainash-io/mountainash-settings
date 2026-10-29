@@ -1,0 +1,51 @@
+{
+  "id": "mountainash_settings.settings._metaclass",
+  "path": "src/mountainash_settings/settings/_metaclass.py",
+  "summary": "_SettingsMetaclass subclasses Pydantic ModelMetaclass without redeclaring dataclass_transform so type checkers keep the library's dynamic constructor contract for settings subclasses.",
+  "role": "integration",
+  "visibility": "private",
+  "stability": "stable",
+  "audiences": [
+    "maintainers"
+  ],
+  "doc_priority": "internal-note",
+  "confidence": "high",
+  "public_api": [],
+  "key_classes": [
+    "_SettingsMetaclass"
+  ],
+  "key_functions": [],
+  "dependencies": [],
+  "dependents": [
+    "mountainash_settings.profiles._metaclass",
+    "mountainash_settings.settings.base_settings"
+  ],
+  "extension_points": [],
+  "lifecycle_notes": [],
+  "documentation_hooks": [],
+  "examples": [],
+  "tests": [],
+  "risks": [
+    "Workaround tied to mypy behaviour (documented against mypy 1.10.1)"
+  ],
+  "open_questions": [],
+  "evidence": [
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/profiles/_metaclass.py",
+      "detail": "imports mountainash_settings.settings._metaclass"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings/base_settings.py",
+      "detail": "imports mountainash_settings.settings._metaclass"
+    }
+  ],
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
+  "manual": {
+    "notes": "",
+    "editorial_status": "",
+    "owner": "",
+    "manual_summary": ""
+  }
+}

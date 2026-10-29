@@ -1,0 +1,119 @@
+{
+  "id": "mountainash_settings.profiles.spec",
+  "path": "src/mountainash_settings/profiles/spec.py",
+  "summary": "Defines ProfileSpec (immutable profile specification: name, provider_type, ordered parameters) and ParameterSpec (one settings field: name, type, tier, default, driver_key, template), plus MISSING and FACTORY_DEFAULT sentinels.",
+  "role": "model",
+  "visibility": "public",
+  "stability": "stable",
+  "audiences": [
+    "users",
+    "extension-authors",
+    "maintainers"
+  ],
+  "doc_priority": "essential",
+  "confidence": "high",
+  "public_api": [
+    "FACTORY_DEFAULT",
+    "FactoryDefault",
+    "MISSING",
+    "Missing",
+    "ParameterSpec",
+    "ProfileSpec"
+  ],
+  "key_classes": [
+    "Missing",
+    "FactoryDefault",
+    "ParameterSpec",
+    "ProfileSpec"
+  ],
+  "key_functions": [],
+  "dependencies": [],
+  "dependents": [
+    "mountainash_settings.profiles",
+    "mountainash_settings.profiles._declaration",
+    "mountainash_settings.profiles._projection",
+    "mountainash_settings.profiles.invariants",
+    "mountainash_settings.profiles.profile",
+    "mountainash_settings.profiles.registry"
+  ],
+  "extension_points": [
+    "Domain subclasses of ProfileSpec via Registry spec_type"
+  ],
+  "lifecycle_notes": [],
+  "documentation_hooks": [
+    "docs/advanced-usage.md",
+    "docs/migration-0.1.md",
+    "docs/profile-spec-pattern.md",
+    "docs/typing.md"
+  ],
+  "examples": [],
+  "tests": [
+    "tests/profiles/test_api_removal.py",
+    "tests/profiles/test_class_completion.py",
+    "tests/profiles/test_class_declarations.py",
+    "tests/profiles/test_emit.py",
+    "tests/profiles/test_generated_consumers.py",
+    "tests/profiles/test_invariants.py",
+    "tests/profiles/test_profile.py",
+    "tests/profiles/test_registry.py",
+    "tests/profiles/test_spec.py",
+    "tests/settings/test_base_settings_coverage.py",
+    "tests/test_public_api.py"
+  ],
+  "risks": [],
+  "open_questions": [],
+  "evidence": [
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "FACTORY_DEFAULT exported"
+    },
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "FactoryDefault exported"
+    },
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "MISSING exported"
+    },
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "Missing exported"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/profiles/__init__.py",
+      "detail": "imports mountainash_settings.profiles.spec"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/profiles/_declaration.py",
+      "detail": "imports mountainash_settings.profiles.spec"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/profiles/_projection.py",
+      "detail": "imports mountainash_settings.profiles.spec"
+    },
+    {
+      "kind": "test",
+      "path": "tests/profiles/test_api_removal.py",
+      "detail": "exercises module behaviour"
+    },
+    {
+      "kind": "test",
+      "path": "tests/profiles/test_class_completion.py",
+      "detail": "exercises module behaviour"
+    }
+  ],
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
+  "manual": {
+    "notes": "",
+    "editorial_status": "",
+    "owner": "",
+    "manual_summary": ""
+  }
+}

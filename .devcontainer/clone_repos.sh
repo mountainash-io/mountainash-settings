@@ -5,7 +5,7 @@ clone_and_checkout() {
     repo_name=$(basename "$2" .git)
     git clone "https://${CLONE_PRIVATE_REPOS_TOKEN}@github.com/$1/$2" "/workspaces/$repo_name"
     cd "/workspaces/$repo_name"
-    
+
     if git branch -r | grep -q "origin/develop"; then
         git checkout develop
         echo "Checked out 'develop' branch in $repo_name"
@@ -16,7 +16,7 @@ clone_and_checkout() {
         default_branch=$(git symbolic-ref --short HEAD)
         echo "Warning: Neither 'develop' nor 'main' branch found in $repo_name. Staying on default branch '$default_branch'."
     fi
-    
+
     cd - > /dev/null
 }
 
@@ -29,7 +29,7 @@ repos=(
     # "mountainash-syntheticdata"
     # "mountainash-utils-dataclasses"
     # "mountainash-utils-factoryclasses"
-    # "mountainash-utils-files"
+    # "mountainash-transport"
     # "mountainash-utils-ssh"
     # "mountainash-utils-xml"
     # "mountainash-utils-gpg"

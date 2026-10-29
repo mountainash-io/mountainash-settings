@@ -1,18 +1,27 @@
 # src/mountainash_settings/profiles/__init__.py
-"""Declarative settings profiles — descriptor + registry + generic base."""
+"""Declarative settings profiles — spec + registry + generic base."""
 
 from __future__ import annotations
 
-from .descriptor import MISSING, ParameterSpec, ProfileDescriptor
-from .invariants import descriptor_invariants_for
-from .profile import DescriptorProfile
+
+from .lookup import lookup_class_var
+from .fields import ProfileField
+from .invariants import spec_invariants_for
+from .profile import Adapter, Profile
 from .registry import Registry
+from .spec import FACTORY_DEFAULT, FactoryDefault, MISSING, Missing, ParameterSpec, ProfileSpec
 
 __all__ = [
+    "Adapter",
+    "FACTORY_DEFAULT",
+    "FactoryDefault",
+    "ProfileField",
     "MISSING",
-    "DescriptorProfile",
+    "Missing",
     "ParameterSpec",
-    "ProfileDescriptor",
+    "Profile",
+    "ProfileSpec",
     "Registry",
-    "descriptor_invariants_for",
+    "lookup_class_var",
+    "spec_invariants_for",
 ]

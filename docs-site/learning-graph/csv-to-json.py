@@ -169,7 +169,7 @@ def csv_to_json(csv_path: str, json_path: str, color_config: dict = None,
         'version': '1.0',
         'format': 'Learning Graph JSON v1.0',
         'schema': 'https://raw.githubusercontent.com/dmccreary/learning-graphs/refs/heads/main/src/schema/learning-graph-schema.json',
-        'license': 'CC BY-NC-SA 4.0 DEED'
+        'license': 'Apache-2.0'
     }
 
     # Merge user-provided metadata with defaults
@@ -316,7 +316,7 @@ if __name__ == "__main__":
             'title': 'My Learning Graph',
             'description': 'A comprehensive learning graph',
             'creator': 'Your Name',
-            'license': 'CC BY 4.0'
+            'license': 'Apache-2.0'
         }, indent=2))
         print("\n⚠️  RECOMMENDED: taxonomy-names.json format (prevents ID-as-name bug):")
         print(json.dumps({

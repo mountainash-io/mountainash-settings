@@ -1,102 +1,101 @@
 ---
 title: 'Mountainash Settings'
-description: 'A practitioner manual for mountainash-settings — typed configuration for Python applications built on Pydantic v2'
+description: 'Documentation for mountainash-settings: typed configuration for Python applications built on Pydantic v2'
 ---
 
 
 [← Back to Ecosystem](https://docs.mountainash.io/)
 # Mountainash Settings
 
-Define fully-typed application settings with Pydantic, load configuration from YAML, TOML, JSON, or .env files, and retrieve a cached instance with a single call.
+**Typed configuration for Python, from a single script to a fleet of services.**
 
-## Why a Guided Manual?
+Configuration always starts small: a dictionary loaded from a YAML file. Then staging needs a different host. The deployment overrides a port through an environment variable. A database password turns up that must never be committed. Before long, three services parse the same file three different ways, and nobody is sure which value actually wins.
 
-The API reference tells you *what* each class and function does. This manual explains *why* you would use them — when to reach for field templating instead of a custom validator, how the merge framework decides which value wins, and what happens inside the two-pass secrets resolution pipeline. It is the difference between knowing the interface and understanding the design.
+mountainash-settings is the one place all of that comes together. You describe your settings once, as a typed Pydantic class. Files, environment variables and your secret store all feed into it, in an order you can predict, and every part of your code gets the same validated answer.
 
-## What's Inside
+## Who it's for
 
-- **[Chapters](chapters/index.md)** — 9 chapters covering foundations through caching and app settings, each building on the last
+<div class="grid cards" markdown>
 
-## Who This Is For
+-   **Application developers**
 
-Python developers and platform engineers who configure applications, data pipelines, or multi-service platforms. If you have used Pydantic BaseSettings before and wished it handled secrets, connection profiles, and multi-file merging out of the box, start with [About](about.md) for a fuller picture of what to expect.
+    ---
 
+    Replace hand-merged YAML, `os.environ` lookups and vault calls with one class that loads YAML, TOML, JSON and `.env` files and validates the result.
 
+    [Define a settings class](chapters/02-mountainash-base-settings/index.md)
 
-# Package Overview
+-   **Data and platform engineers**
 
-mountainash-settings is a typed configuration framework for Python applications built on Pydantic v2. It loads configuration from multiple file formats, resolves secrets transparently, supports field templating for derived values, and provides a profile system for building reusable connection configurations. The auth system offers 10+ pluggable authentication modes as a discriminated union. Intelligent LRU caching ensures settings are constructed once and reused efficiently.
+    ---
 
-## Target Audience
+    Run the same class in dev, staging and production; only the files and the environment change. Secret references are safe to commit, because the real values are fetched when the settings load.
 
-Python developers and platform engineers who need a validated, multi-source configuration system with support for secrets resolution, connection profiles, pluggable authentication, and intelligent caching.
+    [Resolve secrets](chapters/05-secrets-resolution/index.md)
 
+-   **Teams connecting to many systems**
 
-## Who This Is For
+    ---
 
-This manual is for Python developers and platform engineers who build applications that need validated, multi-source configuration. You might be a data engineer wiring up pipeline settings across dev, staging, and production, a backend developer managing connection profiles for multiple databases, or a platform engineer standardising configuration across a fleet of services. If you write Python and deal with configuration files, environment variables, or secrets, this is for you.
+    Declare a database's or SDK's parameters once as a connection profile, then render the exact keyword arguments its driver expects. Every registered profile gets a ready-made pytest suite.
 
-## What You Should Already Know
+    [Build connection profiles](chapters/06-connection-profiles/index.md)
 
-You should be comfortable with:
+-   **Package and integration authors**
 
-- Python type annotations, dataclasses, and decorators
-- Pydantic v2 basics — `BaseModel`, `BaseSettings`, and validators
-- At least one configuration file format (YAML, TOML, JSON, or .env)
-- The general idea of secrets management (you have heard of Vault, AWS SSM, or Azure Key Vault, even if you have not administered them)
+    ---
 
-## What You'll Get Out of This
+    Plug in Vault, AWS SSM or Azure Key Vault by implementing a small store protocol, or build your own profile registry for a family of backends.
 
-After working through this manual, you will know how to:
+    [Implement a secret store](chapters/05-secrets-resolution/index.md#record-store-protocols)
 
-- Define typed settings classes that validate configuration at startup, catching errors before your application runs
-- Load and merge configuration from multiple files and environment variables with predictable priority rules
-- Use template syntax to derive fields from other fields — connection strings, log paths, output directories — without custom code
-- Wire up secrets providers so that `secret:path/to/value` in a config file resolves transparently to the real credential
-- Build reusable connection profiles for databases, storage backends, and APIs with typed parameters and auth mode selection
-- Cache settings instances so your application constructs them once and reuses them efficiently across modules
+</div>
 
-## Prerequisites
+## See it work
 
-- Intermediate Python (type annotations, dataclasses, decorators, metaclasses)
-- Familiarity with Pydantic v2 (BaseModel, BaseSettings, validators)
-- Basic understanding of configuration file formats (YAML, TOML, JSON, .env)
-- Awareness of secrets management concepts (Vault, SSM, Key Vault)
+`app.yaml` holds an environment's defaults. The password is a reference, not a value:
 
-## What This Manual Covers
+```yaml
+DB_HOST: db.internal
+DB_PORT: 5432
+DB_PASSWORD: secret:db.prod.password
+```
 
-1. **Pydantic and Configuration Foundations** — Pydantic BaseSettings, multi-format file loading (YAML, TOML, JSON, .env), environment variables
-2. **MountainAsh Base Settings** — MountainAshBaseSettings class, post_init lifecycle, source customization, validate_assignment invariant
-3. **Settings Parameters and Merge Strategies** — SettingsParameters with structural hash/eq, merge framework, FileHandler, KwargsHandler
-4. **File Handling, Kwargs, and Field Templating** — {FIELD_NAME} template syntax, template resolution in post_init, UPath path derivation
-5. **Secrets Resolution** — Secrets registry, two-pass resolution pipeline, pluggable providers (Vault, SSM, Key Vault)
-6. **Connection Profiles** — ProfileDescriptor, ParameterSpec, MISSING sentinel, dynamic Pydantic field installation, DescriptorProfile
-7. **Profile Registry and Invariants** — Name-keyed store, @decorator registration pattern, duplicate prevention, invariant testing
-8. **Authentication System** — AuthSpec base with kind literal, 10+ concrete auth modes as discriminated union, dispatch to driver kwargs
-9. **Caching, Settings Management, and App Settings** — LRU cache on _get_settings, SettingsManager dictionary store, runtime overrides via model_copy, AppSettings convenience class
+The deployment sets `APP_DB_PORT=6543`, and the application asks for its settings:
 
-## What This Manual Does Not Cover
+```python
+from pydantic import SecretStr
+from mountainash_settings import MountainAshBaseSettings, get_settings
+from mountainash_settings.secrets import MemorySecretStore
 
-- Application-specific business logic
-- Cloud provider account setup and IAM policy authoring
-- Secrets engine administration (Vault server setup, AWS SSM configuration)
-- Database driver internals and connection pooling
-- Pydantic internals beyond what the framework extends
+class AppConfig(MountainAshBaseSettings):
+    DB_HOST: str = "localhost"
+    DB_PORT: int = 5432
+    DB_PASSWORD: SecretStr
 
-## Key Capabilities
+store = MemorySecretStore()
+with store.transaction("db.prod"):
+    store.set("db.prod", {"password": "s3cret"})
 
-**Any config source, one base class** — YAML, TOML, JSON, .env files, and environment variables all flow into the same typed settings class. Pydantic validates everything — type coercion, required fields, constrained values. The config file format becomes a deployment choice, not an application concern.
+settings = get_settings(
+    settings_class=AppConfig,
+    config_files="app.yaml",
+    env_prefix="APP_",
+    secret_store=store,
+)
 
-**Fields that build on each other** — Template syntax lets fields reference other fields: `log_file = 'logs/{APP_NAME}/{RUNDATE}.log'`. Connection strings build from host, port, and database fields. Paths compose from base directories and environment-specific suffixes. The derivation is declarative and transparent.
+print(settings.DB_HOST, settings.DB_PORT)       # db.internal 6543
+print(settings.DB_PASSWORD)                     # **********
+print(settings.DB_PASSWORD.get_secret_value())  # s3cret
+```
 
-**Secrets that resolve themselves** — Write `secret:path/to/value` in a config file or environment variable. Register a secrets provider — AWS SSM, HashiCorp Vault, Azure Key Vault, or your own. The secret resolves before Pydantic validation, so the settings class sees the real value and validates it normally. No special handling in application code.
+The host came from the file, the port from the environment and the password from the secret store, and all three were validated. In production you swap `MemorySecretStore` for the filesystem store or your own adapter; `AppConfig` does not change.
 
-**Connection profiles that know their databases** — Define a profile descriptor once and the framework installs Pydantic fields, auth options, and template wiring automatically. Each database backend gets typed settings with auto-derived connection parameters and driver kwargs.
+## Where to go next
 
-**Auth modes that cover every backend** — From password through OAuth2 to service accounts to Kerberos to "none", every auth mode is a Pydantic model with SecretStr-protected credentials. The discriminated union validates that the auth mode matches what the backend expects.
+- New to the package? Start with [Chapter 2](chapters/02-mountainash-base-settings/index.md). The chapters assume you are comfortable with Python type annotations, Pydantic v2 models and validators, and at least one of YAML, TOML, JSON or `.env`; [Chapter 1](chapters/01-pydantic-and-configuration-foundations/index.md) covers the Pydantic background.
+- The [chapter list](chapters/index.md) shows everything the documentation covers.
+- [About](about.md) has authorship, the license and the link to the code repository.
 
-**Smart caching for pipelines** — `get_settings()` returns the same instance on every call for the same configuration. Runtime overrides for batch IDs or run-specific parameters get their own instance without polluting the cache.
-
-## Context
-
-mountainash-settings is part of the [mountainash](https://github.com/mountainash-io/mountainash) project, a collection of typed Python libraries for data engineering and platform development. It serves as the configuration layer that other mountainash packages depend on for settings management, connection configuration, and secrets resolution.
+!!! note "Upgrading from 0.x"
+    0.1.0 reset the public API. The [migration guide](https://github.com/mountainash-io/mountainash-settings/blob/develop/docs/migration-0.1.md) lists the supported names, target adapters and the new cached retrieval. This documentation describes 0.1.

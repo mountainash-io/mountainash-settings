@@ -1,91 +1,74 @@
-# Contributing to Mountain Ash Data Contracts
+# Contributing
 
-This document outlines the process for contributing to the project and provides guidelines to ensure a smooth collaboration.
+Use Python 3.12+ and Hatch. Fork or clone the repository, create a topic branch
+from current `develop`, and install the package if you need an editable environment:
 
-## Table of Contents
+```bash
+python -m pip install hatch
+python -m pip install -e .
+```
 
-1. [Getting Started](#getting-started)
-2. [Branching Strategy](#branching-strategy)
-3. [Making Changes](#making-changes)
-4. [Submitting a Pull Request](#submitting-a-pull-request)
-5. [Code Review Process](#code-review-process)
-6. [Coding Standards](#coding-standards)
-7. [Testing](#testing)
-8. [Documentation](#documentation)
+[pyproject.toml](pyproject.toml) and [hatch.toml](hatch.toml) define dependencies
+and development environments. Hatch creates its own environments for checks.
 
-## Getting Started
+## Branches and pull requests
 
-1. Fork the repository on GitHub.
-2. Clone your fork locally: `git clone https://github.com/your-username/mountainash-datacontracts.git`
-3. Add the original repository as a remote: `git remote add upstream https://github.com/mountainash-io/mountainash-datacontracts.git`
-4. Create a new branch for your contribution (see [Branching Strategy](#branching-strategy)).
+- Target `develop` for ordinary code, tests, documentation and dependency changes.
+- Use descriptive topic names such as `feature/*`, `bugfix/*`, `chore/*` or `docs/*`.
+- `main` is the production branch. Its PR validator accepts only `release/*` or
+  `hotfix/*` source branches; coordinate that work through [RELEASE.md](RELEASE.md).
+- Keep commits focused, explain observable changes and list the checks run in
+  the PR description. Link related issues and planning records.
+- Request code-owner review, address feedback and let a maintainer merge after
+  the repository's required checks and approvals. Ownership is declared in
+  [.github/CODEOWNERS](.github/CODEOWNERS).
 
-## Branching Strategy
+## Code and verification
 
-We follow a git-flow branching methodology. The following branch naming conventions are allowed:
+Follow the surrounding Python style, use type hints and keep functions focused.
+Add tests for observable contracts and credible regressions; avoid checks that
+duplicate stronger coverage or assert implementation details.
+Place tests under their package-module owner and reuse shared fixtures according
+to [the suite organisation rules](TESTING.md#suite-organisation-and-fixtures).
 
-- `main`: The main production branch
-- `develop`: The main development branch
-- `feature/*`: For new features
-- `chore/*`: For maintenance tasks
-- `release/*`: For release preparation
-- `hotfix/*`: For critical bug fixes in production
-- `bugfix/*`: For non-critical bug fixes
-- `renovate/*`: For dependency updates (automated)
+Start with the settings-only suite and production checks:
 
-### Protected Branches
+```bash
+hatch run test_github:test
+hatch run ruff:check
+hatch run mypy:check
+hatch run mypy:qualify
+hatch build
+```
 
-The following branches are strictly protected and require code owner review and repository owner approval for pull requests:
+See [TESTING.md](TESTING.md) for focused checks, coverage, native-platform testing
+and CI scope. The optional `test` environment requires a sibling auth-client
+checkout. Keep mypy pinned to 1.10.1 with its existing rules and test exclusion.
+The separate installed-consumer gate checks `tests/typing/consumer.py` against
+built wheels; see [typing support](docs/typing.md#qualification) for its evidence.
 
-- `main`
-- `develop`
-- `release/*`
+For source and test typing work, use the separate targets:
 
-## Making Changes
+```bash
+hatch run mypy:check-src
+hatch run mypy:check-tests
+hatch run mypy:check-tests-untyped
+```
 
-1. Ensure you're working on the correct branch (e.g., `feature/new-feature` for a new feature).
-2. Make your changes in small, logical commits.
-3. Follow the [Coding Standards](#coding-standards) of the project.
-4. Add or update tests as necessary (see [Testing](#testing)).
-5. Update documentation if required (see [Documentation](#documentation)).
-
-## Submitting a Pull Request
-
-1. Push your changes to your fork on GitHub.
-2. Open a pull request against the appropriate branch:
-   - For features, chores, and bugfixes, target the `develop` branch.
-   - For hotfixes, target the `main` branch.
-3. Provide a clear title and description for your pull request.
-4. Reference any related issues in the pull request description.
-5. Ensure all checks (tests, linting, etc.) pass successfully.
-
-## Code Review Process
-
-1. All pull requests require at least one review from a code owner.
-2. For protected branches (`main`, `develop`, `release/*`), additional approval from a repository owner is required.
-3. Address any feedback or comments provided during the review process.
-4. Once approved, a maintainer will merge your pull request.
-
-## Coding Standards
-
-- Follow PEP 8 style guide for Python code.
-- Use type hints where appropriate.
-- Write clear, self-documenting code with meaningful variable and function names.
-- Keep functions and methods focused and concise.
-- Use comments sparingly, only when necessary to explain complex logic.
-
-## Testing
-
-- Write unit tests for all new functionality.
-- Ensure all existing tests pass before submitting a pull request.
-- Aim for high test coverage, especially for critical parts of the codebase.
-- Use pytest for writing and running tests.
-- For detailed information on how to run tests and our testing procedures, please refer to our TESTING.md file.
+The test checker routes native modules to Linux, macOS and Windows typeshed
+passes. The `-untyped` mode is opt-in and can still report outstanding test-body
+typing debt. These developer targets do not add CI enforcement: current typing
+CI checks production source and installed consumers.
 
 ## Documentation
 
-- Update the README.md file if your changes affect the project's setup or usage.
-- Document new features or changes in behavior in the appropriate documentation files.
-- Keep docstrings up-to-date for all public functions, classes, and modules.
-
-Thank you for contributing to Mountain Ash Data Contracts!
+- Keep the README concise: purpose, capability map, one runnable quick start and links.
+- Put detailed usage contracts in [docs/](docs/) and keep public docstrings current.
+- Add independent, single-concept [configuration recipes](examples/) with a question,
+  root-level command, expected result and explanation. Use consistent sample data.
+- Verify README and recipe changes with
+  `hatch run test_github:pytest tests/examples -q`.
+- Keep designs, plans and historical delivery evidence in
+  [mountainash-central](https://github.com/mountainash-io/mountainash-central/blob/main/04.planning/mountainash-settings/superpowers/INDEX.md).
+- Follow [the textbook workflow](docs-site/README.md) for generated-site refreshes.
+  A source-document edit does not by itself advance generated provenance.

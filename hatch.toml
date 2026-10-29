@@ -7,6 +7,9 @@ path = "src/mountainash_settings/__version__.py"
 [build.targets.wheel]
 packages = ["src/mountainash_settings"]
 
+[build.targets.sdist]
+include = ["/src", "/pyproject.toml", "/hatch.toml", "/README.md", "/LICENSE", "/NOTICE"]
+
 #================
 # Env: build_github
 #================
@@ -31,6 +34,15 @@ installer = "uv"
 path = ".venv"
 dependencies = []
 
+# Optional, real multiprocess orchestration example; not a runtime dependency.
+[envs.examples_dagster]
+installer = "uv"
+python = "3.12"
+dependencies = ["dagster==1.13.25", "pytest==8.3.5"]
+[envs.examples_dagster.scripts]
+run = "python examples/dagster_workers/example.py"
+test = "pytest tests/examples/test_examples.py -k dagster_workers -q"
+
 #================
 # Env: tower
 #================
@@ -43,7 +55,7 @@ dependencies = []
 # Env: test_github
 #================
 [[envs.test_github.matrix]]
-python = ["3.12"] #,"3.11", "3.10", # "3.8", "3.9","3.9",
+python = ["3.12"]
 
 [envs.test_github]
 installer = "uv"
@@ -58,14 +70,16 @@ dependencies = [
 ]
 [envs.test_github.scripts]
 test = "pytest"
-test-cov = "pytest --cov --junitxml=junit.xml -o junit_family=legacy  --cov-report=xml"
+# Subprocesses change cwd; an explicit config lets pytest-cov propagate the
+# same branch/source settings instead of rediscovering defaults in the child.
+test-cov = "pytest --cov --cov-config={root}/pyproject.toml --junitxml=junit.xml -o junit_family=legacy  --cov-report=xml"
 
 
 #================
 # Env: test
 #================
 [[envs.test.matrix]]
-python = ["3.12"] #,  "3.11",, "3.10" ] # "3.8", "3.9","3.9",
+python = ["3.12"]
 
 [envs.test]
 installer = "uv"
@@ -86,7 +100,7 @@ dependencies = [
     # "mountainash_constants @ {root:uri}/../mountainash-constants",
     # "mountainash_utils_os @ {root:uri}/../mountainash-utils-os",
 
-
+    "mountainash-auth-client @ {root:uri}/../mountainash-auth-client",
 ]
 [envs.test.scripts]
 # ===========================================
@@ -94,7 +108,7 @@ dependencies = [
 # ===========================================
 
 test = [
-    "pytest --cov --junitxml=junit.xml",
+    "pytest --cov --cov-config={root}/pyproject.toml --junitxml=junit.xml",
     "coverage json --pretty-print",
     "coverage xml",
     "coverage html",
@@ -253,6 +267,13 @@ radon-cc-detail = "radon cc ./src"
 # Mypy Type checks
 [envs.mypy]
 installer = "uv"
-dependencies = ["mypy==1.10.1"]
+path = ".hatch/mypy"
+# The production spec-invariant helper lazily imports pytest.
+dependencies = ["mypy==1.10.1", "types-PyYAML==6.0.12.20260906", "pytest==8.3.5", "pytest-check==2.5.3", "build>=1.2,<2"]
 [envs.mypy.scripts]
-check = "mypy --install-types --non-interactive {args:src/mountainash_settings tests}"
+check = "python tools/check_types.py"
+check-src = "python tools/check_types.py {args}"
+check-tests = "python tools/check_test_types.py {args}"
+check-src-untyped = "python tools/check_types.py --check-untyped-defs {args}"
+check-tests-untyped = "python tools/check_test_types.py --check-untyped-defs {args}"
+qualify = "python tools/qualify_typing.py {args}"

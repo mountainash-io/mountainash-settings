@@ -1,0 +1,84 @@
+{
+  "id": "mountainash_settings.profiles.fields",
+  "path": "src/mountainash_settings/profiles/fields.py",
+  "summary": "ProfileField declares a native Pydantic field carrying profile emission options: driver_key (omitted follows class convention, None excludes), tier, transform and template.",
+  "role": "api-builder",
+  "visibility": "public",
+  "stability": "evolving",
+  "audiences": [
+    "users",
+    "extension-authors",
+    "maintainers"
+  ],
+  "doc_priority": "essential",
+  "confidence": "high",
+  "public_api": [
+    "ProfileField"
+  ],
+  "key_classes": [],
+  "key_functions": [
+    "ProfileField"
+  ],
+  "dependencies": [],
+  "dependents": [
+    "mountainash_settings.profiles",
+    "mountainash_settings.profiles._projection",
+    "mountainash_settings.profiles.profile"
+  ],
+  "extension_points": [
+    "ProfileField options driver_key, tier, transform, template"
+  ],
+  "lifecycle_notes": [],
+  "documentation_hooks": [
+    "docs/migration-0.1.md",
+    "docs/profile-spec-pattern.md"
+  ],
+  "examples": [],
+  "tests": [
+    "tests/profiles/test_class_completion.py",
+    "tests/profiles/test_class_declarations.py",
+    "tests/profiles/test_generated_consumers.py",
+    "tests/test_public_api.py"
+  ],
+  "risks": [],
+  "open_questions": [],
+  "evidence": [
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "ProfileField exported"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/profiles/__init__.py",
+      "detail": "imports mountainash_settings.profiles.fields"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/profiles/_projection.py",
+      "detail": "imports mountainash_settings.profiles.fields"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/profiles/profile.py",
+      "detail": "imports mountainash_settings.profiles.fields"
+    },
+    {
+      "kind": "test",
+      "path": "tests/profiles/test_class_completion.py",
+      "detail": "exercises module behaviour"
+    },
+    {
+      "kind": "test",
+      "path": "tests/profiles/test_class_declarations.py",
+      "detail": "exercises module behaviour"
+    }
+  ],
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
+  "manual": {
+    "notes": "",
+    "editorial_status": "",
+    "owner": "",
+    "manual_summary": ""
+  }
+}

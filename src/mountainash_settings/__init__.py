@@ -4,32 +4,32 @@ from .settings_parameters.settings_parameters import SettingsParameters
 from .settings.base_settings import MountainAshBaseSettings
 from .settings_cache.settings_functions import get_settings, get_settings_manager
 from .settings_cache.settings_manager import SettingsManager
+from .settings_cache.sources import CacheableSettingsSource
 
 # --- Profiles + auth (2026-04-16 promotion) ---------------------------------
 
 from .profiles import (
+    Adapter,
+    FACTORY_DEFAULT,
+    FactoryDefault,
+    ProfileField,
     MISSING,
-    DescriptorProfile,
+    Missing,
     ParameterSpec,
-    ProfileDescriptor,
+    Profile,
+    ProfileSpec,
     Registry,
-    descriptor_invariants_for,
+    lookup_class_var,
+    spec_invariants_for,
 )
-from .auth import (
-    AUTH_TO_DRIVER_KWARGS,
-    AuthSpec,
-    AzureADAuth,
-    CertificateAuth,
-    IAMAuth,
-    JWTAuth,
-    KerberosAuth,
-    NoAuth,
-    OAuth2Auth,
-    PasswordAuth,
-    ServiceAccountAuth,
-    TokenAuth,
-    WindowsAuth,
-    auth_to_driver_kwargs,
+from .secrets import (
+    ClearableSecretStore,
+    FilesystemBackend,
+    SecretReader,
+    SecretWriter,
+    SecretCapabilityError,
+    SecretStoreError,
+    SecretStoreUnavailableError,
 )
 
 __all__ = [
@@ -40,30 +40,30 @@ __all__ = [
     "MountainAshBaseSettings",
     "SettingsManager",
 
+    "CacheableSettingsSource",
     "get_settings",
     "get_settings_manager",
 
     # Profiles
+    "Adapter",
+    "FACTORY_DEFAULT",
+    "FactoryDefault",
+    "ProfileField",
     "MISSING",
-    "DescriptorProfile",
+    "Missing",
     "ParameterSpec",
-    "ProfileDescriptor",
+    "Profile",
+    "ProfileSpec",
     "Registry",
-    "descriptor_invariants_for",
+    "lookup_class_var",
+    "spec_invariants_for",
 
-    # Auth
-    "AUTH_TO_DRIVER_KWARGS",
-    "AuthSpec",
-    "AzureADAuth",
-    "CertificateAuth",
-    "IAMAuth",
-    "JWTAuth",
-    "KerberosAuth",
-    "NoAuth",
-    "OAuth2Auth",
-    "PasswordAuth",
-    "ServiceAccountAuth",
-    "TokenAuth",
-    "WindowsAuth",
-    "auth_to_driver_kwargs",
+    # Secrets
+    "ClearableSecretStore",
+    "FilesystemBackend",
+    "SecretReader",
+    "SecretWriter",
+    "SecretCapabilityError",
+    "SecretStoreError",
+    "SecretStoreUnavailableError",
 ]

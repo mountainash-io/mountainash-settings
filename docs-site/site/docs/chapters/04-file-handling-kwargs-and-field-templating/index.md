@@ -1,375 +1,310 @@
 ---
-title: File Handling, Kwargs, and Field Templating
+title: File handling, kwargs, and field templating
 description: How mountainash-settings loads configuration from files and kwargs, and how field values reference other fields via templates with resolution during post-init.
 generated_by: claude skill chapter-content-generator
 date: 2026-06-03
 version: 0.08
 ---
 
-# File Handling, Kwargs, and Field Templating
+# File handling, kwargs, and field templating
 
-## Summary
-
-This chapter covers how mountainash-settings loads configuration from files and keyword arguments, and how field values can reference other fields via templates. You will learn about the FileHandler class with its extension-based dispatch and file categorization, the KwargsHandler for normalizing keyword arguments, multi-format file loading that ties everything together, and the template system including syntax, field name placeholders, resolution during post-init, UPath path derivation, priority rules, and nested template resolution.
+Configuration reaches a settings class through two inputs: file paths (`config_files`) and keyword arguments. Files in `.env`, YAML, TOML and JSON formats can be mixed in one list, and each is loaded by its native source. A field can also be derived from a template that references other fields, such as `"{RUNDATE}T{RUNTIME}"`, when `post_init()` calls `init_setting_from_template()` or a `Profile` field declares `template=`.
 
 ---
 
-<!-- concept:38 -->
-## From Raw Input to Validated Fields
+## From raw input to validated fields
 
-When a caller passes `config_files=["base.yaml", ".env", "overrides.toml"]` alongside keyword arguments like `debug=True`, the framework must route each input to the correct processing pipeline. File paths need to be categorized by extension and handed to the matching Pydantic settings source. Keyword arguments need to be separated into Pydantic-internal parameters, model config overrides, and user-facing attribute values. This chapter covers the two handler classes that perform this routing, the multi-format loading mechanism that ties them together, and the template system that derives field values from other fields.
+A caller can pass `config_files=["base.yaml", ".env", "overrides.toml"]` alongside keyword arguments like `debug=True`. File paths are sorted by extension and handed to the matching Pydantic settings source. Keyword arguments are accepted only as declared field inputs. Source controls and schema controls are rejected before any source opens.
+
+```python
+import tempfile
+from pathlib import Path
+
+from mountainash_settings import MountainAshBaseSettings
+
+
+class ServiceSettings(MountainAshBaseSettings):
+    RUNDATE: str = "20260603"
+    RUNTIME: str = "143022"
+    DEBUG: bool = False
+
+
+with tempfile.TemporaryDirectory() as d:
+    base = str(Path(d, "base.yaml"))
+    secrets = str(Path(d, "secrets.env"))
+    overrides = str(Path(d, "overrides.toml"))
+    Path(base).write_text("RUNDATE: '20270101'\n")
+    Path(secrets).write_text("DEBUG=true\n")
+    Path(overrides).write_text("RUNTIME = '010203'\n")
+
+    # Mixed formats, one duplicate entry, plus a keyword argument
+    s = ServiceSettings(config_files=[base, secrets, overrides, base], RUNTIME="999999")
+    print(s.RUNDATE, s.RUNTIME, s.DEBUG)
+    # 20270101 999999 True
+```
+
+`RUNDATE` comes from the YAML file, `DEBUG` from the `.env` file, and `RUNTIME` from the keyword argument, which takes precedence over the TOML file. The duplicated `base.yaml` entry is loaded once.
 
 <!-- concept:32 -->
-<!-- concept:35 -->
-## FileHandler Class
+## Config file handling
 
-The `SettingsFileHandler` class is a stateless utility (all methods are class methods or static methods) that manages the lifecycle of configuration file paths: normalization, classification, validation, deduplication, and format conversion.
+`config_files` accepts a single path, a list of paths, or `None`. Before loading, the paths are normalised (a leading `~` is expanded), deduplicated with the first occurrence kept, and sorted by format into `.env`, YAML, TOML and JSON groups, each in first-seen order.
 
-The class provides six key operations:
-
-- `separate_config_files()` -- the main entry point that takes a mixed file list and returns a `SettingsFiles` named tuple
-- `identify_file_extension()` -- determines the type of a single file
-- `group_files_by_type()` -- groups a list of files into buckets by extension
-- `validate_config_files_exist()` -- raises `FileNotFoundError` for missing files
-- `deduplicate_files()` -- removes duplicates while preserving order
-- `format_config_file_tuple()` / `format_config_file_list()` -- normalization helpers
-
-The output container is the `SettingsFiles` named tuple, which provides typed access to each file category:
+Every referenced file must exist. A missing file raises `FileNotFoundError` when the settings object is constructed, so a configuration error shows up at construction time and not when a value is first read. A file whose extension is not recognised raises `ValueError`.
 
 ```python
-class SettingsFiles(NamedTuple):
-    env_files:  Optional[List[Union[UPath, str]]] = None
-    yaml_files: Optional[List[Union[UPath, str]]] = None
-    toml_files: Optional[List[Union[UPath, str]]] = None
-    json_files: Optional[List[Union[UPath, str]]] = None
-```
+with tempfile.TemporaryDirectory() as d:
+    try:
+        ServiceSettings(config_files=[str(Path(d, "missing.yaml"))])
+    except FileNotFoundError:
+        print("FileNotFoundError")
 
-The handler accepts flexible input types (single path, list, tuple, or None) and normalizes them consistently. This design means callers never need to pre-process their file paths -- the handler accommodates whatever shape the data arrives in.
+    try:
+        ServiceSettings(config_files=[str(Path(d, "settings.ini"))])
+    except ValueError:
+        print("ValueError")
+```
 
 <!-- concept:33 -->
-## File Extension Dispatch
+## File extension dispatch
 
-**File extension dispatch** is the mechanism by which the handler determines what type of configuration a file contains. The `FileTypeRegistry` class maintains a mapping from file extensions to logical file types:
+The file type comes from the extension. For a regular file such as `config.yaml`, the extension is looked up directly. For a dotfile such as `.env`, which has a leading dot and no other dots, the name without the dot is used.
 
-```python
-class FileTypeRegistry:
-    _registry = {
-        'env':  FileType.ENV,
-        'yaml': FileType.YAML,
-        'yml':  FileType.YAML,
-        'toml': FileType.TOML,
-        'json': FileType.JSON
-    }
-```
+| Input path | Detection | Resolved type |
+|-----------|-----------|---------------|
+| `config.yaml` | Extension `.yaml` | YAML |
+| `settings.yml` | Extension `.yml` | YAML |
+| `app.toml` | Extension `.toml` | TOML |
+| `data.json` | Extension `.json` | JSON |
+| `.env` | Dotfile `env` | ENV |
+| `.env.local` | Extension `.local` | Unknown |
 
-The `identify()` method handles two distinct cases. For regular files with extensions (like `config.yaml`), it strips the leading dot from the suffix and looks up the extension in the registry. For dotfiles (like `.env`), it detects that the filename starts with a dot and contains no other dots, then uses the name minus the leading dot as the lookup key.
-
-| Input Path | Detection Method | Resolved Type |
-|-----------|-----------------|---------------|
-| `config.yaml` | Extension: `.yaml` | YAML |
-| `settings.yml` | Extension: `.yml` | YAML |
-| `app.toml` | Extension: `.toml` | TOML |
-| `data.json` | Extension: `.json` | JSON |
-| `.env` | Dotfile: `env` | ENV |
-| `.env.local` | Extension: `.local` | Unknown |
-
-The registry is extensible via `register_type()`, allowing applications to add support for custom file extensions without modifying the handler itself.
+`.env.local` is not recognised because it has more than one dot, so it raises `ValueError`. Rename it, for example to `local.env`, to load it.
 
 <!-- concept:34 -->
-## File Categorization
+## File categorization
 
-**File categorization** is the process of sorting a mixed list of configuration files into their respective type buckets. The `separate_config_files()` method orchestrates this in four steps:
+Categorization sorts the mixed `config_files` list into its format groups, so a caller does not need to know which files are YAML, TOML, JSON or `.env`. Duplicates are removed on the normalised path, and the first occurrence keeps its position. Entries given as strings stay strings, and entries given as `UPath` objects stay `UPath` objects.
 
-1. Normalize the input to a list of `UPath` objects (expanding `~` home directory references)
-2. Group files by type using `group_files_by_type()`
-3. Deduplicate each group while preserving order
-4. Return a `SettingsFiles` named tuple with the four categories
+The example in [From raw input to validated fields](#from-raw-input-to-validated-fields) shows this: `base.yaml` appears twice in the list and is loaded once, and the three formats are each routed to their own source.
 
-```python
-# Input: mixed file list
-files = ["base.yaml", "secrets.env", "overrides.toml", "base.yaml"]
-
-# Output: categorized and deduplicated
-result = SettingsFileHandler.separate_config_files(files)
 <!-- concept:41 -->
-# result.yaml_files == [UPath("base.yaml")]  (deduplicated)
-# result.env_files  == [UPath("secrets.env")]
-# result.toml_files == [UPath("overrides.toml")]
-# result.json_files == None
+## UPath config paths
+
+Configuration file paths may be strings or `UPath` objects (from `universal_pathlib`). Both are valid `config_files` entries. A `UPath` entry is kept as a `UPath`, so any filesystem options it carries are retained.
+
+```python
+from upath import UPath
+
+with tempfile.TemporaryDirectory() as d:
+    path = Path(d, "cfg.json")
+    path.write_text('{"RUNDATE": "20280101"}')
+
+    print(ServiceSettings(config_files=UPath(str(path))).RUNDATE)
+    # 20280101
 ```
 
-After categorization, the `MountainAshBaseSettings` constructor validates that all referenced files exist on disk (or the target filesystem) by calling `validate_config_files_exist()` for each category. This fail-fast behavior catches configuration errors at construction time rather than at the point where a missing value is first accessed.
+!!! warning "Remote config paths are not supported"
+    Only local config paths work. A remote path such as `s3://bucket/cfg.json` or `memory:///cfg.json` raises `NotImplementedError` when the settings object is constructed, so keep configuration files on the local filesystem.
 
-#### Diagram: File Categorization Pipeline
+This applies to configuration file paths only. Templated field values are plain strings, so a template such as `"s3://{BUCKET}/{ENVIRONMENT}/{DATASET}.parquet"` works normally.
 
-<iframe src="../../sims/file-categorization-pipeline/main.html" width="100%" height="450px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>File Categorization Pipeline</summary>
-Type: workflow
-**sim-id:** file-categorization-pipeline<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
-
-A directed flow showing mixed file inputs entering a pipeline of four stages: UPath normalization, FileTypeRegistry.identify() dispatch, group_files_by_type() bucketing, and deduplicate_files() cleanup. Output flows into four colored lanes (env=green, yaml=blue, toml=purple, json=orange). Clicking a file in the input list highlights its path through the pipeline. Dragging new file names into the input area runs them through the pipeline interactively. Learning objective: Trace how a mixed file list is categorized into typed buckets by the FileHandler (Bloom: Apply).
-</details>
-
+<!-- concept:35 -->
 <!-- concept:36 -->
-## KwargsHandler Class
+## Keyword arguments
 
-The `SettingsKwargsHandler` class normalizes keyword arguments into a consistent dictionary format. Like `SettingsFileHandler`, it is a stateless utility with class methods and static methods.
+Keyword arguments passed to a settings class are matched against its declared fields. A key that matches a declared field name, or a validation alias of one, is accepted as that field's value. Anything else is dealt with as follows:
 
-The primary method is `format_kwargs_dict()`, which accepts three input shapes -- `None`, a dictionary, or a tuple of key-value pairs -- and normalizes them:
-
-```python
-@classmethod
-def format_kwargs_dict(cls,
-                       p_kwargs: None | Dict[str,Any] | Tuple[Any,Any] = None
-                       ) -> Optional[Dict[str,Any]]:
-    if p_kwargs is None:
-        return None
-    if isinstance(p_kwargs, dict):
-        p_kwargs = p_kwargs.get("kwargs", p_kwargs)
-        return p_kwargs
-    if isinstance(p_kwargs, tuple):
-        p_kwargs = dict(p_kwargs)
-        p_kwargs = p_kwargs.get("kwargs", p_kwargs)
-        return p_kwargs
-    raise ValueError(f"Invalid p_kwargs: {p_kwargs}")
-```
-
-A subtle detail is the `p_kwargs.get("kwargs", p_kwargs)` pattern. If the input dictionary itself contains a nested `"kwargs"` key, the handler unwraps it. This handles the case where kwargs have been double-wrapped during parameter passing -- a defensive measure against a common serialization artifact.
-
-## Kwargs Normalization
-
-**Kwargs normalization** is the broader process by which the `SettingsParameters` class separates a flat dictionary of keyword arguments into three routing destinations:
-
-- **Pydantic model config kwargs** -- keys in `_reserved_pydantic_modelconfig_kwargs` (e.g., `extra`, `arbitrary_types_allowed`)
-- **Pydantic settings kwargs** -- keys in `_reserved_pydantic_kwargs` (e.g., `_env_prefix`, `_env_file`, `_secrets_dir`)
-- **Attribute settings kwargs** -- everything else that matches a field name on the target settings class
-
-The `SettingsParameters` class provides three getter methods that implement this separation:
+- Source controls: any key starting with an underscore (`_env_file`, `_env_prefix`, `_secrets_dir`, `_cli_*` and so on) raises `ValueError` before any source opens. Source selection goes through the public `config_files`, `env_prefix`, `secrets_dir` and `secret_store` parameters instead.
+- Schema controls: `extra`, `arbitrary_types_allowed` and `validate_default` raise `ValueError` unless the settings class declares a field of that name. Schema behaviour is configured on the class's `model_config`, never per call.
+- Anything else that is not a declared field name is dropped.
 
 ```python
-def get_pydantic_modelconfig_kwargs(self) -> Dict[str, Any]:
-    # Returns only model config overrides
+# A kwarg that matches no declared field is dropped
+print(ServiceSettings(DEBUG=True, nothing=1).DEBUG)
+# True
 
-def get_pydantic_settings_kwargs(self) -> Dict[str, Any]:
-    # Returns only Pydantic BaseSettings init parameters
-
-def get_attribute_settings_kwargs(self, settings_class=None) -> Dict[str, Any]:
-    # Returns only user-facing field values
+# Source and schema controls are rejected
+for bad in ({"_env_file": "x.env"}, {"extra": "allow"}):
+    try:
+        ServiceSettings(**bad)
+    except ValueError as e:
+        print(e)
+# Unsupported source control kwarg: '_env_file'
+# Unsupported schema control kwarg: 'extra'. Configure this on the settings class's model_config instead.
 ```
 
-This three-way split ensures each parameter reaches its correct destination during construction. The model config kwargs update `self.model_config` before `BaseSettings.__init__` runs. The Pydantic settings kwargs are passed as named arguments to `super().__init__()`. The attribute kwargs are passed as `**valid_attribute_kwargs` to populate the instance's declared fields.
+The error messages name the offending key and never echo its value. Retrieval through the settings cache (`get_settings`) applies the same rules, and also refuses `reinitialise` or any source selector supplied as a runtime field rather than through its own parameter.
 
-!!! tip "Debugging kwargs routing"
-    If a keyword argument silently fails to populate a field, check whether it matches a key in `_reserved_pydantic_kwargs`. If so, it is being routed to Pydantic's internal machinery rather than to a field setter. Prefix it with an underscore to explicitly target the Pydantic parameter, or remove the prefix to target the field.
+!!! tip "Debugging kwargs"
+    If a keyword argument does not populate a field, check that its name matches a declared field (or a validation alias) on the settings class. Names that match nothing are dropped. If construction raises `ValueError` naming a kwarg, the name is a source or schema control. Remove the underscore prefix, or move the setting to the corresponding public parameter or to `model_config`.
 
 <!-- concept:22 -->
-## Multi Format File Loading
+## Multi format file loading
 
-**Multi-format file loading** is the mechanism that assigns categorized files to the correct Pydantic settings source. After the `FileHandler` produces a `SettingsFiles` tuple, the `MountainAshBaseSettings` constructor assigns each category to its destination:
+Each format reaches its Pydantic settings source by a different route:
 
-```python
-# YAML, TOML, JSON go through model_config
-self.model_config["yaml_file"] = obj_config_files.yaml_files or None
-self.model_config["toml_file"] = obj_config_files.toml_files or None
-self.model_config["json_file"] = obj_config_files.json_files or None
+- `.env` files are passed to Pydantic's dotenv source.
+- YAML, TOML and JSON files are supplied to the matching Pydantic config source for that one construction only.
 
-# ENV files go through BaseSettings._env_file parameter
-super().__init__(_env_file=obj_config_files.env_files, ...)
-```
-
-This split exists because Pydantic handles `.env` files differently from structured config files. The `.env` file is passed as an init parameter that the `DotEnvSettingsSource` consumes directly. Structured files (YAML, TOML, JSON) are declared on `model_config` where the corresponding `*ConfigSettingsSource` classes read them.
-
-The result is that a single `config_files` parameter from the caller can contain any mix of file types, and each type is automatically routed to its native loading mechanism. A caller does not need to know which files are YAML versus TOML versus `.env` -- the handler figures it out from the file extensions.
+The class's `model_config` is never modified, and file paths cannot leak from one construction into another, even when constructions overlap, nest or fail. Two settings instances built with different `config_files` stay independent.
 
 <!-- concept:37 -->
 <!-- concept:39 -->
-<!-- concept:42 -->
-<!-- concept:43 -->
-## Template Syntax
+## Template syntax
 
-The mountainash-settings **template syntax** uses Python's standard `str.format()` placeholders to reference other fields on the same settings instance. A template is a string containing one or more `{FIELD_NAME}` placeholders that will be replaced with the current value of the named field.
+Templates use Python's standard `str.format()` placeholders. A template is a string containing one or more `{FIELD_NAME}` placeholders, each replaced with the current value of the named field on the same settings instance.
 
-```python
-# Template syntax uses curly braces around field names
-template = "{RUNDATE}T{RUNTIME}"
-# If RUNDATE="20260603" and RUNTIME="143022"
-# Resolves to: "20260603T143022"
-```
-
-The syntax leverages Python's built-in `string.Formatter` class for parsing. The `_build_template_mapping()` method iterates over the parsed fields and builds a mapping dictionary by reading the current value of each referenced field from the settings instance:
+`init_setting_from_template()` resolves a template and `format_template_from_settings()` formats one on demand. The usual place to call `init_setting_from_template()` is `post_init()`:
 
 ```python
-def _build_template_mapping(self, template_str: str) -> Dict[str, Any]:
-    mapping = {}
-    for _, field_name, _, _ in Formatter().parse(template_str):
-        if field_name:
-            if hasattr(self, field_name):
-                mapping[field_name] = getattr(self, field_name)
-            else:
-                raise AttributeError(
-                    f"The object does not have an attribute "
-                    f"named '{field_name}'"
-                )
-    return mapping
-```
+from typing import Optional
 
-If a template references a field that does not exist on the instance, an `AttributeError` is raised immediately -- templates fail fast rather than producing silently incorrect values.
+from mountainash_settings import MountainAshBaseSettings
 
-## Field Name Placeholder
 
-A **field name placeholder** is a single `{FIELD_NAME}` reference within a template string. The placeholder name must match an attribute name on the settings instance exactly (case-sensitive). Multiple placeholders can appear in a single template, and they can be interspersed with literal text:
-
-- `"{RUNDATE}"` -- single placeholder, resolves to the field value directly
-- `"{RUNDATE}T{RUNTIME}"` -- two placeholders with a literal `T` separator
-- `"s3://{BUCKET}/{ENVIRONMENT}/{DATASET}.parquet"` -- three placeholders with path separators
-
-Placeholders reference the _current_ field value at resolution time. This means that if a field has been set by any source (env var, config file, kwargs), the template uses that value. If the field retains its default, the template uses the default. This interaction with the source priority chain is governed by the template priority rules discussed below.
-
-## Template Resolution
-
-**Template resolution** is the process of replacing placeholders with field values to produce a concrete string. The `init_setting_from_template()` method performs this resolution with an important guard: if the target field already has a non-None value and `reinitialise` is False, the existing value is preserved:
-
-```python
-def init_setting_from_template(self, template_str, current_value=None,
-                                reinitialise=False):
-    if current_value is not None and reinitialise is False:
-        return current_value
-
-    mapping = self._build_template_mapping(template_str)
-    return template_str.format(**mapping)
-```
-
-This guard implements a critical design principle: explicitly provided values always take precedence over template-derived values. If a caller passes `RUNDATETIME="2026-01-01T00:00:00"` as a kwarg, the template `"{RUNDATE}T{RUNTIME}"` is never evaluated for that field.
-
-The companion method `format_template_from_settings()` always resolves the template, regardless of the current value. This method is used when the caller wants a formatted string on demand, not as part of the initialization lifecycle.
-
-<!-- concept:40 -->
-## Post Init Template Expansion
-
-**Post-init template expansion** is the mechanism by which templates are resolved during the `post_init()` lifecycle hook. This timing is critical: templates must be expanded after all configuration sources have been loaded but before the settings instance is returned to the caller.
-
-The `AppSettings` class demonstrates this pattern:
-
-```python
-def post_init(self, template_settings_parameters=None,
-              reinitialise=False):
-    super().post_init(reinitialise=reinitialise)
-    app_settings_templates = self._init_template_object(
-        template_settings_parameters
-    )
-    self.RUNDATETIME = self.init_setting_from_template(
-        template_str=app_settings_templates.RUNDATETIME_TEMPLATE,
-        current_value=self.RUNDATETIME,
-        reinitialise=reinitialise
-    )
-```
-
-The `Profile` class uses an automated version: it iterates over all `ParameterSpec` entries that declare a `template` attribute and calls `init_setting_from_template()` for each one, applying templates only when the field still holds its default value.
-
-#### Diagram: Template Expansion Timeline
-
-<iframe src="../../sims/template-expansion-timeline/main.html" width="100%" height="450px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Template Expansion Timeline</summary>
-Type: microsim
-**sim-id:** template-expansion-timeline<br/>
-**Library:** vis-timeline<br/>
-**Status:** Specified
-
-A horizontal timeline showing the construction lifecycle with seven labeled stages. Template-related events are highlighted: placeholder fields receive their values from config sources at stage 4, template expansion occurs at stage 7 (post_init). Users can click each stage to see the state of a sample settings instance at that point -- showing which fields have values and which are still placeholders. A "Step Through" button advances through the stages one at a time. Learning objective: Predict the state of field values at each stage of the construction lifecycle (Bloom: Apply).
-</details>
-
-## UPath Path Derivation
-
-The template system supports **UPath path derivation**, which means template-resolved values can be used as file system paths via the `UPath` (universal path) type. When a template resolves to a string like `"s3://my-bucket/data/20260603/output.parquet"`, the result can be assigned to a `UPath` field and used for file operations on any supported filesystem.
-
-This capability is particularly powerful for data pipeline configurations where output paths incorporate runtime parameters:
-
-```python
-class PipelineSettings(MountainAshBaseSettings):
-    BUCKET: str = Field(default="my-bucket")
-    RUNDATE: str = Field(default="20260603")
-    OUTPUT_PATH: Optional[str] = Field(default=None)
-
-    def post_init(self, **kwargs):
-        super().post_init(**kwargs)
-        self.OUTPUT_PATH = self.init_setting_from_template(
-            template_str="s3://{BUCKET}/data/{RUNDATE}/output.parquet",
-            current_value=self.OUTPUT_PATH
-        )
-```
-
-Because mountainash-settings uses `UPath` (from the `universal_pathlib` package) rather than `pathlib.Path`, these derived paths work transparently with S3, GCS, Azure Blob Storage, HDFS, and any other filesystem supported by `fsspec`.
-
-## Template Priority Rules
-
-**Template priority rules** determine when a template is evaluated versus when an explicitly provided value takes precedence. The rules follow a simple hierarchy:
-
-1. If the field has an explicit value from kwargs, environment variable, or config file: **keep the explicit value**
-2. If the field has its declared default (or None): **evaluate the template**
-3. If `reinitialise=True` is passed: **always evaluate the template**, overriding any existing value
-
-These rules ensure that templates behave as intelligent defaults. A template for `OUTPUT_PATH = "s3://{BUCKET}/{RUNDATE}/output.parquet"` provides a sensible derived value, but a caller who passes `OUTPUT_PATH="/local/override/path"` gets exactly what they asked for.
-
-The `Profile` class enforces this by comparing the current field value against the `ParameterSpec.default`:
-
-```python
-# Only apply template when value matches the declared default
-param_default = param.default if param.default is not MISSING else None
-if current not in (param_default, None, ""):
-    continue  # skip -- explicit value takes precedence
-```
-
-This means that runtime fields (kwargs) are the primary mechanism for user-provided overrides. Structural fields loaded from config files also take precedence over templates, because by the time `post_init()` runs, all source values have already been populated.
-
-## Nested Template Resolution
-
-**Nested template resolution** refers to the ability of templates to reference fields that are themselves template-derived. Because `post_init()` resolves templates in the order they are declared, a template can safely reference a field that was resolved by a preceding template in the same `post_init()` call.
-
-```python
 class PipelineSettings(MountainAshBaseSettings):
     RUNDATE: str = "20260603"
     RUNTIME: str = "143022"
-    RUNDATETIME: Optional[str] = None     # template: "{RUNDATE}T{RUNTIME}"
-    OUTPUT_DIR: Optional[str] = None      # template: "output/{RUNDATETIME}"
+    RUNDATETIME: Optional[str] = None
+    OUTPUT_DIR: Optional[str] = None
 
     def post_init(self, **kwargs):
         super().post_init(**kwargs)
-        # First: resolve RUNDATETIME from RUNDATE and RUNTIME
         self.RUNDATETIME = self.init_setting_from_template(
             "{RUNDATE}T{RUNTIME}", self.RUNDATETIME
         )
-        # Second: resolve OUTPUT_DIR from (now resolved) RUNDATETIME
         self.OUTPUT_DIR = self.init_setting_from_template(
             "output/{RUNDATETIME}", self.OUTPUT_DIR
         )
+
+
+s = PipelineSettings()
+print(s.RUNDATETIME)
+# 20260603T143022
+print(s.OUTPUT_DIR)
+# output/20260603T143022
 ```
 
-The ordering within `post_init()` is the responsibility of the subclass author. Templates must be resolved in dependency order -- a field that references another template-derived field must come after that field's resolution. Circular references (A references B which references A) would cause infinite recursion; the framework does not detect these at declaration time, so the subclass author must avoid them.
+Only declared fields can be referenced. Private attributes, methods and dunder attributes are never available to a template. A template that names anything else raises `AttributeError` immediately, so a typo fails at once and does not produce a wrong value:
 
-#### Diagram: Nested Template Resolution Graph
+```python
+for template in ("{MISSING}", "{__class__}", "{model_dump}"):
+    try:
+        s.format_template_from_settings(template)
+    except AttributeError as e:
+        print(e)
+# The object does not have an attribute named 'MISSING'
+# The object does not have an attribute named '__class__'
+# The object does not have an attribute named 'model_dump'
+```
 
-<iframe src="../../sims/nested-template-graph/main.html" width="100%" height="450px" scrolling="no"></iframe>
-<details markdown="1">
-<summary>Nested Template Resolution Graph</summary>
-Type: graph-model
-**sim-id:** nested-template-graph<br/>
-**Library:** vis-network<br/>
-**Status:** Specified
+<!-- concept:38 -->
+## Field name placeholder
 
-A directed acyclic graph showing fields as nodes and template references as edges. Source fields (RUNDATE, RUNTIME) are at the top, first-level derived fields (RUNDATETIME) in the middle, and second-level derived fields (OUTPUT_DIR) at the bottom. Clicking a node shows its template string and current resolved value. Hovering over an edge shows which placeholder in the template references which field. A "Resolve" button animates the resolution in topological order. A "Change RUNDATE" slider lets users modify the source value and see how all derived fields update. Learning objective: Design template dependency chains that resolve correctly without circular references (Bloom: Create).
-</details>
+A field name placeholder is a single `{FIELD_NAME}` reference inside a template. The name must match a declared field exactly, including case. A template can hold several placeholders mixed with literal text:
 
-## Key Takeaways
+- `"{RUNDATE}"` resolves to the field value directly.
+- `"{RUNDATE}T{RUNTIME}"` has two placeholders and a literal `T`.
+- `"s3://{BUCKET}/{ENVIRONMENT}/{DATASET}.parquet"` has three placeholders and path separators.
 
-- **FileHandler Class** is a stateless utility that normalizes, categorizes, validates, and deduplicates configuration file paths into typed buckets.
-- **File Extension Dispatch** uses a pluggable registry to identify file types from extensions, with special handling for dotfiles like `.env`.
-- **File Categorization** produces a `SettingsFiles` named tuple that routes each file category to its correct Pydantic settings source.
-- **KwargsHandler Class** normalizes keyword arguments from dictionaries or tuples into a consistent dictionary format, unwrapping nested "kwargs" keys.
-- **Kwargs Normalization** separates kwargs into three routing destinations: model config overrides, Pydantic settings parameters, and user-facing field values.
-- **Multi Format File Loading** assigns env files to `_env_file` and structured files to `model_config`, enabling transparent mixed-format loading from a single parameter.
-- **Template Syntax** uses Python's `str.format()` with `{FIELD_NAME}` placeholders that reference other fields on the same settings instance.
-- **Template Priority Rules** ensure explicit values from kwargs, env vars, or config files always take precedence over template-derived values.
+A placeholder reads the field's value at resolution time. If a source (environment variable, config file or kwarg) set the field, the template uses that value. Otherwise it uses the field's default.
+
+## Template resolution
+
+`init_setting_from_template()` takes the template, the field's current value and an optional `reinitialise` flag. If the current value is not `None` and `reinitialise` is false, the current value is returned unchanged and the template is not evaluated. Otherwise the template is formatted with the current field values.
+
+An explicitly provided value therefore always wins over a template. In the example above, passing `RUNDATETIME` directly leaves the template unused for that field:
+
+```python
+print(PipelineSettings(RUNDATETIME="2026-01-01T00:00:00").OUTPUT_DIR)
+# output/2026-01-01T00:00:00
+```
+
+`format_template_from_settings()` always resolves the template, whatever the current value. Use it to build a formatted string on demand:
+
+```python
+print(s.format_template_from_settings("s3://bucket/{RUNDATE}/data.parquet"))
+# s3://bucket/20260603/data.parquet
+```
+
+<!-- concept:40 -->
+## Post init template expansion
+
+Templates are resolved in `post_init()`, which runs after all configuration sources have loaded and before the instance is returned. That ordering means a template sees values from files, environment variables and kwargs, not only defaults. `PipelineSettings` above shows the pattern: call `super().post_init(**kwargs)`, then assign each templated field.
+
+A `Profile` automates this. A `ParameterSpec` that declares a `template` is resolved for you, with no `post_init()` override:
+
+```python
+from mountainash_settings import ParameterSpec, Profile, ProfileSpec
+
+
+class ApiProfile(Profile):
+    __spec__ = ProfileSpec(
+        name="api", provider_type="api",
+        parameters=[
+            ParameterSpec(name="HOST", type=str, tier="core"),
+            ParameterSpec(name="URL", type=str, tier="core", default="",
+                          template="https://{HOST}/api"),
+        ],
+    )
+
+
+print(ApiProfile(HOST="example.com").URL)
+# https://example.com/api
+print(ApiProfile(HOST="a.b", URL="https://override.example/").URL)
+# https://override.example/
+```
+
+The same templating is available on `ProfileField(template=...)` for profiles declared with native Pydantic fields.
+
+<!-- concept:42 -->
+## Template priority rules
+
+Template priority rules decide when a template is evaluated and when an explicit value stands.
+
+For a hand-written `post_init()` that calls `init_setting_from_template()`, the rule is a check on the current value:
+
+1. If the current value is not `None` and `reinitialise` is not true, the current value is kept.
+2. Otherwise the template is evaluated.
+
+`Profile` uses a stricter rule based on where a value came from, not on what it is. A comparison of values cannot tell "the caller passed the same value as the default" from "no value was supplied", and getting that wrong silently overwrites an explicit choice.
+
+1. Initial construction: every templated field that was not explicitly supplied to this call is derived, even if its value happens to equal the default, `None` or `""`.
+2. `reinitialise=True`: only fields that were previously derived from a template are recomputed, excluding any supplied explicitly to this call through `get_settings(reinitialise=True)` or `SettingsManager`.
+
+A template such as `OUTPUT_PATH = "s3://{BUCKET}/{RUNDATE}/output.parquet"` provides a derived value, but a caller who passes `OUTPUT_PATH="/local/override/path"` gets that exact value, including on a later `reinitialise=True` call made through the cache.
+
+The derived value is assigned through the model's normal validated assignment, so type coercion, field validators and `SecretStr` wrapping apply as they would to an explicit value.
+
+Values loaded from config files also take precedence over templates, because every source has been applied by the time `post_init()` runs.
+
+!!! warning "Direct `post_init(reinitialise=True)` is not override-protected"
+    The "explicit in this call" exclusion applies only on the cache route. Calling `post_init(reinitialise=True)` directly on an instance you built yourself cannot tell a field you just set from one that still holds an old derived value. It re-derives every field that was ever template-derived on that instance, so an override you set by hand is overwritten.
+
+<!-- concept:43 -->
+## Nested template resolution
+
+A template can reference a field that is itself template-derived. In `PipelineSettings`, `OUTPUT_DIR` uses `{RUNDATETIME}`, and `RUNDATETIME` is resolved on the line before it.
+
+The order within `post_init()` is the subclass author's responsibility. Resolve templates in dependency order, so that a field referenced by another template is resolved first.
+
+Resolution is a single ordered pass with ordinary `str.format()`. There is no recursive expansion and no cycle detection. A template that references a field not yet resolved reads that field's current value at that moment:
+
+```python
+class Pair(MountainAshBaseSettings):
+    A: Optional[str] = None
+    B: Optional[str] = None
+
+    def post_init(self, **kwargs):
+        super().post_init(**kwargs)
+        self.A = self.init_setting_from_template("a-{B}", self.A)
+        self.B = self.init_setting_from_template("b-{A}", self.B)
+
+
+p = Pair()
+print(p.A, p.B)
+# a-None b-a-None
+```
+
+Two fields that refer to each other do not raise an error. The result depends on the order in which they are resolved.

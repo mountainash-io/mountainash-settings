@@ -29,10 +29,10 @@ Name-keyed store, @decorator registration, duplicate prevention, descriptor inva
 AuthSpec base with kind literal, 10+ concrete auth modes as discriminated union, dispatch function, driver kwargs mapping.
 
 ### CACHE -- Caching
-LRU cache on _get_settings, structural cache key, runtime override application via model_copy, SettingsManager named lookup.
+Private structural source context, structural context key, runtime input projection, fresh result materialization, SettingsManager ownership.
 
 ### APP -- App Settings
-AppSettings convenience class, defaults, templates, integration with caching.
+AppSettings convenience class, defaults, templates, integration with settings materialization.
 
 ## Taxonomy Summary Table
 

@@ -1,9 +1,17 @@
 name: Pytest
 
 on:
+  push:
+    branches: [develop, main]
   pull_request:
     paths:
       - "src/mountainash_settings/**"
+      - "tests/**"
+      - "examples/**"
+      - "README.md"
+      - "pyproject.toml"
+      - "hatch.toml"
+      - ".github/workflows/python-run-pytest.yml"
   workflow_dispatch:
     inputs:
       fallback_branch:
@@ -29,26 +37,31 @@ jobs:
 
     steps:
       - name: Set fallback branch
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_FALLBACK_BRANCH: ${{ github.event.inputs.fallback_branch }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "FALLBACK_BRANCH=${{ github.event.inputs.fallback_branch }}" >> $GITHUB_ENV
-          elif [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "FALLBACK_BRANCH=${{ github.base_ref }}" >> $GITHUB_ENV
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            printf 'FALLBACK_BRANCH=%s\n' "$INPUT_FALLBACK_BRANCH" >> "$GITHUB_ENV"
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
+            printf 'FALLBACK_BRANCH=%s\n' "$BASE_REF" >> "$GITHUB_ENV"
           else
-            echo "FALLBACK_BRANCH=develop" >> $GITHUB_ENV
+            echo "FALLBACK_BRANCH=develop" >> "$GITHUB_ENV"
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install Hatch
-        run: pip install hatch
+        run: pip install hatch==1.16.5
 
       - name: Create virtual environment
         run: hatch env create test_github
@@ -56,11 +69,50 @@ jobs:
       - name: Run Coverage Tests
         run: hatch run test_github:test-cov
 
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+      - name: Retain coverage and test reports for upload
+        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
+          name: codecov-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            coverage.xml
+            junit.xml
+          if-no-files-found: warn
+          retention-days: 1
+
+  # Codecov OIDC upload runs only on push/dispatch; pull_request jobs never get id-token.
+  upload-coverage:
+    needs: test
+    if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Download coverage and test reports
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: codecov-reports-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Upload coverage reports to Codecov
+        if: needs.test.result == 'success'
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
+        with:
+          use_oidc: true
+          fail_ci_if_error: true
+          files: ./coverage.xml
+          disable_search: true
           verbose: true
 
       - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
+        with:
+          report_type: test_results
+          use_oidc: true
+          fail_ci_if_error: true
+          files: ./junit.xml
+          disable_search: true

@@ -1,13 +1,13 @@
-from typing import Optional, List, Tuple
-from datetime import datetime
+from typing import Any, ClassVar, Literal, Optional
 
 from pydantic import Field
-from upath import UPath
 
 # from mountainash_utils_os import get_platform_slash
 from mountainash_settings import MountainAshBaseSettings, SettingsParameters
+from mountainash_settings.settings_parameters.filehandler import ConfigFilesInput
 
 from .app_settings_templates import  AppSettingsTemplates
+from . import _timestamps
 
 """AppSettings class.
 
@@ -22,27 +22,41 @@ Parameters:
 
 class AppSettings(MountainAshBaseSettings):
 
+    RUN_TIMESTAMP_SCOPE: ClassVar[Literal["context", "process"]] = "context"
+
+    @classmethod
+    def _capture_initialization_defaults(cls) -> dict[str, Any]:
+        return _timestamps.capture(cls.RUN_TIMESTAMP_SCOPE)
+
     def __init__(self,
-                 config_files: Optional[str|UPath|List[str|UPath]|Tuple[str|UPath]] = None,
+                 config_files: ConfigFilesInput = None,
                  settings_parameters:   Optional[SettingsParameters] = None,
                  template_settings_parameters:   Optional[SettingsParameters] = None,
 
                  **kwargs) -> None:
 
 
-        super().__init__(config_files=config_files,
-                         settings_parameters=settings_parameters,
-                         template_settings_parameters=template_settings_parameters,
-                         **kwargs)
+        from mountainash_settings.settings_cache._context import initialization_defaults_for_instance
+
+        defaults = initialization_defaults_for_instance(self)
+        # Process scope must consult the PID-aware slot even when a forked child
+        # inherits an already-captured manager. This does not resample in one PID.
+        if defaults is None or type(self).RUN_TIMESTAMP_SCOPE == "process":
+            defaults = type(self)._capture_initialization_defaults()
+        with _timestamps.default_scope(defaults):
+            super().__init__(config_files=config_files,
+                             settings_parameters=settings_parameters,
+                             template_settings_parameters=template_settings_parameters,
+                             **kwargs)
 
     # General App Settings
     # PLATFORM_SLASH: str =                    Field(default=get_platform_slash())
     LOCALE_TIMEZONE: str =                   Field(default="UTC")
 
     DEBUG: bool =                            Field(default=False)
-    RUNDATE: str =                           Field(default=datetime.now().strftime("%Y%m%d"))
-    RUNTIME: str =                           Field(default=datetime.now().strftime("%H%M%S"))
-    RUNDATETIME: str =                       Field(default=None)
+    RUNDATE: str =                           Field(default_factory=_timestamps.run_date)
+    RUNTIME: str =                           Field(default_factory=_timestamps.run_time)
+    RUNDATETIME: str | None =                Field(default=None)
 
 
 

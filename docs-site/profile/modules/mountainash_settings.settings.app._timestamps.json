@@ -1,0 +1,61 @@
+{
+  "id": "mountainash_settings.settings.app._timestamps",
+  "path": "src/mountainash_settings/settings/app/_timestamps.py",
+  "summary": "AppSettings clock helpers: captures run date/time per context or process scope and supplies initialization-local timestamp defaults.",
+  "role": "io",
+  "visibility": "private",
+  "stability": "evolving",
+  "audiences": [
+    "maintainers"
+  ],
+  "doc_priority": "internal-note",
+  "confidence": "medium",
+  "public_api": [],
+  "key_classes": [],
+  "key_functions": [
+    "capture",
+    "default_scope",
+    "run_date",
+    "run_time"
+  ],
+  "dependencies": [],
+  "dependents": [
+    "mountainash_settings.settings.app.app_settings"
+  ],
+  "extension_points": [],
+  "lifecycle_notes": [
+    "Timestamp scope ('context' or 'process') determines whether cached materializations share a run time"
+  ],
+  "documentation_hooks": [],
+  "examples": [],
+  "tests": [
+    "tests/settings/app/test_app_settings.py",
+    "tests/settings/app/test_timestamp_process.py"
+  ],
+  "risks": [],
+  "open_questions": [],
+  "evidence": [
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings/app/app_settings.py",
+      "detail": "imports mountainash_settings.settings.app._timestamps"
+    },
+    {
+      "kind": "test",
+      "path": "tests/settings/app/test_app_settings.py",
+      "detail": "exercises module behaviour"
+    },
+    {
+      "kind": "test",
+      "path": "tests/settings/app/test_timestamp_process.py",
+      "detail": "exercises module behaviour"
+    }
+  ],
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
+  "manual": {
+    "notes": "",
+    "editorial_status": "",
+    "owner": "",
+    "manual_summary": ""
+  }
+}

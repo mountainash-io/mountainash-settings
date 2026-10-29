@@ -1,32 +1,59 @@
 ---
 title: 'About'
-description: 'About the Mountainash Settings manual — scope, authorship, license, and relationship to the mountainash-settings code repository'
+description: 'Why mountainash-settings exists, the design ideas behind it, where it fits in the mountainash project, and who maintains it'
 ---
 
 [← Back to Home](index.md)
 
-# About This Manual
+# About mountainash-settings
 
-**Mountainash Settings** is a practitioner manual for `mountainash-settings`, a typed configuration framework for Python applications built on Pydantic v2. It is a companion to the library's API reference, not a replacement for it: where the reference tells you what a class or function does, this manual explains why you would reach for it, how its pieces fit together, and what happens under the hood when settings are loaded, merged, and resolved.
+**Pydantic validates your settings. mountainash-settings decides where they come from, when they load and who gets to see them.**
 
-The manual is organized into [9 chapters](chapters/index.md) that build on one another, starting from Pydantic and configuration-file foundations and ending with caching, settings management, and the `AppSettings` convenience class. Along the way it covers the merge framework that reconciles configuration from multiple sources, the field-templating syntax used to derive values like connection strings and log paths, the two-pass secrets resolution pipeline that resolves `secret:path/to/value` references transparently, the descriptor-based connection profile system, and the pluggable authentication modes available to it. For a fuller sense of who the manual is written for and what it assumes you already know, see the [Package Overview](course-description.md).
+## Why it exists
 
-## What This Manual Is Not
+Pydantic Settings already reads environment variables and `.env` files into a typed model. That is enough for a single script. It starts to strain when an application grows into services, scheduled jobs and worker processes.
 
-This manual does not cover application-specific business logic, cloud provider account setup or IAM policy authoring, secrets-engine administration (standing up a Vault server or configuring AWS SSM), database driver internals, or Pydantic internals beyond what `mountainash-settings` extends. It assumes working familiarity with Python type annotations and Pydantic v2 basics; Chapter 1 exists specifically to fill in the Pydantic and configuration-loading prerequisites the rest of the book builds on.
+Two problems show up at that point. The first is that settings loaded once at startup are not there when a worker process, a thread pool or an orchestrator such as Dagster rebuilds your application somewhere else. The second is that a settings object full of passwords and API keys, passed from constructor to constructor, eventually ends up in a log line, an error report or a serialized message.
 
-## About the Author
+mountainash-settings answers both the same way. Your code carries a recipe, a `SettingsParameters` object that says which class, which files and which environment prefix to use, and asks for the settings where the work actually runs. The recipe is cheap to pass around, and printing it never shows the values you passed in.
 
-This manual and the `mountainash-settings` library are written and maintained by **Nathaniel Ramm**. Questions, corrections, and feedback on the manual are welcome — see the [Contact](contact.md) page for ways to reach out, including opening an issue directly on GitHub.
+## What it adds to Pydantic Settings
 
-## Relationship to the Code Repository
+Pydantic supplies validation, field types, aliases and inheritance. Pydantic Settings supplies the source readers. mountainash-settings builds on both and adds:
 
-`mountainash-settings` is developed in the open at [github.com/mountainash-io/mountainash-settings](https://github.com/mountainash-io/mountainash-settings). Every page in this manual carries an edit link back to its source file in that repository's `docs/` directory, so corrections can be proposed as pull requests directly against the page you are reading.
+| Area | What you get |
+|---|---|
+| Configuration loading | YAML, TOML, JSON, `.env` and environment inputs feeding one class, with a fixed precedence |
+| Derived values | `{FIELD_NAME}` templates that build paths and names from other fields |
+| Retrieval | `get_settings()` with cached inputs and an independent, validated copy for every caller |
+| Secrets | `secret:` references resolved from a store you choose, plus built-in local stores |
+| Connection profiles | One declaration per backend, rendered into the keyword arguments its driver expects |
+| Extension | Registries of profiles with generated invariant tests, and store protocols for your own secret managers |
 
-The library is part of the broader [mountainash](https://github.com/mountainash-io/mountainash) project, a collection of typed Python libraries for data engineering and platform development. Within that ecosystem, `mountainash-settings` is the configuration layer: other mountainash packages depend on it for settings management, connection-profile configuration, and secrets resolution, rather than each reimplementing those concerns independently.
+## Design ideas
+
+These ideas shape the whole package. Knowing them makes the rest of the documentation easier to read.
+
+Carry the recipe, not the values. Pass `SettingsParameters` through your application and retrieve settings at the point of use. Fewer objects hold live credentials, and workers can rebuild exactly the configuration they need.
+
+Every caller gets its own copy. `get_settings()` reuses the inputs it has already read, but each call returns a freshly validated instance. One module changing its settings never affects another.
+
+Configuration is fixed for the life of a process. Once a configuration has been read, later calls reuse it, even if the file on disk changes. A new process picks up a changed deployment; there is no hot-reload machinery to reason about.
+
+Secrets stay references until they are needed. A `secret:` reference is resolved when the settings are constructed, and if a resolved value fails validation the error names the field, not the value.
+
+It stays Pydantic. Your settings class is an ordinary Pydantic model with native field types and validators, so what you already know about Pydantic still applies.
+
+## Where it fits
+
+mountainash-settings is the configuration layer of the [mountainash](https://github.com/mountainash-io/mountainash) project, a collection of typed Python libraries for data engineering and platform development. Other mountainash packages use it for their settings, connection profiles and secret references. Authentication is a separate concern and lives in `mountainash-auth-client`.
+
+## Who maintains it
+
+The library and this documentation are written and maintained by Nathaniel Ramm. Both are developed in the open at [github.com/mountainash-io/mountainash-settings](https://github.com/mountainash-io/mountainash-settings), where the [examples directory](https://github.com/mountainash-io/mountainash-settings/tree/develop/examples) has runnable versions of the main patterns, including worker processes and Dagster jobs.
+
+Every page here has an edit link to its source under `docs-site/site/docs/`, so a correction can go straight in as a pull request. For questions and feedback, the [Contact](contact.md) page lists the ways to get in touch.
 
 ## License
 
-All content in this manual — text, diagrams, and examples — is licensed under **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)**. You are free to share and adapt the material for non-commercial purposes provided you give appropriate credit and share adaptations under the same license. See the [License](license.md) page for the full terms. Commercial rights are reserved by the copyright holder; commercial licensing and publication inquiries can be directed to Nathaniel Ramm via the [Contact](contact.md) page.
-
-This license applies to the manual's content. The `mountainash-settings` source code itself is governed by the license declared in its own repository, [github.com/mountainash-io/mountainash-settings](https://github.com/mountainash-io/mountainash-settings), which readers should consult before reusing or redistributing the library's code.
+`mountainash-settings` and this documentation are licensed under the [Apache License, Version 2.0](license.md). Copyright 2024-2026 Mountain Ash Solutions Pty. Ltd.

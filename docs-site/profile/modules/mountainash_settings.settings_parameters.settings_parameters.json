@@ -1,70 +1,101 @@
 {
   "id": "mountainash_settings.settings_parameters.settings_parameters",
   "path": "src/mountainash_settings/settings_parameters/settings_parameters.py",
-  "summary": "SettingsParameters is a frozen dataclass capturing all inputs needed to create a settings instance: config files, settings class, env prefix, secrets dir, secrets provider, and runtime kwargs. Its custom __hash__/__eq__ exclude kwargs, enabling LRU-cache reuse when only runtime overrides differ. merge() combines two instances with configurable precedence.",
+  "summary": "SettingsParameters holds the structural parameters (config files, settings class, env prefix, secrets dir, secret store) that key cached settings, with create(), merge() per-field strategies, get_settings(), and kwargs classification that rejects source/schema controls for direct and cached construction.",
   "role": "public-api",
   "visibility": "public",
-  "stability": "stable",
-  "audiences": ["users", "maintainers", "contributors", "backend-architecture"],
+  "stability": "evolving",
+  "audiences": [
+    "users",
+    "maintainers",
+    "broader-hype"
+  ],
   "doc_priority": "essential",
   "confidence": "high",
   "public_api": [
-    "SettingsParameters",
-    "SettingsParameters.create",
-    "SettingsParameters.merge",
-    "SettingsParameters.get_settings",
-    "SettingsParameters.apply_runtime_overrides",
-    "SettingsParameters.get_attribute_settings_kwargs",
-    "SettingsParameters.get_pydantic_settings_kwargs",
-    "SettingsParameters.get_pydantic_modelconfig_kwargs",
-    "SettingsParameters.get_all_kwargs",
-    "SettingsParameters.to_dict",
-    "SettingsParameters.extract_settings_parameters"
+    "SettingsParameters"
   ],
-  "key_classes": ["SettingsParameters"],
-  "key_functions": [
-    "SettingsParameters.create",
-    "SettingsParameters.merge",
-    "SettingsParameters.apply_runtime_overrides"
+  "key_classes": [
+    "SettingsParameters"
   ],
+  "key_functions": [],
   "dependencies": [
+    "mountainash_settings.resolve",
+    "mountainash_settings.secrets.backend",
+    "mountainash_settings.settings.base_settings",
+    "mountainash_settings.settings_cache",
     "mountainash_settings.settings_parameters.filehandler",
     "mountainash_settings.settings_parameters.kwargshandler"
   ],
   "dependents": [
-    "mountainash_settings.settings.base_settings",
+    "mountainash_settings",
     "mountainash_settings.settings_cache.settings_functions",
-    "mountainash_settings.settings_cache.settings_manager"
+    "mountainash_settings.settings_parameters"
   ],
   "extension_points": [],
-  "lifecycle_notes": [
-    "frozen=True — SettingsParameters instances are immutable after creation",
-    "Structural parameters (config_files, settings_class, env_prefix, secrets_dir, secrets_provider) determine hash identity; kwargs are excluded",
-    "merge() combines config_files by union+dedup; scalars by last-wins (or first if prioritise_base=True); kwargs by dict merge"
-  ],
+  "lifecycle_notes": [],
   "documentation_hooks": [
-    "Caching split: structural params → LRU cache key; runtime kwargs → applied post-cache via apply_runtime_overrides()",
-    "merge() raises ValueError if both SettingsParameters specify different settings_class values"
+    "README.md",
+    "docs/README_SECRETS.md",
+    "docs/advanced-usage.md",
+    "docs/quickstart.md",
+    "docs/typing.md"
   ],
-  "examples": [
-    "examples/smart_merging_example.py",
-    "examples/comprehensive_patterns_example.py"
-  ],
+  "examples": [],
   "tests": [
-    "tests/test_settings_parameters/test_settings_parameters.py",
-    "tests/test_settings_parameters/test_settings_parameters_coverage.py",
-    "tests/test_settings_parameters/test_merge_framework.py"
+    "tests/profiles/test_class_completion.py",
+    "tests/profiles/test_generated_consumers.py",
+    "tests/profiles/test_profile.py",
+    "tests/settings/app/test_app_settings.py",
+    "tests/settings/app/test_timestamp_process.py",
+    "tests/settings/test_base_settings.py",
+    "tests/settings/test_base_settings_coverage.py",
+    "tests/settings/test_config_file_deep_merge.py",
+    "tests/settings/test_dotenv_compat.py",
+    "tests/settings/test_persist.py",
+    "tests/settings_cache/test_secret_store_binding.py",
+    "tests/settings_cache/test_settings_manager.py",
+    "tests/settings_cache/test_source_isolation.py",
+    "tests/settings_parameters/test_merge_framework.py",
+    "tests/settings_parameters/test_settings_parameters.py",
+    "tests/settings_parameters/test_settings_parameters_coverage.py",
+    "tests/test_config_files.py"
   ],
-  "risks": [
-    "merge() with config_files from both sides deduplicates by string representation — UPath vs str of the same file may not deduplicate correctly"
-  ],
+  "risks": [],
   "open_questions": [],
   "evidence": [
-    {"kind": "symbol", "path": "src/mountainash_settings/__init__.py", "detail": "SettingsParameters in __all__"},
-    {"kind": "test", "path": "tests/test_settings_parameters/test_settings_parameters.py", "detail": "Full test coverage"},
-    {"kind": "example", "path": "examples/smart_merging_example.py", "detail": "Merge workflow demonstrated"}
+    {
+      "kind": "export",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "SettingsParameters exported"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/__init__.py",
+      "detail": "imports mountainash_settings.settings_parameters.settings_parameters"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings_cache/settings_functions.py",
+      "detail": "imports mountainash_settings.settings_parameters.settings_parameters"
+    },
+    {
+      "kind": "import",
+      "path": "src/mountainash_settings/settings_parameters/__init__.py",
+      "detail": "imports mountainash_settings.settings_parameters.settings_parameters"
+    },
+    {
+      "kind": "test",
+      "path": "tests/profiles/test_class_completion.py",
+      "detail": "exercises module behaviour"
+    },
+    {
+      "kind": "test",
+      "path": "tests/profiles/test_generated_consumers.py",
+      "detail": "exercises module behaviour"
+    }
   ],
-  "source_hash": "b09b31cf2867ac909f50975ed1d4e79090c8d359",
+  "source_hash": "88f4df95f108a6896a0e92a49cda94f0554a4aec",
   "manual": {
     "notes": "",
     "editorial_status": "",
