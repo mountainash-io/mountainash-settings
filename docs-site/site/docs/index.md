@@ -9,6 +9,9 @@ description: 'Documentation for mountainash-settings: typed configuration for Py
 
 **Typed configuration for Python, from a single script to a fleet of services.**
 
+!!! warning "Experimental"
+    mountainash-settings 0.1.0 is experimental and not yet ready for production use. Its APIs can change between versions, and it is not yet published on PyPI.
+
 Configuration always starts small: a dictionary loaded from a YAML file. Then staging needs a different host. The deployment overrides a port through an environment variable. A database password turns up that must never be committed. Before long, three services parse the same file three different ways, and nobody is sure which value actually wins.
 
 mountainash-settings is the one place all of that comes together. You describe your settings once, as a typed Pydantic class. Files, environment variables and your secret store all feed into it, in an order you can predict, and every part of your code gets the same validated answer.
