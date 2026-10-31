@@ -9,6 +9,9 @@ description: 'Why mountainash-settings exists, the design ideas behind it, where
 
 **Pydantic validates your settings. mountainash-settings decides where they come from, when they load and who gets to see them.**
 
+!!! warning "Experimental"
+    mountainash-settings 0.1.0 is experimental and not yet ready for production use. Its APIs can change between versions, and it is not yet published on PyPI.
+
 ## Why it exists
 
 Pydantic Settings already reads environment variables and `.env` files into a typed model. That is enough for a single script. It starts to strain when an application grows into services, scheduled jobs and worker processes.
