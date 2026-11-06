@@ -30,6 +30,7 @@ _common = _load_common()
 _TEST_REQUIREMENTS = (
     "pytest==8.3.5",
     "pytest-check==2.5.3",
+    "aiohttp==3.14.5",
 )
 
 

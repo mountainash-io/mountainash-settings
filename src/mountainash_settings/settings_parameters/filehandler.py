@@ -1,9 +1,25 @@
-"""Configuration path normalization and order-preserving grouping."""
+"""Configuration path normalization and order-preserving grouping.
+
+Local strings keep their string form (``~`` expanded, local only); remote
+URL strings become UPaths; UPaths keep their filesystem options. Paths are
+de-duplicated first-seen by option-aware identity. Format classification uses
+the URL path for HTTP(S) and the literal key name elsewhere. Missing-file
+errors use safe labels (no userinfo, HTTP query/fragment or options).
+"""
 
 from collections.abc import Sequence
+from pathlib import PurePosixPath
 from typing import NamedTuple
 
 from upath import UPath
+
+from mountainash_settings._config_files import (
+    ConfigPathIdentity,
+    config_filename,
+    config_path_identities,
+    config_path_label,
+    normalize_config_path,
+)
 
 ConfigPath = str | UPath
 ConfigFilesInput = ConfigPath | Sequence[ConfigPath] | None
@@ -38,10 +54,10 @@ class FileTypeRegistry:
 
     @classmethod
     def identify(cls, file_path: ConfigPath) -> str | None:
-        path = UPath(file_path)
-        if path.name.startswith(".") and "." not in path.name[1:]:
-            return cls._registry.get(path.name[1:].lower())
-        return cls._registry.get(path.suffix.lower().lstrip("."))
+        filename = config_filename(file_path)
+        if filename.startswith(".") and "." not in filename[1:]:
+            return cls._registry.get(filename[1:].lower())
+        return cls._registry.get(PurePosixPath(filename).suffix.lower().lstrip("."))
 
 
 class SettingsFileHandler:
@@ -54,11 +70,10 @@ class SettingsFileHandler:
         raw = (config_files,) if isinstance(config_files, (str, UPath)) else config_files
         if not isinstance(raw, Sequence):
             raise TypeError("Invalid configuration paths")
-        unique: dict[str, ConfigPath] = {}
-        for item in raw:
-            path = UPath(item).expanduser()
-            # Retain UPath filesystem options; never reconstruct it from a URL.
-            unique.setdefault(str(path), path if isinstance(item, UPath) else str(path))
+        normalized = tuple(normalize_config_path(item) for item in raw)
+        unique: dict[ConfigPathIdentity, ConfigPath] = {}
+        for identity, path in zip(config_path_identities(normalized), normalized):
+            unique.setdefault(identity, path)
         return tuple(unique.values())
 
     @classmethod
@@ -89,8 +104,9 @@ class SettingsFileHandler:
     @classmethod
     def validate_config_files_exist(cls, config_files: ConfigFilesInput = None) -> None:
         for item in cls.format_config_file_tuple(config_files):
-            if not UPath(item).exists():
-                raise FileNotFoundError(f"Config file {item} not found.")
+            path = item if isinstance(item, UPath) else UPath(item)
+            if not path.exists():
+                raise FileNotFoundError(f"Config file {config_path_label(item)} not found.")
 
     @classmethod
     def group_files_by_type(cls, config_files: ConfigFilesInput = None) -> dict[str, list[ConfigPath]]:

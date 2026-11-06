@@ -12,10 +12,10 @@ from pydantic_settings import (
     DotEnvSettingsSource,
     EnvSettingsSource,
     JsonConfigSettingsSource,
-    PydanticBaseSettingsSource,
-    SecretsSettingsSource,
     TomlConfigSettingsSource,
     YamlConfigSettingsSource,
+    PydanticBaseSettingsSource,
+    SecretsSettingsSource,
 )
 from pydantic_settings.sources import (
     DefaultSettingsSource,
@@ -31,6 +31,16 @@ from ..resolve import _resolve_dict_with_changed_fields
 from ..secrets.backend import SecretReader
 from ..settings_parameters import SettingsFileHandler, SettingsParameters
 from .sources import CacheableSettingsSource
+from .._config_files import (
+    ConfigPathIdentity,
+    ConfigPathOwnershipError,
+    UPathJsonSource,
+    UPathTomlSource,
+    UPathYamlSource,
+    config_path_identities,
+    own_config_paths,
+)
+from upath import UPath
 
 if TYPE_CHECKING:
     from ..settings.base_settings import MountainAshBaseSettings
@@ -40,11 +50,25 @@ _SourceSnapshot = tuple[type[PydanticBaseSettingsSource], str, dict[str, Any], b
 
 @dataclass(frozen=True, eq=False)
 class _StructuralKey:
-    config_files: tuple[str, ...]
+    """Structural identity of one cached context.
+
+    ``config_files`` retains the complete, independently owned source
+    selectors (location, protocol and access options) in normalized caller
+    order, never display strings. Equality and hashing use the shared
+    option-aware identities, so equal-looking selectors with distinct opaque
+    access objects are distinct contexts. Opaque access objects are borrowed
+    by identity, never compared, hashed or copied through their own hooks.
+    """
+
+    config_files: tuple[str | UPath, ...]
     settings_class: type[MountainAshBaseSettings]
     env_prefix: str | None
     secrets_dir: str | None
     secret_store: "SecretReader | None" = field(repr=False)
+    _identities: tuple[ConfigPathIdentity, ...] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "_identities", config_path_identities(self.config_files))
 
     @classmethod
     def from_parameters(cls, parameters: SettingsParameters) -> "_StructuralKey":
@@ -58,8 +82,14 @@ class _StructuralKey:
         if issubclass(parameters.settings_class, Profile):
             _require_materializable_profile(parameters.settings_class)
         files = SettingsFileHandler.format_config_file_tuple(parameters.config_files)
+        try:
+            owned_files = own_config_paths(tuple(files))
+        except ConfigPathOwnershipError:
+            # No fallback: a selector that cannot be faithfully owned is not
+            # admitted to the cache. The message names no path or option.
+            raise ValueError("Cached settings config files cannot be safely owned") from None
         return cls(
-            tuple(str(path) for path in files),
+            owned_files,
             parameters.settings_class,
             parameters.env_prefix,
             parameters.secrets_dir,
@@ -68,12 +98,12 @@ class _StructuralKey:
 
     def __hash__(self) -> int:
         store = None if self.secret_store is None else id(self.secret_store)
-        return hash((self.config_files, id(self.settings_class), self.env_prefix, self.secrets_dir, store))
+        return hash((self._identities, id(self.settings_class), self.env_prefix, self.secrets_dir, store))
 
     def __eq__(self, other: object) -> bool:
         return (
             isinstance(other, _StructuralKey)
-            and self.config_files == other.config_files
+            and self._identities == other._identities
             and self.settings_class is other.settings_class
             and self.env_prefix == other.env_prefix
             and self.secrets_dir == other.secrets_dir
@@ -81,13 +111,15 @@ class _StructuralKey:
         )
 
     def parameters(self) -> SettingsParameters:
+        """Return parameters carrying fresh independently owned path descriptions."""
         return SettingsParameters.create(
-            config_files=self.config_files,
+            config_files=own_config_paths(self.config_files),
             settings_class=self.settings_class,
             env_prefix=self.env_prefix,
             secrets_dir=self.secrets_dir,
             secret_store=self.secret_store,
         )
+
 
 @dataclass
 class _CacheFrame:
@@ -216,6 +248,9 @@ def _builtin_source(source: PydanticBaseSettingsSource) -> bool:
         YamlConfigSettingsSource,
         TomlConfigSettingsSource,
         JsonConfigSettingsSource,
+        UPathYamlSource,
+        UPathTomlSource,
+        UPathJsonSource,
         SecretsSettingsSource,
     }
 

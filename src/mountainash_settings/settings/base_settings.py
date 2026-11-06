@@ -16,14 +16,19 @@ from pydantic.json_schema import SkipJsonSchema
 from pydantic_settings import (
     BaseSettings,
     DotEnvSettingsSource,
-    JsonConfigSettingsSource,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
-    TomlConfigSettingsSource,
-    YamlConfigSettingsSource,
 )
 
 from mountainash_settings.settings_parameters import SettingsFileHandler, SettingsParameters, SettingsKwargsHandler, SettingsFiles
+from mountainash_settings._config_files import (
+    ConfigPathOwnershipError,
+    UPathJsonSource,
+    UPathTomlSource,
+    UPathYamlSource,
+    config_path_label,
+    own_config_paths,
+)
 from mountainash_settings.settings_parameters.filehandler import ConfigFilesInput
 from ._metaclass import _SettingsMetaclass
 
@@ -33,6 +38,11 @@ T = TypeVar('T', bound='MountainAshBaseSettings')
 
 _CACHE_SOURCE_UNSET = object()
 _LOCAL_PATH_TYPE = type(UPath("."))
+
+
+def _safe_labels(paths: Any) -> tuple[Any, ...]:
+    """Public provenance entries: ordinary local form, remote userinfo/query stripped."""
+    return tuple(config_path_label(path) for path in paths)
 
 
 @dataclass(frozen=True)
@@ -411,6 +421,8 @@ def _detach_cached_result(instance: BaseSettings) -> None:
     source_private = dict(object.__getattribute__(instance, "__pydantic_private__") or {})
     # The bound secret store travels by identity, never copied or reconstructed.
     retained_secret_store = source_private.pop("_settings_secret_store", None)
+    # Source selectors are owned by the dedicated helper, never the generic copier.
+    retained_source_paths = source_private.pop("_settings_source_paths", None)
     memo: dict[int, Any] = {}
     active: set[int] = set()
     try:
@@ -424,8 +436,15 @@ def _detach_cached_result(instance: BaseSettings) -> None:
         )
     except (_UnownedReconstruction, RecursionError):
         raise ValueError("Cached settings result cannot be safely owned") from None
+    try:
+        detached_source_paths = (
+            None if retained_source_paths is None else own_config_paths(retained_source_paths)
+        )
+    except ConfigPathOwnershipError:
+        raise ValueError("Cached settings result cannot be safely owned") from None
     detached_dict.update(retained_metadata)
     detached_private["_settings_secret_store"] = retained_secret_store
+    detached_private["_settings_source_paths"] = detached_source_paths
     object.__setattr__(instance, "__dict__", detached_dict)
     object.__setattr__(instance, "__pydantic_extra__", detached_extra)
     object.__setattr__(instance, "__pydantic_private__", detached_private)
@@ -487,6 +506,11 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
     SETTINGS_SOURCE_JSON_FILES: Optional[Union[Any, str, List[Any|str]]] =      Field(default=None)
     SETTINGS_SOURCE_KWARG_NAMES: tuple[str, ...] = Field(default=())
     _settings_reconstruction_kwargs: Optional[dict[str, Any]] = PrivateAttr(default=None)
+    # Private, ordered, independently owned source selectors (full options, caller
+    # order) from which extract_settings_parameters() rebuilds the recipe. None
+    # means no faithful owned description exists (existing unowned-recipe convention).
+    # Public SETTINGS_SOURCE_*_FILES carry safe labels only and are never a recipe.
+    _settings_source_paths: Optional[tuple[Any, ...]] = PrivateAttr(default=None)
     _settings_secret_store: Optional[Any] = PrivateAttr(default=None)
     SETTINGS_SOURCE_SECRETS_DIR: Optional[str] = Field(default=None)
 
@@ -562,10 +586,13 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
         object.__setattr__(self, "SETTINGS_CLASS", type(self))
         object.__setattr__(self, "SETTINGS_CLASS_NAME", type(self).__name__)
         object.__setattr__(self, "SETTINGS_SOURCE_ENV_PREFIX", parameters.env_prefix)
-        object.__setattr__(self, "SETTINGS_SOURCE_ENV_FILES", config_files.env_files)
-        object.__setattr__(self, "SETTINGS_SOURCE_YAML_FILES", config_files.yaml_files)
-        object.__setattr__(self, "SETTINGS_SOURCE_TOML_FILES", config_files.toml_files)
-        object.__setattr__(self, "SETTINGS_SOURCE_JSON_FILES", config_files.json_files)
+        object.__setattr__(self, "SETTINGS_SOURCE_ENV_FILES", _safe_labels(config_files.env_files))
+        object.__setattr__(self, "SETTINGS_SOURCE_YAML_FILES", _safe_labels(config_files.yaml_files))
+        object.__setattr__(self, "SETTINGS_SOURCE_TOML_FILES", _safe_labels(config_files.toml_files))
+        object.__setattr__(self, "SETTINGS_SOURCE_JSON_FILES", _safe_labels(config_files.json_files))
+        self._settings_source_paths = own_config_paths(
+            SettingsFileHandler.format_config_file_tuple(parameters.config_files)
+        )
         object.__setattr__(self, "SETTINGS_SOURCE_SECRETS_DIR", parameters.secrets_dir)
         self._settings_secret_store = parameters.secret_store
         fields = type(self).model_fields
@@ -628,6 +655,15 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
             local_settings_params = SettingsParameters.merge(settings_parameters, local_settings_params)
 
         obj_config_files: SettingsFiles = SettingsFileHandler.separate_config_files(local_settings_params.config_files)
+        # Full ordered selectors for the private recipe, owned before any source
+        # opens. Ordinary custom paths stay readable even when no faithful owned
+        # description exists: the recipe is then None and extraction refuses safely.
+        try:
+            source_paths: Optional[tuple[Any, ...]] = own_config_paths(
+                SettingsFileHandler.format_config_file_tuple(local_settings_params.config_files)
+            )
+        except ConfigPathOwnershipError:
+            source_paths = None
 
         # Validate config files exist
         SettingsFileHandler.validate_config_files_exist(obj_config_files.env_files)
@@ -714,10 +750,11 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
         object.__setattr__(self, "SETTINGS_CLASS",            local_settings_params.settings_class or MountainAshBaseSettings)
         object.__setattr__(self, "SETTINGS_CLASS_NAME",       local_settings_params.settings_class.__name__ if local_settings_params.settings_class else "MountainAshBaseSettings")
         object.__setattr__(self, "SETTINGS_SOURCE_ENV_PREFIX", local_settings_params.env_prefix)
-        object.__setattr__(self, "SETTINGS_SOURCE_ENV_FILES",  obj_config_files.env_files)
-        object.__setattr__(self, "SETTINGS_SOURCE_YAML_FILES", obj_config_files.yaml_files)
-        object.__setattr__(self, "SETTINGS_SOURCE_TOML_FILES", obj_config_files.toml_files)
-        object.__setattr__(self, "SETTINGS_SOURCE_JSON_FILES", obj_config_files.json_files)
+        object.__setattr__(self, "SETTINGS_SOURCE_ENV_FILES",  _safe_labels(obj_config_files.env_files))
+        object.__setattr__(self, "SETTINGS_SOURCE_YAML_FILES", _safe_labels(obj_config_files.yaml_files))
+        object.__setattr__(self, "SETTINGS_SOURCE_TOML_FILES", _safe_labels(obj_config_files.toml_files))
+        object.__setattr__(self, "SETTINGS_SOURCE_JSON_FILES", _safe_labels(obj_config_files.json_files))
+        self._settings_source_paths = source_paths
         object.__setattr__(self, "SETTINGS_SOURCE_SECRETS_DIR", local_settings_params.secrets_dir)
         self._settings_secret_store = local_settings_params.secret_store
 
@@ -768,9 +805,9 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
             env_settings,
             dotenv_settings,
             unprefixed_dotenv_settings,
-            YamlConfigSettingsSource(settings_cls, deep_merge=True, **yaml_kwargs),
-            TomlConfigSettingsSource(settings_cls, deep_merge=True, **toml_kwargs),
-            JsonConfigSettingsSource(settings_cls, deep_merge=True, **json_kwargs),
+            UPathYamlSource(settings_cls, deep_merge=True, **yaml_kwargs),
+            UPathTomlSource(settings_cls, deep_merge=True, **toml_kwargs),
+            UPathJsonSource(settings_cls, deep_merge=True, **json_kwargs),
             file_secret_settings,
         )
 
@@ -980,6 +1017,13 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
         """
         Returns a SettingsParameters object reconstructed from a BaseSettings object.
 
+        Config files come from the private, ordered, independently owned source
+        selectors (local paths, remote URLs and UPath access options, in the
+        original caller order), never from the safe public ``SETTINGS_SOURCE_*``
+        labels. Borrowed access objects are retained by identity. No source is
+        reread. Raises TypeError when no faithful owned recipe exists.
+
+
         Args:
             objSettings (BaseSettings): The settings object.
 
@@ -987,22 +1031,18 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
             SettingsParameters: The settings parameters object
         """
 
-        # combine the config files into a single list
-        config_files : List = []
-        if self.SETTINGS_SOURCE_ENV_FILES:
-            config_files += self.SETTINGS_SOURCE_ENV_FILES
-        if self.SETTINGS_SOURCE_YAML_FILES:
-            config_files += self.SETTINGS_SOURCE_YAML_FILES
-        if self.SETTINGS_SOURCE_TOML_FILES:
-            config_files += self.SETTINGS_SOURCE_TOML_FILES
-        if self.SETTINGS_SOURCE_JSON_FILES:
-            config_files += self.SETTINGS_SOURCE_JSON_FILES
-
-
-        existing_config_files =     SettingsFileHandler.format_config_file_list(config_files=config_files)
+        # The ordered, full-option recipe is private; the public SETTINGS_SOURCE_*
+        # fields hold safe labels only and are never read back.
+        source_paths = self._settings_source_paths
+        existing_config_files: Optional[List[Any]] = None
+        if source_paths is not None:
+            try:
+                existing_config_files = list(own_config_paths(source_paths))
+            except ConfigPathOwnershipError:
+                existing_config_files = None
         recipe = self._settings_reconstruction_kwargs
         existing_kwargs = _snapshot_reconstruction(recipe) if recipe is not None else None
-        if existing_kwargs is None:
+        if existing_config_files is None or existing_kwargs is None:
             raise TypeError(
                 f"Cannot extract settings parameters for {type(self).__name__}: "
                 "source inputs have no faithful independently owned reconstruction"

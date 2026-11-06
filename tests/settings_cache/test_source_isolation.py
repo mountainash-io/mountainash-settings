@@ -16,10 +16,14 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from pydantic._internal._utils import deep_update
 from pydantic_settings import (
     DotEnvSettingsSource,
     EnvSettingsSource,
     InitSettingsSource,
+    JsonConfigSettingsSource,
+    TomlConfigSettingsSource,
+    YamlConfigSettingsSource,
     SecretsSettingsSource,
 )
 
@@ -296,8 +300,11 @@ class TestDirectHookFallback:
             sources = _StaticSettings.settings_customise_sources(
                 _StaticSettings, init_settings, env_settings, dotenv_settings, secrets_settings,
             )
-            yaml_source = next(s for s in sources if type(s).__name__ == "YamlConfigSettingsSource")
-            assert yaml_source() == {"marker": "static-value"}
+            state = {}
+            for source in sources:
+                source._set_current_state(state)
+                state = deep_update(source(), state)
+            assert state["marker"] == "static-value"
         finally:
             _StaticSettings.model_config.pop("yaml_file", None)
 
@@ -311,3 +318,81 @@ class TestDirectHookFallback:
         settings = _NoMutationSettings(config_files=[path])
         assert settings.marker == "no-mutation"
         assert dict(_NoMutationSettings.model_config) == before
+
+
+@pytest.mark.parametrize("representation", ["string", "upath"])
+@pytest.mark.parametrize("route", ["direct", "cached", "standalone"])
+def test_remote_toml_table_selection(memory_config_root, isolated_settings_manager, representation, route):
+    path = memory_config_root / "table.toml"
+    path.write_text("[app]\nVALUE=7\n")
+    selected = str(path) if representation == "string" else path
+
+    class TableSettings(MountainAshBaseSettings):
+        model_config = {"toml_file": selected, "toml_table_header": ("app",)}
+        VALUE: int = 0
+
+    if route == "direct":
+        assert TableSettings(config_files=selected).VALUE == 7
+    elif route == "cached":
+        parameters = SettingsParameters.create(settings_class=TableSettings, config_files=selected)
+        assert isolated_settings_manager.get_or_create_settings(parameters).VALUE == 7
+    else:
+        sources = TableSettings.settings_customise_sources(
+            TableSettings, InitSettingsSource(TableSettings, {}),
+            EnvSettingsSource(TableSettings), DotEnvSettingsSource(TableSettings),
+            SecretsSettingsSource(TableSettings),
+        )
+        state = {}
+        for source in sources:
+            source._set_current_state(state)
+            state = deep_update(source(), state)
+        assert state["VALUE"] == 7
+
+
+def test_remote_toml_optional_file_and_missing_table(memory_config_root):
+    path = memory_config_root / "optional.toml"
+
+    class OptionalSettings(MountainAshBaseSettings):
+        model_config = {"toml_file": str(path), "toml_table_header": ("app",)}
+        VALUE: int = 0
+
+    def sources():
+        return OptionalSettings.settings_customise_sources(
+            OptionalSettings, InitSettingsSource(OptionalSettings, {}),
+            EnvSettingsSource(OptionalSettings), DotEnvSettingsSource(OptionalSettings),
+            SecretsSettingsSource(OptionalSettings),
+        )
+
+    state = {}
+    for source in sources():
+        state = deep_update(source(), state)
+    assert state.get("VALUE", 0) == 0
+    path.write_text("[other]\nVALUE=9\n")
+    with pytest.raises(KeyError):
+        sources()
+
+
+@pytest.mark.parametrize(
+    "suffix, source_type, argument",
+    [
+        ("yaml", YamlConfigSettingsSource, "yaml_file"),
+        ("toml", TomlConfigSettingsSource, "toml_file"),
+        ("json", JsonConfigSettingsSource, "json_file"),
+    ],
+)
+def test_capture_hook_can_select_standard_structured_source(
+    tmp_path, isolated_settings_manager, suffix, source_type, argument,
+):
+    path = _write_marker(tmp_path / f"selected.{suffix}", suffix, "selected")
+
+    class SelectedSettings(MountainAshBaseSettings):
+        marker: str = "default"
+
+        @classmethod
+        def settings_capture_sources(cls, sources):
+            return (source_type(cls, **{argument: path}),)
+
+    parameters = SettingsParameters.create(settings_class=SelectedSettings)
+    first = parameters.get_settings()
+    path.unlink()
+    assert first.marker == parameters.get_settings().marker == "selected"

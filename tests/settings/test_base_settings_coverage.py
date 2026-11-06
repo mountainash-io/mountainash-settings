@@ -16,6 +16,7 @@ Tests cover:
 import pytest
 from typing import Any, List, Optional
 from pydantic import Field, SecretStr
+from pathlib import Path
 
 from mountainash_settings import (
     MountainAshBaseSettings,
@@ -440,19 +441,18 @@ class TestExtractSettingsParameters:
         assert extracted.kwargs["TEST_VAL_1"] == "value1"
 
     @pytest.mark.unit
-    def test_extract_with_config_files(self, temp_multiple_yaml_files, temp_toml_file):
-        """Test extracting parameters with config files."""
+    def test_extracted_recipe_reuses_original_order_snapshot(
+        self, temp_multiple_yaml_files, temp_toml_file, isolated_settings_manager,
+    ):
         original_params = SettingsParameters.create(
             settings_class=TestSettings,
-            config_files=[temp_multiple_yaml_files[1], temp_toml_file, temp_multiple_yaml_files[0]]
+            config_files=[temp_multiple_yaml_files[1], temp_toml_file, temp_multiple_yaml_files[0]],
         )
-        settings = TestSettings(settings_parameters=original_params)
-
+        settings = original_params.get_settings()
         extracted = settings.extract_settings_parameters()
-
-        assert tuple(map(str, extracted.config_files)) == (
-            temp_multiple_yaml_files[1], temp_multiple_yaml_files[0], temp_toml_file,
-        )
+        for path in original_params.config_files:
+            Path(path).unlink()
+        assert extracted.get_settings().TEST_VAL_1 == "toml_value_1"
 
     @pytest.mark.unit
     def test_extract_with_env_prefix(self):

@@ -3,8 +3,11 @@
 import json
 from itertools import count
 from pathlib import Path
+from uuid import uuid4
+from collections.abc import Iterator
 
 import pytest
+from upath import UPath
 
 
 @pytest.fixture(scope="session")
@@ -122,3 +125,14 @@ def create_config_file(tmp_path):
         return str(path)
 
     return create
+
+
+@pytest.fixture
+def memory_config_root() -> Iterator[UPath]:
+    """Own a unique memory namespace without resetting shared filesystem state."""
+    root = UPath(f"memory:///settings-config-{uuid4().hex}")
+    root.mkdir(parents=True, exist_ok=True)
+    try:
+        yield root
+    finally:
+        root.rmdir(recursive=True)
