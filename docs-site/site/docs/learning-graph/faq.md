@@ -21,7 +21,7 @@ You subclass MountainAshBaseSettings instead of BaseSettings to get these. Its m
 
 ### Which configuration file formats does mountainash-settings support?
 
-YAML, TOML, JSON and .env files. You can mix them in one application, for example YAML for application settings, TOML for project metadata and a .env file for local overrides. The config files parameter accepts a list of paths, and each path is routed by its extension to the matching Pydantic source. Within one format, later files deep-merge over earlier ones.
+YAML, TOML, JSON and .env files. You can mix them in one application, for example YAML for application settings, TOML for project metadata and a .env file for local overrides. The config files parameter accepts a list of local paths, URL strings or UPath objects, and each is routed by its extension to the matching Pydantic source; remote paths (for example `memory://` or HTTP) work for all four formats. Within one structured format (YAML, TOML, JSON), later files deep-merge over earlier ones. Dotenv files are flat key/value sources: a later file replaces the same key and there is no recursive mapping merge.
 
 ### What is the settings model config and how do I customise it?
 
@@ -60,7 +60,7 @@ An environment variable therefore overrides a YAML value, and an explicit keywor
 
 ### How does multi-format loading choose a parser for each file?
 
-By file extension. When you pass a list of paths as the config files parameter, `.yaml` and `.yml` files go to the YAML source, `.toml` to TOML, `.json` to JSON and `.env` to dotenv. The paths are grouped into those four buckets before the matching Pydantic sources read them. You never name a parser. A file with an unknown extension raises `ValueError`.
+By file extension. When you pass a list of paths as the config files parameter, `.yaml` and `.yml` files go to the YAML source, `.toml` to TOML, `.json` to JSON and `.env` to dotenv. The paths are grouped into those four buckets before the matching Pydantic sources read them. You never name a parser. A file with an unknown extension raises `ValueError` ("Unsupported configuration file extension"). Classification uses the filename only, so an HTTP query string or fragment does not hide the suffix.
 
 ## Settings parameters and merge strategies
 
@@ -87,7 +87,7 @@ When several structured files of one format are loaded as sources, they are read
 
 ### How does mountainash-settings select and order configuration files?
 
-Before loading, the file list is normalised. You can pass a string, a UPath, a sequence of paths or `None`. The result is an ordered list with duplicates removed in first-seen order. Each file's type comes from its extension, and an unknown extension raises `ValueError`. The files are then grouped into env, YAML, TOML and JSON sets for the matching Pydantic sources, which read them. This happens during construction, so application code rarely deals with it directly. It is useful to know when debugging which files were selected and in what order.
+Before loading, the file list is normalised. You can pass a string, a UPath, a sequence of paths or `None`. The result is an ordered list with duplicates removed in first-seen order. A URL string and a default-option UPath for the same location are one source, but the same location with different UPath options is a distinct source, so identity is option-aware. `~` is expanded only for local paths; remote keys are kept literally. UPath options are retained and used when the file is read; opaque credential or session objects in them are borrowed by identity, not copied or closed, and the application supplies any backend dependency or credentials. Each file's type comes from its extension, and an unknown extension raises `ValueError`. The files are then grouped into env, YAML, TOML and JSON sets for the matching Pydantic sources, which read them. This happens during construction, so application code rarely deals with it directly. It is useful to know when debugging which files were selected and in what order.
 
 ### How are keyword arguments normalised before they reach the settings constructor?
 
@@ -111,7 +111,7 @@ Yes, but resolution is a single ordered pass using ordinary `str.format()`. Ther
 
 ### Can a template produce a UPath field?
 
-Not directly. Templates produce strings. UPath support applies to `config_files` paths, which are normalised and checked for existence against the named filesystem. To get a UPath field from a template, convert it in `post_init`, for example `UPath(self.format_template_from_settings(...))`.
+Not directly. Templates produce strings. UPath support applies to `config_files` paths, which are normalised and checked for existence against the named filesystem; local `~` is expanded there, but template-derived fields and remote keys are never expanded. To get a UPath field from a template, convert it in `post_init`, for example `UPath(self.format_template_from_settings(...))`.
 
 ## Secrets resolution
 
