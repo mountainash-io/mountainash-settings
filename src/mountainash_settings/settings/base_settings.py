@@ -1,3 +1,4 @@
+import os
 from typing import Optional, Union, List, Any, Dict, Type, Tuple, TypeVar, Self, cast
 from upath import UPath
 from string import Formatter
@@ -27,6 +28,7 @@ from mountainash_settings._config_files import (
     UPathTomlSource,
     UPathYamlSource,
     config_path_label,
+    dotenv_view,
     own_config_paths,
 )
 from mountainash_settings.settings_parameters.filehandler import ConfigFilesInput
@@ -45,17 +47,50 @@ def _safe_labels(paths: Any) -> tuple[Any, ...]:
     return tuple(config_path_label(path) for path in paths)
 
 
+def _is_remote_config_path(path: Any) -> bool:
+    return (path if isinstance(path, UPath) else UPath(path)).protocol != ""
+
+
+def _selects_remote_dotenv(selection: Any) -> bool:
+    """Whether a dotenv ``env_file`` selection names any non-local location."""
+    if selection is None:
+        return False
+    items = (selection,) if isinstance(selection, (str, os.PathLike, UPath)) else selection
+    return any(_is_remote_config_path(item) for item in items)
+
+
+def _dotenv_views(
+    dotenv_settings: DotEnvSettingsSource, env_files: Any,
+) -> tuple[DotEnvSettingsSource, DotEnvSettingsSource]:
+    """The primary dotenv source and its unprefixed fallback, sharing one parse.
+
+    ``env_files`` is the invocation's full ordered selection when a direct frame
+    supplies one (the incoming source then only parsed its local subset); otherwise
+    the incoming source's own selection stands. Only an ordinary incoming source that
+    cannot open its remote selection is adapted; arbitrary custom subclasses and
+    already adapted or local-only sources keep their own parse.
+    """
+    primary = dotenv_settings
+    if type(dotenv_settings) is DotEnvSettingsSource:
+        selection = dotenv_settings.env_file if env_files is _CACHE_SOURCE_UNSET else env_files
+        if _selects_remote_dotenv(selection):
+            primary = dotenv_view(dotenv_settings, selection, dotenv_settings.env_prefix)
+    fallback = dotenv_view(primary, primary.env_file, "", captured_env=primary.env_vars)
+    return primary, fallback
+
+
 @dataclass(frozen=True)
 class _DirectSourceFrame:
     """Invocation-local file-source paths for one direct construction (MAS-SEC-004).
 
-    Carries only the declared settings class and normalized YAML/TOML/JSON
-    path tuples -- never resolved credential values. Consulted by
+    Carries only the declared settings class and the full ordered dotenv plus
+    normalized YAML/TOML/JSON path tuples -- never resolved credential values. Consulted by
     ``settings_customise_sources`` only when it belongs to the class
     currently under construction; never exposed as a public API.
     """
 
     settings_class: Type[BaseSettings]
+    env_files: Any
     yaml_files: Any
     toml_files: Any
     json_files: Any
@@ -68,7 +103,7 @@ _CURRENT_DIRECT_SOURCE_FRAME: ContextVar[Optional["_DirectSourceFrame"]] = Conte
 
 @contextmanager
 def _direct_source_frame(
-    settings_class: Type[BaseSettings], yaml_files: Any, toml_files: Any, json_files: Any,
+    settings_class: Type[BaseSettings], env_files: Any, yaml_files: Any, toml_files: Any, json_files: Any,
 ):
     """Install this invocation's file-source paths for the duration of construction.
 
@@ -77,7 +112,7 @@ def _direct_source_frame(
     cannot leak one invocation's source paths into another's.
     """
 
-    frame = _DirectSourceFrame(settings_class, yaml_files, toml_files, json_files)
+    frame = _DirectSourceFrame(settings_class, env_files, yaml_files, toml_files, json_files)
     token = _CURRENT_DIRECT_SOURCE_FRAME.set(frame)
     try:
         yield frame
@@ -697,6 +732,7 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
         construction_error: Optional[Exception] = None
         with _direct_source_frame(
             self.__class__,
+            obj_config_files.env_files or None,
             obj_config_files.yaml_files or None,
             obj_config_files.toml_files or None,
             obj_config_files.json_files or None,
@@ -705,7 +741,9 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
                 super().__init__(   _case_sensitive=True,
                                     _nested_model_default_partial_update=False,
                                     _env_prefix=            local_settings_params.env_prefix,
-                                    _env_file=              tuple(str(path) for path in obj_config_files.env_files) or None,
+                                    # Only local paths: Pydantic's own preliminary source (and any custom
+                                    # hook receiving it) can open nothing else; the frame carries the full order.
+                                    _env_file=              tuple(str(path) for path in obj_config_files.env_files if not _is_remote_config_path(path)) or None,
                                     _env_file_encoding =    'utf-8',
                                     _env_ignore_empty =     True,
                                     _env_nested_delimiter = None,
@@ -780,23 +818,10 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
         yaml_files: Any = _CACHE_SOURCE_UNSET,
         toml_files: Any = _CACHE_SOURCE_UNSET,
         json_files: Any = _CACHE_SOURCE_UNSET,
+        env_files: Any = _CACHE_SOURCE_UNSET,
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
         """Build the shared MountainAsh source ordering for direct and cached use."""
-        unprefixed_dotenv_settings = DotEnvSettingsSource(
-            settings_cls,
-            env_file=dotenv_settings.env_file,
-            env_file_encoding=dotenv_settings.env_file_encoding,
-            dotenv_filtering=dotenv_settings.dotenv_filtering,
-            case_sensitive=dotenv_settings.case_sensitive,
-            env_prefix="",
-            env_prefix_target=dotenv_settings.env_prefix_target,
-            env_nested_delimiter=dotenv_settings.env_nested_delimiter,
-            env_nested_max_split=dotenv_settings.env_nested_max_split,
-            env_ignore_empty=dotenv_settings.env_ignore_empty,
-            env_parse_none_str=dotenv_settings.env_parse_none_str,
-            env_parse_enums=dotenv_settings.env_parse_enums,
-            _init_state=dotenv_settings._init_state,
-        )
+        dotenv_settings, unprefixed_dotenv_settings = _dotenv_views(dotenv_settings, env_files)
         yaml_kwargs = {} if yaml_files is _CACHE_SOURCE_UNSET else {"yaml_file": yaml_files}
         toml_kwargs = {} if toml_files is _CACHE_SOURCE_UNSET else {"toml_file": toml_files}
         json_kwargs = {} if json_files is _CACHE_SOURCE_UNSET else {"json_file": json_files}
@@ -834,6 +859,7 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
         if frame is not None and frame.settings_class is settings_cls:
             return cls._cache_default_sources(
                 settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+                env_files=frame.env_files,
                 yaml_files=frame.yaml_files, toml_files=frame.toml_files, json_files=frame.json_files,
             )
         return cls._cache_default_sources(

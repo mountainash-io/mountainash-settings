@@ -2,7 +2,7 @@
 
 One home for: input normalization, option-aware path identity, independent
 ownership of option containers, safe diagnostic labels, HTTP-aware filename
-classification and the structured (YAML/TOML/JSON) UPath source adapters.
+classification and the YAML/TOML/JSON/dotenv UPath source adapters.
 
 Ownership contract: exact ordinary containers (dict/list/tuple/set/frozenset)
 and immutable value types are owned recursively and compared by value. Every
@@ -10,7 +10,7 @@ other option object (clients, timeouts, credentials, enum members, models,
 container subclasses ...) is an opaque access capability: it is retained
 strongly and compared by identity, never cloned or closed. Identity encoding
 does not call capability equality/hash hooks; ordinary container construction
-retains Python's key protocol. No filesystem is opened here.
+retains Python's key protocol. Path normalization and ownership perform no I/O.
 
 This module must not import ``settings_parameters.filehandler`` at runtime:
 that module consumes it.
@@ -19,7 +19,7 @@ that module consumes it.
 from __future__ import annotations
 
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from pathlib import PurePath
@@ -29,11 +29,14 @@ from uuid import UUID
 
 from pydantic import SecretBytes, SecretStr
 from pydantic._internal._utils import deep_update
+from dotenv import dotenv_values
 from pydantic_settings import (
+    DotEnvSettingsSource,
     JsonConfigSettingsSource,
     TomlConfigSettingsSource,
     YamlConfigSettingsSource,
 )
+from pydantic_settings.sources.utils import parse_env_vars
 from pydantic_settings.sources import ConfigFileSourceMixin
 from upath import UPath
 
@@ -48,6 +51,8 @@ __all__ = [
     "config_path_label",
     "normalize_config_path",
     "own_config_paths",
+    "UPathDotenvSource",
+    "dotenv_view",
 ]
 
 _HTTP_PROTOCOLS = frozenset({"http", "https"})
@@ -352,3 +357,74 @@ class UPathTomlSource(_UPathFilesMixin, TomlConfigSettingsSource):
             elif item.is_file():
                 return True
         return False
+
+
+# --- dotenv adapter ---------------------------------------------------------------------
+
+class UPathDotenvSource(DotEnvSettingsSource):
+    """Dotenv source that streams selected UPaths and keeps upstream interpretation.
+
+    Only file opening differs from the inherited source: parsing, empty/None handling,
+    case folding, filtering, prefix/alias targeting and nested handling are inherited.
+    ``captured_env`` supplies an already parsed mapping so a second view of the same
+    files never rereads the source.
+    """
+
+    def __init__(self, *args: Any, captured_env: Mapping[str, str | None] | None = None,
+                 **kwargs: Any) -> None:
+        self._captured_env = captured_env
+        super().__init__(*args, **kwargs)
+
+    def _load_env_vars(self) -> Mapping[str, str | None]:
+        if self._captured_env is not None:
+            return dict(self._captured_env)
+        return self._read_env_files()
+
+    def _read_env_file(self, file_path: Any) -> Mapping[str, str | None]:
+        with file_path.open("r", encoding=self.env_file_encoding or "utf8") as stream:
+            file_vars = dotenv_values(stream=stream)
+        return parse_env_vars(
+            file_vars, self.case_sensitive, self.env_ignore_empty, self.env_parse_none_str,
+        )
+
+    def _read_env_files(self) -> Mapping[str, str | None]:
+        env_files = self.env_file
+        if env_files is None:
+            return {}
+        if isinstance(env_files, (str, os.PathLike, UPath)):
+            env_files = [env_files]
+        dotenv_vars: dict[str, str | None] = {}
+        for env_file in env_files:
+            path = _open_candidate(env_file)
+            if path is None:
+                path = UPath(str(env_file))
+            # FIFOs exist only on local filesystems; remote paths need not implement them.
+            if path.is_file() or (_is_local(path) and path.is_fifo()):
+                dotenv_vars.update(self._read_env_file(path))
+        return dotenv_vars
+
+
+def dotenv_view(
+    source: DotEnvSettingsSource,
+    files: Any,
+    prefix: str,
+    *,
+    captured_env: Mapping[str, str | None] | None = None,
+) -> UPathDotenvSource:
+    """Another view of ``source``: same flags and shared init state, other files/prefix."""
+    return UPathDotenvSource(
+        source.settings_cls,
+        env_file=files,
+        env_file_encoding=source.env_file_encoding,
+        dotenv_filtering=source.dotenv_filtering,
+        case_sensitive=source.case_sensitive,
+        env_prefix=prefix,
+        env_prefix_target=source.env_prefix_target,
+        env_nested_delimiter=source.env_nested_delimiter,
+        env_nested_max_split=source.env_nested_max_split,
+        env_ignore_empty=source.env_ignore_empty,
+        env_parse_none_str=source.env_parse_none_str,
+        env_parse_enums=source.env_parse_enums,
+        _init_state=source._init_state,
+        captured_env=captured_env,
+    )

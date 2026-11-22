@@ -19,12 +19,12 @@ from pydantic_settings import (
 )
 from pydantic_settings.sources import (
     DefaultSettingsSource,
-    DotenvType,
     EnvPrefixTarget,
     InitSettingsSource,
     PathType,
 )
 
+from pydantic_settings.sources.types import EnvNoneType
 from pydantic_settings.sources.utils import InitState
 
 from ..resolve import _resolve_dict_with_changed_fields
@@ -34,6 +34,7 @@ from .sources import CacheableSettingsSource
 from .._config_files import (
     ConfigPathIdentity,
     ConfigPathOwnershipError,
+    UPathDotenvSource,
     UPathJsonSource,
     UPathTomlSource,
     UPathYamlSource,
@@ -251,6 +252,7 @@ def _builtin_source(source: PydanticBaseSettingsSource) -> bool:
         UPathYamlSource,
         UPathTomlSource,
         UPathJsonSource,
+        UPathDotenvSource,
         SecretsSettingsSource,
     }
 
@@ -320,10 +322,10 @@ def _settings_sources(key: _StructuralKey) -> tuple[PydanticBaseSettingsSource, 
     SettingsFileHandler.validate_config_files_exist(files.yaml_files)
     SettingsFileHandler.validate_config_files_exist(files.toml_files)
     SettingsFileHandler.validate_config_files_exist(files.json_files)
-    env_file: DotenvType | None = (
-        tuple(str(path) for path in files.env_files) if files.env_files else config.get("env_file")
-    )
-    dotenv = DotEnvSettingsSource(
+    # Full option-bearing selectors reach the adapter; absent selection keeps the
+    # class fallback for dotenv (structured sources receive explicit empty tuples).
+    env_file: Any = tuple(files.env_files) if files.env_files else config.get("env_file")
+    dotenv = UPathDotenvSource(
         cls, env_file=env_file, env_file_encoding=env_file_encoding,
         case_sensitive=case_sensitive, env_prefix=effective_prefix,
         env_prefix_target=env_prefix_target, env_nested_delimiter=env_nested_delimiter,
@@ -356,6 +358,13 @@ def _capture_sources(key: _StructuralKey) -> tuple[tuple[_SourceSnapshot, ...], 
             custom = True
         elif _builtin_source(source):
             source_state = source()
+            if type(source) in (DotEnvSettingsSource, UPathDotenvSource):
+                # Declared null fields are already None. Residual provider markers
+                # are unused top-level extra strings, not model-owned sentinel objects.
+                source_state = {
+                    key: str(value) if type(value) is EnvNoneType else value
+                    for key, value in source_state.items()
+                }
             custom = False
         else:
             raise ValueError("Cached retrieval requires CacheableSettingsSource for custom sources")

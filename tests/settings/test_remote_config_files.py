@@ -27,6 +27,7 @@ class RemoteSettings(MountainAshBaseSettings):
     ("yaml", "VALUE: 5\nNESTED: {a: 1}\n", "VALUE: 9\n"),
     ("toml", "VALUE = 5\n[NESTED]\na = 1\n", "VALUE = 9\n"),
     ("json", '{"VALUE": 5, "NESTED": {"a": 1}}', '{"VALUE": 9}'),
+    ("env", 'VALUE=5\nNESTED={"a": 1}\n', "VALUE=9\n"),
 ])
 def test_remote_snapshot_and_recipe(memory_config_root, isolated_settings_manager,
                                     suffix, initial, changed):
@@ -82,25 +83,36 @@ def test_object_key_punctuation_is_not_a_query(memory_config_root, name):
 
 
 def test_remote_empty_missing_and_unknown_files(memory_config_root, isolated_settings_manager):
-    empty = memory_config_root / "empty.yaml"
-    empty.write_text("")
-    assert RemoteSettings(config_files=empty).VALUE == 0
-    assert get_settings(settings_class=RemoteSettings, config_files=empty).VALUE == 0
+    for suffix in ("yaml", "env"):
+        empty = memory_config_root / f"empty.{suffix}"
+        empty.write_text("")
+        assert RemoteSettings(config_files=empty).VALUE == 0
+        assert get_settings(settings_class=RemoteSettings, config_files=empty).VALUE == 0
     unknown = memory_config_root / "unknown.unsupported"
     unknown.write_text("VALUE: 10")
-    for path, error in ((memory_config_root / "missing.yaml", FileNotFoundError), (unknown, ValueError)):
+    for path, error in (
+        (memory_config_root / "missing.yaml", FileNotFoundError),
+        (memory_config_root / "missing.env", FileNotFoundError),
+        (unknown, ValueError),
+    ):
         with pytest.raises(error):
             RemoteSettings(config_files=path)
         with pytest.raises(error):
             get_settings(settings_class=RemoteSettings, config_files=path)
 
 
-def test_failed_remote_parse_does_not_publish_defaults(memory_config_root, isolated_settings_manager):
-    path = memory_config_root / "retry.json"
-    path.write_text('{"VALUE":')
-    with pytest.raises(json.JSONDecodeError):
+@pytest.mark.parametrize("suffix, broken, repaired, error", [
+    ("json", b'{"VALUE":', '{"VALUE": 31}', json.JSONDecodeError),
+    ("env", b"VALUE=\xff\n", "VALUE=31\n", UnicodeDecodeError),
+])
+def test_failed_remote_parse_does_not_publish_defaults(
+    memory_config_root, isolated_settings_manager, suffix, broken, repaired, error,
+):
+    path = memory_config_root / f"retry.{suffix}"
+    path.write_bytes(broken)
+    with pytest.raises(error):
         get_settings(settings_class=RemoteSettings, config_files=path)
-    path.write_text('{"VALUE": 31}')
+    path.write_text(repaired)
     assert get_settings(settings_class=RemoteSettings, config_files=path).VALUE == 31
 
 
@@ -136,6 +148,7 @@ def http_config_server() -> Iterator[tuple[str, list[tuple[str, str | None]]]]:
                 ".yaml": f"VALUE: {value}\n",
                 ".toml": f"VALUE = {value}\n",
                 ".json": json.dumps({"VALUE": value}),
+                ".env": f"APP_VALUE={value}\nVALUE=99\n",
             }[suffix].encode()
             self.send_response(200)
             self.send_header("Content-Length", str(len(body)))
@@ -163,15 +176,15 @@ def http_config_server() -> Iterator[tuple[str, list[tuple[str, str | None]]]]:
         worker.join(timeout=5)
 
 
-@pytest.mark.parametrize("suffix", ["yaml", "toml", "json"])
+@pytest.mark.parametrize("suffix", ["yaml", "toml", "json", "env"])
 def test_http_options_snapshot_and_diagnostics(http_config_server, isolated_settings_manager, suffix):
     origin, requests = http_config_server
     url = f"{origin}/config.{suffix}?token=query-private-canary#fragment-private-canary"
     timeout = ClientTimeout(total=5)
     headers = {"X-Value": "51", "X-Case": uuid4().hex, "X-Secret": "option-private-canary"}
     path = UPath(url, headers=headers, client_kwargs={"timeout": timeout})
-    assert RemoteSettings(config_files=path).VALUE == 51
-    captured = get_settings(settings_class=RemoteSettings, config_files=path)
+    assert RemoteSettings(config_files=path, env_prefix="APP_").VALUE == 51
+    captured = get_settings(settings_class=RemoteSettings, config_files=path, env_prefix="APP_")
     assert captured.VALUE == 51
     assert any("token=query-private-canary" in request[0] for request in requests)
 
@@ -189,10 +202,10 @@ def test_http_options_snapshot_and_diagnostics(http_config_server, isolated_sett
 
     other = UPath(url, headers=dict(headers), client_kwargs={"timeout": ClientTimeout(total=5)})
     before = len(requests)
-    assert get_settings(settings_class=RemoteSettings, config_files=other).VALUE == 51
+    assert get_settings(settings_class=RemoteSettings, config_files=other, env_prefix="APP_").VALUE == 51
     assert len(requests) > before
     changed = UPath(url, headers={**headers, "X-Value": "52"}, client_kwargs={"timeout": timeout})
-    assert get_settings(settings_class=RemoteSettings, config_files=changed).VALUE == 52
+    assert get_settings(settings_class=RemoteSettings, config_files=changed, env_prefix="APP_").VALUE == 52
 
     # Mutate public containers only after checking fresh-context selection.
     path.storage_options["headers"]["X-Value"] = "61"
@@ -205,8 +218,8 @@ def test_http_options_snapshot_and_diagnostics(http_config_server, isolated_sett
     assert len(requests) == before
 
     plain = f"{origin}/plain.{suffix}?selection=public"
-    assert RemoteSettings(config_files=plain).VALUE == 12
-    assert get_settings(settings_class=RemoteSettings, config_files=UPath(plain)).VALUE == 12
+    assert RemoteSettings(config_files=plain, env_prefix="APP_").VALUE == 12
+    assert get_settings(settings_class=RemoteSettings, config_files=UPath(plain), env_prefix="APP_").VALUE == 12
 
 
 def test_http_missing_error_uses_safe_source_label(http_config_server):
