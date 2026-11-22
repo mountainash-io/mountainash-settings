@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 
 
+from .._config_files import config_path_identities, config_path_label
 from .filehandler import ConfigFilesInput, SettingsFileHandler
 from .kwargshandler import SettingsKwargsHandler
 
@@ -97,7 +98,9 @@ class SettingsParameters():
         Returns:
             int: Hash value based on structural parameters only
         """
-        hashable_config_files = SettingsFileHandler.format_config_file_tuple(self.config_files)
+        hashable_config_files = config_path_identities(
+            SettingsFileHandler.format_config_file_tuple(self.config_files)
+        )
 
         hashable_attrs = tuple([
             hashable_config_files,
@@ -129,8 +132,12 @@ class SettingsParameters():
         if not isinstance(other, SettingsParameters):
             return False
 
-        self_hashable_config_files = SettingsFileHandler.format_config_file_tuple(self.config_files)
-        other_hashable_config_files = SettingsFileHandler.format_config_file_tuple(other.config_files)
+        self_hashable_config_files = config_path_identities(
+            SettingsFileHandler.format_config_file_tuple(self.config_files)
+        )
+        other_hashable_config_files = config_path_identities(
+            SettingsFileHandler.format_config_file_tuple(other.config_files)
+        )
 
         return (
             self_hashable_config_files == other_hashable_config_files and
@@ -139,6 +146,17 @@ class SettingsParameters():
             self.secrets_dir == other.secrets_dir and
             self.secret_store is other.secret_store
             # Deliberately exclude: kwargs comparison
+        )
+
+    def __repr__(self) -> str:
+        """Safe representation: config paths use diagnostic labels, never options."""
+        files = tuple(
+            config_path_label(path)
+            for path in SettingsFileHandler.format_config_file_tuple(self.config_files)
+        )
+        return (
+            f"SettingsParameters(config_files={files!r}, settings_class={self.settings_class!r}, "
+            f"env_prefix={self.env_prefix!r}, secrets_dir={self.secrets_dir!r})"
         )
 
 

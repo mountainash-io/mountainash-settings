@@ -109,7 +109,7 @@ The package overrides Pydantic's `settings_customise_sources()` class method to 
 1. Init settings: values passed as kwargs to the constructor
 2. Environment settings: values from environment variables
 3. Dotenv settings: values from `.env` files, using the configured environment prefix
-4. Unprefixed dotenv settings: the same `.env` files read again with no prefix
+4. Unprefixed dotenv settings: the same parsed `.env` values interpreted with no prefix
 5. YAML config: values from `.yaml` and `.yml` files
 6. TOML config: values from `.toml` files
 7. JSON config: values from `.json` files
@@ -173,7 +173,7 @@ When the same field is defined in several places, the highest-priority source wi
 1. Constructor kwargs (highest priority)
 2. Environment variables
 3. Dotenv files (`.env`, read with the configured prefix)
-4. Unprefixed dotenv files (the same `.env` files read with no prefix)
+4. Unprefixed dotenv values (the same parsed values interpreted with no prefix)
 5. YAML files
 6. TOML files
 7. JSON files
@@ -237,7 +237,7 @@ print(settings.SETTINGS_SOURCE_ENV_PREFIX)
 <!-- concept:21 -->
 ## Config files parameter
 
-The `config_files` parameter declares which configuration files an instance loads. It accepts a single path string, a `UPath` object, a list of paths, or a tuple of paths. The package sorts the paths by extension and checks that each file exists.
+The `config_files` parameter declares which configuration files an instance loads. It accepts a single path string, a `UPath` object, a list of paths, or a tuple of paths. The package groups the paths by format, keeps the given order within each format, and checks that each file exists.
 
 ```python
 import tempfile
@@ -260,9 +260,43 @@ with tempfile.TemporaryDirectory() as tmp:
     # base staging
 ```
 
-Strings and `UPath` objects can be mixed, and each keeps the form it was given (see [UPath config paths](../04-file-handling-kwargs-and-field-templating/index.md#upath-config-paths)). Path normalisation calls `expanduser()`, so config paths are documented for local paths only. Remote paths are not supported and raise `NotImplementedError`.
+Strings and `UPath` objects can be mixed: local strings remain strings, remote URL strings are normalized to `UPath`, and supplied UPaths retain their filesystem options (see [UPath config paths](../04-file-handling-kwargs-and-field-templating/index.md#upath-config-paths)). All four formats (dotenv, YAML, TOML and JSON) load from local and remote locations. A URL string such as `"memory:///app/settings.yaml"` loads the same source as a `UPath` with default options, and never falls back silently to defaults. Only local paths have `~` expanded; remote keys are not expanded. Filesystem options such as headers and timeouts affect how the file is read and its source identity.
 
-When several files are given, the source priority above decides between file types: dotenv, then YAML, then TOML, then JSON. In the example, `mode` comes from the YAML file because YAML outranks TOML, while `name` comes from the only file that sets it. Within one type, files are kept in the order given. Because structured sources deep-merge, a later-listed file overrides the leaf values of an earlier-listed one, and keys defined only in earlier files are retained.
+The backend that opens a remote path is whichever `fsspec`/`universal_pathlib` implementation is installed for its scheme. Installing that backend and supplying its credentials is the application's job; the settings package adds neither.
+
+This example needs nothing beyond the package: an application and its database settings live in the in-memory filesystem.
+
+```python
+from upath import UPath
+from mountainash_settings import MountainAshBaseSettings, get_settings
+
+class DatabaseSettings(MountainAshBaseSettings):
+    host: str = "localhost"
+    port: int = 5432
+
+app_file = UPath("memory:///billing-app/database.yaml")
+app_file.parent.mkdir(parents=True, exist_ok=True)
+app_file.write_text("host: db.internal\nport: 6543\n")
+
+direct = DatabaseSettings(config_files="memory:///billing-app/database.yaml")
+print(direct.host, direct.port)
+# db.internal 6543
+
+cached = get_settings(settings_class=DatabaseSettings, config_files=app_file)
+print(cached.host)
+# db.internal
+
+app_file.write_text("host: changed\nport: 1\n")
+app_file.unlink()
+print(get_settings(settings_class=DatabaseSettings, config_files="memory:///billing-app/database.yaml").host)
+# db.internal
+print(get_settings(settings_class=DatabaseSettings, config_files=app_file).host)
+# db.internal
+```
+
+Direct construction reads the file each time it is called. Cached retrieval reads each source once per source context and pins the values; later changes or deletion of the file do not affect that context. Ordinary option containers and values are copied. Opaque access objects such as credential clients are borrowed by identity, not copied or closed: the application owns their lifecycle.
+
+When several files are given, the source priority above decides between file types: dotenv, then YAML, then TOML, then JSON. In the first example, `mode` comes from the YAML file because YAML outranks TOML, while `name` comes from the only file that sets it. Within one type, files are kept in the order given. Because structured sources deep-merge, a later-listed file overrides the leaf values of an earlier-listed one, and keys defined only in earlier files are retained.
 
 ## Meta-field traceability
 

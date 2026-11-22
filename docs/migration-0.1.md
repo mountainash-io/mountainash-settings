@@ -85,7 +85,8 @@ kwargs raise `TypeError`; the second merge input wins.
 Config-file helpers accept a string, UPath, sequence of paths, or `None`.
 Absent file collections are empty; `SettingsFiles` groups are immutable tuples.
 Deduplication preserves first-seen order. Unknown extensions raise `ValueError`
-instead of printing a warning. Structured-file UPaths retain remote capability.
+instead of printing a warning. YAML, TOML, JSON and dotenv UPaths and URL
+strings load remote content, keeping filesystem options; only local paths expand `~`.
 
 Cached classes must derive from `MountainAshBaseSettings`. Direct-source
 customization through Pydantic's `settings_customise_sources` still works for

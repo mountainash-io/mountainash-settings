@@ -64,6 +64,7 @@ dependencies = [
     "pytest==8.3.5",
     "pytest-check==2.5.3",
     "pytest-cov==6.1.1",
+    "aiohttp==3.14.5",
 
     # "mountainash_constants @ {root:uri}/temp/mountainash-constants",
     # "mountainash_utils_os @ {root:uri}/temp/mountainash-utils-os",
@@ -88,6 +89,7 @@ dependencies = [
     "pytest==8.3.5",
     "pytest-asyncio>=0.23.0",    # Async test support
     "pytest-check==2.5.3",
+    "aiohttp==3.14.5",
     "pytest-mock==3.12.0",
     "pytest-json-report>=1.5.0", # Structured JSON output
     "pytest-metadata>=2.0.0",    # Additional test metadata
@@ -269,7 +271,7 @@ radon-cc-detail = "radon cc ./src"
 installer = "uv"
 path = ".hatch/mypy"
 # The production spec-invariant helper lazily imports pytest.
-dependencies = ["mypy==1.10.1", "types-PyYAML==6.0.12.20260906", "pytest==8.3.5", "pytest-check==2.5.3", "build>=1.2,<2"]
+dependencies = ["mypy==1.10.1", "types-PyYAML==6.0.12.20260906", "pytest==8.3.5", "pytest-check==2.5.3", "aiohttp==3.14.5", "build>=1.2,<2"]
 [envs.mypy.scripts]
 check = "python tools/check_types.py"
 check-src = "python tools/check_types.py {args}"

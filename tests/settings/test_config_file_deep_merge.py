@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from pydantic import Field
+from upath import UPath
 
 from mountainash_settings import MountainAshBaseSettings, SettingsParameters
 
@@ -16,7 +17,12 @@ class _MergeSettings(MountainAshBaseSettings):
     payload: Any = None
 
 
-def _write_pair(tmp_path: Path, suffix: str) -> tuple[Path, Path]:
+@pytest.fixture(params=["local", "remote"])
+def config_root(request, tmp_path):
+    return tmp_path if request.param == "local" else request.getfixturevalue("memory_config_root")
+
+
+def _write_pair(tmp_path: Path | UPath, suffix: str) -> tuple[Path | UPath, Path | UPath]:
     base = tmp_path / f"base.{suffix}"
     override = tmp_path / f"override.{suffix}"
     if suffix == "toml":
@@ -86,8 +92,8 @@ def _write_pair(tmp_path: Path, suffix: str) -> tuple[Path, Path]:
 
 
 @pytest.mark.parametrize("suffix", ["toml", "yaml", "json"])
-def test_structured_files_deep_merge_mappings_and_replace_leaves(tmp_path, suffix):
-    base, override = _write_pair(tmp_path, suffix)
+def test_structured_files_deep_merge_mappings_and_replace_leaves(config_root, suffix):
+    base, override = _write_pair(config_root, suffix)
 
     settings = _MergeSettings(config_files=[base, override])
 
@@ -105,8 +111,8 @@ def test_structured_files_deep_merge_mappings_and_replace_leaves(tmp_path, suffi
 
 
 @pytest.mark.parametrize("suffix", ["toml", "yaml", "json"])
-def test_structured_file_order_controls_leaf_precedence(tmp_path, suffix):
-    base, override = _write_pair(tmp_path, suffix)
+def test_structured_file_order_controls_leaf_precedence(config_root, suffix):
+    base, override = _write_pair(config_root, suffix)
 
     settings = _MergeSettings(config_files=[override, base])
 
@@ -119,8 +125,8 @@ def test_structured_file_order_controls_leaf_precedence(tmp_path, suffix):
 
 
 @pytest.mark.parametrize("suffix", ["toml", "yaml", "json"])
-def test_settings_parameters_preserves_base_then_local_order(tmp_path, suffix):
-    base, override = _write_pair(tmp_path, suffix)
+def test_settings_parameters_preserves_base_then_local_order(config_root, suffix):
+    base, override = _write_pair(config_root, suffix)
     params = SettingsParameters.create(
         settings_class=_MergeSettings,
         config_files=[base],
@@ -137,8 +143,8 @@ def test_settings_parameters_preserves_base_then_local_order(tmp_path, suffix):
 
 
 @pytest.mark.parametrize("suffix", ["toml", "yaml", "json"])
-def test_settings_parameters_respects_reversed_caller_order(tmp_path, suffix):
-    base, override = _write_pair(tmp_path, suffix)
+def test_settings_parameters_respects_reversed_caller_order(config_root, suffix):
+    base, override = _write_pair(config_root, suffix)
     params = SettingsParameters.create(
         settings_class=_MergeSettings,
         config_files=[override],

@@ -44,45 +44,53 @@ class _ParsingSettings(MountainAshBaseSettings):
     MODE: _ParsingMode = _ParsingMode.DEV
 
 
-def _load(settings_class, env_file, *, env_prefix="PREFIX_"):
-    return settings_class(
-        settings_parameters=SettingsParameters.create(
-            settings_class=settings_class,
-            config_files=[env_file],
-            env_prefix=env_prefix,
-        )
+
+@pytest.fixture(params=["local", "memory"])
+def env_dir(request, tmp_path):
+    """The same dotenv semantics must hold for local and memory-backed sources."""
+    if request.param == "local":
+        return tmp_path
+    return request.getfixturevalue("memory_config_root")
+
+
+def _build(settings_class, route, *env_files, env_prefix="PREFIX_"):
+    """Direct construction and cached capture build their sources separately."""
+    parameters = SettingsParameters.create(
+        settings_class=settings_class, config_files=list(env_files), env_prefix=env_prefix,
     )
+    if route == "direct":
+        return settings_class(settings_parameters=parameters)
+    return SettingsManager().get_or_create_settings(parameters)
 
 
-def test_os_environment_beats_both_dotenv_sources(tmp_path, monkeypatch):
-    env_file = tmp_path / "values.env"
+@pytest.mark.parametrize("route", ["direct", "cached"])
+def test_os_environment_beats_both_dotenv_sources(env_dir, route, monkeypatch):
+    env_file = env_dir / "values.env"
     env_file.write_text('VALUE="fallback"\nPREFIX_VALUE="prefixed"\n')
     monkeypatch.setenv("PREFIX_VALUE", "operating-system")
 
-    settings = _load(_DotenvSettings, env_file)
+    settings = _build(_DotenvSettings, route, env_file)
 
     assert settings.VALUE == "operating-system"
 
 
-def test_alias_prefix_target_prefers_prefixed_value(tmp_path):
-    env_file = tmp_path / "aliases.env"
+@pytest.mark.parametrize("route", ["direct", "cached"])
+def test_alias_prefix_target_prefers_prefixed_value(env_dir, route):
+    env_file = env_dir / "aliases.env"
     env_file.write_text('ALIAS="fallback"\nPREFIX_ALIAS="prefixed"\n')
 
-    settings = _load(_AliasDotenvSettings, env_file)
-
-    assert settings.VALUE == "prefixed"
+    assert _build(_AliasDotenvSettings, route, env_file).VALUE == "prefixed"
 
 
-def test_nested_delimiter_merges_prefixed_and_fallback_values(tmp_path):
-    env_file = tmp_path / "nested.env"
+@pytest.mark.parametrize("route", ["direct", "cached"])
+def test_nested_delimiter_merges_prefixed_and_fallback_values(env_dir, route):
+    env_file = env_dir / "nested.env"
     env_file.write_text(
         'PREFIX_NESTED__FIRST="prefixed"\n'
         'NESTED__SECOND="fallback"\n'
     )
 
-    settings = _load(_NestedDotenvSettings, env_file)
-
-    assert settings.NESTED == _NestedValues(
+    assert _build(_NestedDotenvSettings, route, env_file).NESTED == _NestedValues(
         FIRST="prefixed",
         SECOND="fallback",
     )
@@ -105,18 +113,62 @@ def test_cached_sources_preserve_mountainash_environment_parsing(monkeypatch):
     )
 
 
-def test_cached_dotenv_filtering_ignores_unrelated_values(tmp_path):
+@pytest.mark.parametrize("route", ["direct", "cached"])
+def test_dotenv_filtering_ignores_unrelated_values(env_dir, route):
     class _FilteringSettings(_DotenvSettings):
         model_config = SettingsConfigDict(extra="forbid", dotenv_filtering="only_existing")
 
-    env_file = tmp_path / "filtering.env"
+    env_file = env_dir / "filtering.env"
     env_file.write_text("VALUE=fallback\nUNRELATED=ignored\n")
-    settings = SettingsManager().get_or_create_settings(
-        SettingsParameters.create(
-            settings_class=_FilteringSettings, config_files=[env_file], env_prefix="PREFIX_",
-        ),
+
+    assert _build(_FilteringSettings, route, env_file).VALUE == "fallback"
+
+
+@pytest.mark.parametrize("route", ["direct", "cached"])
+def test_dotenv_interpolates_within_selected_file(env_dir, route):
+    env_file = env_dir / "interpolate.env"
+    env_file.write_text("BASE=root\nVALUE=${BASE}/child\n")
+
+    assert _build(_DotenvSettings, route, env_file).VALUE == "root/child"
+
+
+@pytest.mark.parametrize("route", ["direct", "cached"])
+@pytest.mark.parametrize("extra", ["ignore", "allow"])
+def test_dotenv_ignores_empty_values_and_parses_none_and_enums(env_dir, route, extra):
+    class ParsingSettings(_ParsingSettings):
+        model_config = SettingsConfigDict(extra=extra)
+
+    env_file = env_dir / "parsing.env"
+    env_file.write_text("MAS002_EMPTY=\nMAS002_NULL=None\nMAS002_MODE=PROD\n")
+
+    settings = _build(ParsingSettings, route, env_file, env_prefix="MAS002_")
+
+    assert (settings.EMPTY, settings.NULL, settings.MODE) == (
+        "fallback", None, _ParsingMode.PROD,
     )
-    assert settings.VALUE == "fallback"
+    if extra == "allow":
+        assert settings.model_extra["MAS002_NULL"] == "None"
+
+
+@pytest.mark.parametrize("remote_last", [True, False])
+@pytest.mark.parametrize("route", ["direct", "cached"])
+def test_mixed_local_and_remote_dotenv_files_override_in_caller_order(
+    tmp_path, memory_config_root, remote_last, route,
+):
+    local = tmp_path / "local.env"
+    remote = memory_config_root / "remote.env"
+    local.write_text("VALUE=local\nFALLBACK=local-only\n")
+    remote.write_text("VALUE=remote\n")
+    files = [local, remote] if remote_last else [remote, local]
+
+    class _Mixed(_DotenvSettings):
+        FALLBACK: str | None = None
+
+    settings = _build(_Mixed, route, *files)
+
+    assert (settings.VALUE, settings.FALLBACK) == (
+        "remote" if remote_last else "local", "local-only",
+    )
 
 
 def test_cached_enum_with_mutable_value_is_rejected():

@@ -13,6 +13,7 @@ import pytest
 from typing import Dict, Any
 from pydantic_settings import BaseSettings
 from pydantic import Field
+from upath import UPath
 
 from mountainash_settings import (
     SettingsParameters,
@@ -430,3 +431,43 @@ class TestEdgeCases:
         assert result["secrets_dir"] == "/secrets"
         assert result["kwargs"]["VALUE"] == "test"
         assert result["kwargs"]["COUNT"] == 42
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_source_capabilities_compare_by_identity_without_user_hooks(
+    memory_config_root, isolated_settings_manager, nested,
+):
+    class Capability:
+        def __eq__(self, other):
+            raise AssertionError("Capability equality is not settings identity")
+
+        def __hash__(self):
+            raise AssertionError("Capability hashing is not settings identity")
+
+    capability = Capability()
+    def options(value):
+        return {"nested": [{"access": value}], "flags": {"a", "b"}} if nested else value
+
+    location = memory_config_root / "identity.yaml"
+    location.write_text("COUNT: 23\n")
+    path = UPath(str(location), access=options(capability))
+    same = UPath(str(location), access=options(capability))
+    different = UPath(str(location), access=options(Capability()))
+    left = SettingsParameters.create(settings_class=SimpleSettings, config_files=path, VALUE="left")
+    right = SettingsParameters.create(settings_class=SimpleSettings, config_files=same, VALUE="right")
+    separate = SettingsParameters.create(settings_class=SimpleSettings, config_files=different)
+    assert left == right
+    assert hash(left) == hash(right)
+    assert left != separate
+    merged = SettingsParameters.merge(left, separate)
+    assert len(merged.config_files) == 2
+    selected = merged.config_files[0].storage_options["access"]
+    assert (selected["nested"][0]["access"] if nested else selected) is capability
+    assert SimpleSettings(settings_parameters=left).COUNT == 23
+    captured = left.get_settings()
+    assert captured.COUNT == 23
+    location.unlink()
+    extracted = captured.extract_settings_parameters()
+    selected = extracted.config_files[0].storage_options["access"]
+    assert (selected["nested"][0]["access"] if nested else selected) is capability
+    assert extracted.get_settings().COUNT == 23
