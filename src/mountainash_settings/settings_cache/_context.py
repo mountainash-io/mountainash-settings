@@ -28,6 +28,7 @@ from pydantic_settings.sources.types import EnvNoneType
 from pydantic_settings.sources.utils import InitState
 
 from ..resolve import _resolve_dict_with_changed_fields
+from .._safe_errors import raise_safe
 from ..secrets.backend import SecretReader
 from ..settings_parameters import SettingsFileHandler, SettingsParameters
 from .sources import CacheableSettingsSource
@@ -88,7 +89,7 @@ class _StructuralKey:
         except ConfigPathOwnershipError:
             # No fallback: a selector that cannot be faithfully owned is not
             # admitted to the cache. The message names no path or option.
-            raise ValueError("Cached settings config files cannot be safely owned") from None
+            raise_safe(ValueError("Cached settings config files cannot be safely owned"))
         return cls(
             owned_files,
             parameters.settings_class,

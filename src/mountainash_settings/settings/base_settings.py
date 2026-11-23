@@ -29,6 +29,7 @@ from mountainash_settings._config_files import (
     UPathYamlSource,
     config_path_label,
     dotenv_view,
+    is_remote_config_path,
     own_config_paths,
 )
 from mountainash_settings.settings_parameters.filehandler import ConfigFilesInput
@@ -47,16 +48,12 @@ def _safe_labels(paths: Any) -> tuple[Any, ...]:
     return tuple(config_path_label(path) for path in paths)
 
 
-def _is_remote_config_path(path: Any) -> bool:
-    return (path if isinstance(path, UPath) else UPath(path)).protocol != ""
-
-
 def _selects_remote_dotenv(selection: Any) -> bool:
     """Whether a dotenv ``env_file`` selection names any non-local location."""
     if selection is None:
         return False
     items = (selection,) if isinstance(selection, (str, os.PathLike, UPath)) else selection
-    return any(_is_remote_config_path(item) for item in items)
+    return any(is_remote_config_path(item) for item in items)
 
 
 def _dotenv_views(
@@ -118,6 +115,43 @@ def _direct_source_frame(
         yield frame
     finally:
         _CURRENT_DIRECT_SOURCE_FRAME.reset(token)
+
+
+_DOTENV_PREPARED = "_mountainash_direct_dotenv_prepared"
+
+
+def _local_dotenv_selection(env_files: Any) -> Optional[tuple[str, ...]]:
+    """The ordinary local subset of a direct dotenv selection, in the form Pydantic received."""
+    if env_files is None:
+        return None
+    return tuple(str(path) for path in env_files if not is_remote_config_path(path)) or None
+
+
+def _prepare_direct_dotenv(settings_cls: Any, dotenv_settings: Any) -> None:
+    """Fill Pydantic's incoming dotenv source from the active direct frame, once.
+
+    Direct construction hands Pydantic ``_env_file=None`` so the preliminary source reads
+    nothing through unprotected opens. Run before a source hook dispatches, this gives that
+    same ordinary source object the invocation's local selection and parsed values through
+    the protected adapter, keeping every other flag and its shared init state. Only the
+    incoming source of the frame's own class is touched; a marker on the source makes a
+    later super call neither reopen the files nor overwrite the hook's own mutations.
+    """
+    frame = _CURRENT_DIRECT_SOURCE_FRAME.get()
+    if (
+        frame is None
+        or frame.settings_class is not settings_cls
+        or type(dotenv_settings) is not DotEnvSettingsSource
+        or dotenv_settings.env_file is not None
+        or getattr(dotenv_settings, _DOTENV_PREPARED, False)
+    ):
+        return
+    local_files = _local_dotenv_selection(frame.env_files)
+    if local_files is not None:
+        view = dotenv_view(dotenv_settings, local_files, dotenv_settings.env_prefix)
+        dotenv_settings.env_file = local_files
+        dotenv_settings.env_vars = view.env_vars
+    setattr(dotenv_settings, _DOTENV_PREPARED, True)
 
 
 class _UnownedReconstruction(Exception):
@@ -741,9 +775,10 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
                 super().__init__(   _case_sensitive=True,
                                     _nested_model_default_partial_update=False,
                                     _env_prefix=            local_settings_params.env_prefix,
-                                    # Only local paths: Pydantic's own preliminary source (and any custom
-                                    # hook receiving it) can open nothing else; the frame carries the full order.
-                                    _env_file=              tuple(str(path) for path in obj_config_files.env_files if not _is_remote_config_path(path)) or None,
+                                    # No preliminary file read: the incoming dotenv source is filled from
+                                    # this invocation's frame by the source hook wrapper (_metaclass), through
+                                    # the protected adapter, before any hook sees it.
+                                    _env_file=              None,
                                     _env_file_encoding =    'utf-8',
                                     _env_ignore_empty =     True,
                                     _env_nested_delimiter = None,
@@ -768,7 +803,14 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
             from mountainash_settings.resolve import _sanitize_if_implicated
 
             _sanitize_if_implicated(self.__class__, construction_error, _resolved_field_names)
-            raise construction_error
+            # Rethrowing inside a caller's active handler would make Python attach that
+            # ambient exception as the error's __context__ (replacing a cleared or existing
+            # one); put back the context the construction left.
+            saved_context = construction_error.__context__
+            try:
+                raise construction_error
+            finally:
+                construction_error.__context__ = saved_context
 
 
         # Meta-field bookkeeping only. super().__init__ above already applied

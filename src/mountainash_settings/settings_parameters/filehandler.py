@@ -17,9 +17,11 @@ from mountainash_settings._config_files import (
     ConfigPathIdentity,
     config_filename,
     config_path_identities,
-    config_path_label,
+    _display_location,
+    config_path_exists,
     normalize_config_path,
 )
+from mountainash_settings._safe_errors import raise_safe
 
 ConfigPath = str | UPath
 ConfigFilesInput = ConfigPath | Sequence[ConfigPath] | None
@@ -69,7 +71,7 @@ class SettingsFileHandler:
             return ()
         raw = (config_files,) if isinstance(config_files, (str, UPath)) else config_files
         if not isinstance(raw, Sequence):
-            raise TypeError("Invalid configuration paths")
+            raise_safe(TypeError("Invalid configuration paths"))
         normalized = tuple(normalize_config_path(item) for item in raw)
         unique: dict[ConfigPathIdentity, ConfigPath] = {}
         for identity, path in zip(config_path_identities(normalized), normalized):
@@ -95,18 +97,17 @@ class SettingsFileHandler:
     @staticmethod
     def identify_file_extension(file_path: ConfigPath) -> str:
         if file_path is None:
-            raise TypeError("Invalid configuration path")
+            raise_safe(TypeError("Invalid configuration path"))
         extension = FileTypeRegistry.identify(file_path)
         if extension is None:
-            raise ValueError("Unsupported configuration file extension")
+            raise_safe(ValueError("Unsupported configuration file extension"))
         return extension
 
     @classmethod
     def validate_config_files_exist(cls, config_files: ConfigFilesInput = None) -> None:
         for item in cls.format_config_file_tuple(config_files):
-            path = item if isinstance(item, UPath) else UPath(item)
-            if not path.exists():
-                raise FileNotFoundError(f"Config file {config_path_label(item)} not found.")
+            if not config_path_exists(item):
+                raise_safe(FileNotFoundError(f"Config file {_display_location(item)} not found."))
 
     @classmethod
     def group_files_by_type(cls, config_files: ConfigFilesInput = None) -> dict[str, list[ConfigPath]]:
