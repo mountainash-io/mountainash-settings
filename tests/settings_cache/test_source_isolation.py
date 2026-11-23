@@ -683,7 +683,7 @@ class TestCustomHookCompatibility:
         # a no-super hook body ran, and the native error is unreachable from it.
         assert entered == []
         assert caught.value.errno == errno.EACCES
-        assert str(path) in str(caught.value)
+        assert caught.value.filename == str(path)
         _assert_native_unreachable(caught.value, native)
 
     def test_mixed_selection_local_failure_precedes_any_remote_open(

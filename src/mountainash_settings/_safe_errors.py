@@ -67,7 +67,7 @@ def safe_detail(native: BaseException) -> str:
     return type(native).__name__
 
 
-def safe_cause(native: BaseException | None) -> BaseException | None:
+def safe_cause(native: BaseException | None) -> OSError | None:
     """The exception an error may chain as ``__cause__`` in place of *native*.
 
     ``OSError`` with an errno: a fresh exception of the same type carrying only
@@ -77,7 +77,7 @@ def safe_cause(native: BaseException | None) -> BaseException | None:
         return None
     try:
         return type(native)(native.errno, native.strerror)
-    except Exception:  # noqa: BLE001 - a subclass constructor that rejects (errno, strerror)
+    except Exception:  # A subclass constructor may reject (errno, strerror).
         return OSError(native.errno, native.strerror)
 
 
