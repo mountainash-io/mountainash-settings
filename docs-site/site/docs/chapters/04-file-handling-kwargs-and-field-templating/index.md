@@ -109,6 +109,24 @@ with tempfile.TemporaryDirectory() as d:
 
 Public config-source labels omit userinfo and filesystem options; HTTP(S) labels also omit query strings and fragments. Literal `?` and `#` characters in object-store keys remain part of the key. These diagnostic labels do not replace the complete recipe from `extract_settings_parameters()`, which keeps the full selectors and options in their original order. Treat that recipe as private and use it only in trusted code. Cached retrieval reads each source once per source context and pins the values, while direct construction reads on each call.
 
+Configuration access errors use a separate display rule: hierarchical locations
+retain only scheme, host, port and path, without userinfo, query or fragment;
+other scheme-prefixed locations display as `***`. Local paths and path segments
+remain visible. Native OS causes retain only errno and strerror, without native
+filenames or extra attributes; other native errors contribute their class name.
+Missing files remain `FileNotFoundError`. Parser and decoding errors about file
+content are not sanitized by this boundary.
+
+The same protection covers direct and cached reads, including the preliminary
+local dotenv read before custom source hooks. Loading configuration machinery
+also installs process-wide filters on the `fsspec`, `fsspec.http`,
+`fsspec.caching` and `fsspec.asyn` loggers. Records keep their severity and handlers,
+but use controlled filesystem messages without raw arguments, exception payloads
+or stack text. Unrelated fsspec users in the same process receive this reduced
+diagnostic detail too. This is not a universal settings-value masking facility:
+trusted recipes, file contents, visible path segments and arbitrary user-defined
+sources remain outside that guarantee.
+
 Templated field values are plain strings and are not config paths, so a template such as `"s3://{BUCKET}/{ENVIRONMENT}/{DATASET}.parquet"` works normally and is never expanded or opened.
 
 <!-- concept:35 -->

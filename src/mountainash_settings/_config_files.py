@@ -23,7 +23,7 @@ from collections.abc import Mapping, Sequence
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from pathlib import PurePath
-from typing import Any, cast
+from typing import Any, NoReturn, cast
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -40,6 +40,12 @@ from pydantic_settings.sources.utils import parse_env_vars
 from pydantic_settings.sources import ConfigFileSourceMixin
 from upath import UPath
 
+from mountainash_settings._safe_errors import (
+    install_config_log_filters, raise_safe, safe_detail, safe_location,
+)
+
+install_config_log_filters()
+
 __all__ = [
     "ConfigPathIdentity",
     "ConfigPathOwnershipError",
@@ -49,6 +55,7 @@ __all__ = [
     "config_filename",
     "config_path_identities",
     "config_path_label",
+    "config_path_exists",
     "normalize_config_path",
     "own_config_paths",
     "UPathDotenvSource",
@@ -158,13 +165,30 @@ def normalize_config_path(path: str | UPath) -> str | UPath:
     remote strings become default-option UPaths; remote UPaths keep options.
     """
     if isinstance(path, UPath):
-        return _expand(path)
+        try:
+            return _expand(path)
+        except Exception as native:
+            _raise_invalid_location(path, native)
     if isinstance(path, os.PathLike):
-        path = os.fspath(path)
+        try:
+            path = os.fspath(path)
+        except Exception as native:
+            _raise_invalid_location(path, native)
     if not isinstance(path, str):
-        raise TypeError("Invalid configuration path")
-    resolved = _expand(UPath(path))
-    return str(resolved) if _is_local(resolved) else resolved
+        raise_safe(TypeError("Invalid configuration path"))
+    try:
+        resolved = _expand(UPath(path))
+        return str(resolved) if _is_local(resolved) else resolved
+    except Exception as native:
+        _raise_invalid_location(path, native)
+
+
+def is_remote_config_path(path: str | UPath) -> bool:
+    """Classify a selector without exposing native path-construction failures."""
+    try:
+        return _as_upath(path).protocol != ""
+    except Exception as native:
+        _raise_invalid_location(path, native)
 
 
 def _as_upath(path: str | UPath) -> UPath:
@@ -210,14 +234,20 @@ class ConfigPathIdentity:
 
 def _identity(path: str | UPath) -> ConfigPathIdentity:
     if not isinstance(path, (str, UPath)):
-        raise ConfigPathOwnershipError("Config path must be a string or UPath")
-    upath = _as_upath(path)
-    borrowed: list[Any] = []
-    options = _option_key(dict(upath.storage_options), set(), borrowed)
-    local = _is_local(upath)
-    return ConfigPathIdentity(
-        upath.protocol, str(upath), None if local else type(upath), options, tuple(borrowed),
-    )
+        raise_safe(ConfigPathOwnershipError("Config path must be a string or UPath"))
+    try:
+        upath = _as_upath(path)
+        borrowed: list[Any] = []
+        options = _option_key(dict(upath.storage_options), set(), borrowed)
+        local = _is_local(upath)
+        return ConfigPathIdentity(
+            upath.protocol, str(upath), None if local else type(upath), options, tuple(borrowed),
+        )
+    except ConfigPathOwnershipError:
+        # Rebuild a controlled refusal; never trust the caught message or attributes.
+        raise_safe(ConfigPathOwnershipError("Config path options cannot be identified"))
+    except Exception as native:
+        _raise_invalid_location(path, native)
 
 
 def config_path_identities(paths: Sequence[str | UPath]) -> tuple[ConfigPathIdentity, ...]:
@@ -259,10 +289,57 @@ def own_config_paths(paths: Sequence[str | UPath]) -> tuple[str | UPath, ...]:
     certify state omitted from a subclass's own reconstruction contract.
     """
     memo: dict[int, Any] = {}
-    return tuple(_own_path(path, memo) for path in paths)
+    owned: list[str | UPath] = []
+    for path in paths:
+        try:
+            owned.append(_own_path(path, memo))
+        except ConfigPathOwnershipError:
+            raise_safe(ConfigPathOwnershipError(
+                f"Config path of type {type(path).__name__} cannot be faithfully owned"
+            ))
+        except Exception as native:
+            _raise_invalid_location(path, native)
+    return tuple(owned)
 
 
 # --- diagnostics ----------------------------------------------------------------------
+
+def _display_location(path: Any) -> str:
+    # Remote UPaths are not necessarily PathLike (notably HTTPPath in UPath 0.3).
+    try:
+        location = str(path)
+    except Exception:
+        return "***"
+    return safe_location(location)
+
+
+def _raise_invalid_location(path: Any, native: Exception) -> NoReturn:
+    raise_safe(
+        ValueError(f"Config file {_display_location(path)}: invalid location ({safe_detail(native)})"),
+        native,
+    )
+
+
+def _raise_config_access_error(location: str, operation: str, native: Exception) -> NoReturn:
+    display = safe_location(location)
+    detail = safe_detail(native)
+    if isinstance(native, OSError) and native.errno is not None:
+        error = OSError(native.errno, f"Config file {operation} failed ({detail})", display)
+    elif isinstance(native, FileNotFoundError):
+        error = FileNotFoundError(f"Config file {display}: {operation} failed ({detail})")
+    else:
+        error = OSError(f"Config file {display}: {operation} failed ({detail})")
+    raise_safe(error, native)
+
+
+def config_path_exists(path: str | UPath) -> bool:
+    """Inspect a config selector without exposing backend exception payloads."""
+    try:
+        target = _as_upath(path)
+        return target.exists()
+    except Exception as native:
+        _raise_config_access_error(_display_location(path), "inspect", native)
+
 
 def _safe_text(path: UPath) -> str:
     text = str(path)
@@ -296,21 +373,84 @@ def config_filename(path: str | UPath) -> str:
     HTTP uses the URL path (queries/fragments never hide the suffix); other
     protocols keep their literal key name, including ``?``/``#``.
     """
-    upath = _as_upath(path)
-    if upath.protocol in _HTTP_PROTOCOLS:
-        return urlsplit(str(upath)).path.rpartition("/")[2]
-    return upath.name
+    try:
+        upath = _as_upath(path)
+        if upath.protocol in _HTTP_PROTOCOLS:
+            return urlsplit(str(upath)).path.rpartition("/")[2]
+        return upath.name
+    except Exception as native:
+        _raise_invalid_location(path, native)
 
 
 # --- structured source adapters ---------------------------------------------------------
 
 def _open_candidate(file: Any) -> UPath | None:
     """UPath for str/PathLike inputs; None leaves resource-like inputs to upstream."""
-    if isinstance(file, UPath):
-        return _expand(file)
-    if isinstance(file, (str, os.PathLike)):
-        return _expand(UPath(file))
-    return None
+    try:
+        if isinstance(file, UPath):
+            return _expand(file)
+        if isinstance(file, (str, os.PathLike)):
+            return _expand(UPath(file))
+        return None
+    except Exception as native:
+        _raise_invalid_location(file, native)
+
+
+def _config_is_file(path: Any, *, allow_fifo: bool = False) -> bool:
+    try:
+        return bool(path.is_file() or (allow_fifo and _is_local(path) and path.is_fifo()))
+    except Exception as native:
+        _raise_config_access_error(_display_location(path), "inspect", native)
+
+
+class _ConfigReader:
+    """Only the read interface consumed by the inherited content parsers."""
+
+    def __init__(self, stream: Any, display: str) -> None:
+        self._stream = stream
+        self.name = display
+
+    def read(self, *args: Any, **kwargs: Any) -> Any:
+        try:
+            return self._stream.read(*args, **kwargs)
+        except UnicodeDecodeError:
+            raise
+        except Exception as native:
+            _raise_config_access_error(self.name, "read", native)
+
+
+class _ConfigOpen:
+    def __init__(self, manager: Any, display: str) -> None:
+        self._manager = manager
+        self._display = display
+
+    def __enter__(self) -> _ConfigReader:
+        try:
+            stream = self._manager.__enter__()
+        except Exception as native:
+            _raise_config_access_error(self._display, "open", native)
+        return _ConfigReader(stream, self._display)
+
+    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> Any:
+        try:
+            return self._manager.__exit__(exc_type, exc, traceback)
+        except Exception as native:
+            if native is exc:
+                raise
+            _raise_config_access_error(self._display, "close", native)
+
+
+class _ConfigPathView:
+    def __init__(self, path: Any) -> None:
+        self._path = path
+
+    def open(self, *args: Any, **kwargs: Any) -> _ConfigOpen:
+        display = _display_location(self._path)
+        try:
+            manager = self._path.open(*args, **kwargs)
+        except Exception as native:
+            _raise_config_access_error(display, "open", native)
+        return _ConfigOpen(manager, display)
 
 
 class _UPathFilesMixin(ConfigFileSourceMixin):
@@ -325,9 +465,9 @@ class _UPathFilesMixin(ConfigFileSourceMixin):
         for file in files:
             opened = _open_candidate(file)
             target = file if opened is None else opened
-            if not target.is_file():
+            if not _config_is_file(target):
                 continue
-            updating = self._read_file(cast(Any, target))
+            updating = self._read_file(cast(Any, _ConfigPathView(target)))
             data = deep_update(data, updating) if deep_merge else {**data, **updating}
         return data
 
@@ -352,9 +492,9 @@ class UPathTomlSource(_UPathFilesMixin, TomlConfigSettingsSource):
         for item in paths:
             opened = _open_candidate(item)
             if opened is not None:
-                if opened.exists():
+                if config_path_exists(opened):
                     return True
-            elif item.is_file():
+            elif _config_is_file(item):
                 return True
         return False
 
@@ -381,8 +521,8 @@ class UPathDotenvSource(DotEnvSettingsSource):
         return self._read_env_files()
 
     def _read_env_file(self, file_path: Any) -> Mapping[str, str | None]:
-        with file_path.open("r", encoding=self.env_file_encoding or "utf8") as stream:
-            file_vars = dotenv_values(stream=stream)
+        with _ConfigPathView(file_path).open("r", encoding=self.env_file_encoding or "utf8") as stream:
+            file_vars = dotenv_values(stream=cast(Any, stream))
         return parse_env_vars(
             file_vars, self.case_sensitive, self.env_ignore_empty, self.env_parse_none_str,
         )
@@ -397,9 +537,12 @@ class UPathDotenvSource(DotEnvSettingsSource):
         for env_file in env_files:
             path = _open_candidate(env_file)
             if path is None:
-                path = UPath(str(env_file))
+                try:
+                    path = UPath(str(env_file))
+                except Exception as native:
+                    _raise_invalid_location(env_file, native)
             # FIFOs exist only on local filesystems; remote paths need not implement them.
-            if path.is_file() or (_is_local(path) and path.is_fifo()):
+            if _config_is_file(path, allow_fifo=True):
                 dotenv_vars.update(self._read_env_file(path))
         return dotenv_vars
 

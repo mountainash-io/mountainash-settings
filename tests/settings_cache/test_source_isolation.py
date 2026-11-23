@@ -10,10 +10,15 @@ identity.
 """
 from __future__ import annotations
 
+import builtins
+import errno
+import io
 import json
+import os
 import threading
+import traceback
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
@@ -81,6 +86,142 @@ def memory_reads(monkeypatch, memory_config_root):
 
     monkeypatch.setattr(filesystem_class, "_open", counting)
     return lambda path: sum(1 for read in reads if read.endswith("/" + path.name))
+
+
+_NATIVE_DETAIL = "P8_NATIVE_" + "DETAIL"
+
+
+class _LocalOpens:
+    """Count or fail real opens of chosen local files; every other open runs untouched."""
+
+    def __init__(self) -> None:
+        self._counts: dict[str, int] = {}
+        self._native: dict[str, BaseException] = {}
+
+    def watch(self, path) -> None:
+        self._counts.setdefault(os.fspath(path), 0)
+
+    def fail(self, path) -> OSError:
+        """Make every open of ``path`` raise one native error; returns that exact object."""
+        key = os.fspath(path)
+        self.watch(path)
+        # Only the filename and note carry the sentinel: a safe cause may repeat strerror.
+        error = PermissionError(errno.EACCES, "Permission denied", f"{key}?{_NATIVE_DETAIL}#fragment")
+        error.add_note(_NATIVE_DETAIL)
+        self._native[key] = error
+        return error
+
+    def count(self, path) -> int:
+        return self._counts[os.fspath(path)]
+
+    def observe(self, file) -> None:
+        if isinstance(file, (str, os.PathLike)):
+            key = os.fspath(file)
+            if key in self._counts:
+                self._counts[key] += 1
+                if key in self._native:
+                    raise self._native[key]
+
+
+@pytest.fixture
+def local_opens(monkeypatch):
+    """Observe opens of watched local files through both the builtin and pathlib/UPath routes."""
+    opens = _LocalOpens()
+    real_open = io.open
+
+    def watching_open(file, *args, **kwargs):
+        opens.observe(file)
+        return real_open(file, *args, **kwargs)
+
+    monkeypatch.setattr(io, "open", watching_open)
+    monkeypatch.setattr(builtins, "open", watching_open)
+    return opens
+
+
+def _assert_native_unreachable(error: BaseException, native: BaseException) -> None:
+    """Walk the cause/context graph: the injected native error and its text must be gone."""
+    pending, seen = [error], set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        assert current is not native
+        for text in (str(current), repr(current), repr(current.args), repr(vars(current)),
+                     "".join(traceback.format_exception(current))):
+            assert _NATIVE_DETAIL not in text
+        pending.extend(link for link in (current.__cause__, current.__context__) if link is not None)
+
+
+_HOOK_SHAPES = ["inherited", "no-super", "super", "two-level", "staticmethod", "function"]
+# Hook bodies a successful construction runs, outermost first.
+_EXPECTED_ENTRIES = {
+    "inherited": [], "no-super": ["hook"], "super": ["hook"],
+    "two-level": ["child", "parent"], "staticmethod": ["hook"], "function": ["hook"],
+}
+
+
+def _hooked_settings(shape: str, entered: list[str]):
+    """Settings class whose source hook has the named shape; ``entered`` records hook bodies run."""
+
+    class _Plain(MountainAshBaseSettings):
+        marker: str = "unset"
+        other: str = "unset"
+
+    def no_super(settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings):
+        entered.append("hook")
+        return (init_settings, dotenv_settings)
+
+    if shape == "inherited":
+        return _Plain
+    if shape == "no-super":
+        class _NoSuper(_Plain):
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                entered.append("hook")
+                return (init_settings, dotenv_settings)
+        return _NoSuper
+    if shape == "super":
+        class _Super(_Plain):
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                entered.append("hook")
+                return super().settings_customise_sources(
+                    settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+                )
+        return _Super
+    if shape == "two-level":
+        class _Parent(_Plain):
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                entered.append("parent")
+                return super().settings_customise_sources(
+                    settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+                )
+
+        class _Child(_Parent):
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                entered.append("child")
+                return super().settings_customise_sources(
+                    settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+                )
+        return _Child
+    if shape == "staticmethod":
+        class _Static(_Plain):
+            settings_customise_sources = cast(Any, staticmethod(no_super))
+        return _Static
+    class _Function(_Plain):
+        settings_customise_sources = cast(Any, no_super)
+    return _Function
 
 
 def _pausing_settings_class(paused: threading.Event, resume: threading.Event):
@@ -209,6 +350,29 @@ class TestConcurrentConstructionIsolation:
         assert [str(p) for p in settings_a.SETTINGS_SOURCE_ENV_FILES] == [str(remote_a)]
         assert (later.marker, later.count) == ("unset", 0)
 
+    def test_local_dotenv_failure_in_an_overlapping_construction_does_not_disturb_the_paused_one(
+        self, tmp_path, local_opens,
+    ):
+        path_a = _write_marker(tmp_path / "paused_a.env", "env", "a")
+        path_bad = _write_marker(tmp_path / "paused_bad.env", "env", "bad")
+        path_c = _write_marker(tmp_path / "paused_c.env", "env", "c")
+        local_opens.fail(path_bad)
+        paused, resume = threading.Event(), threading.Event()
+        settings_cls = _pausing_settings_class(paused, resume)
+
+        def failing_then_unrelated():
+            with pytest.raises(PermissionError):
+                settings_cls(config_files=[path_bad])
+            return settings_cls(config_files=[path_c])
+
+        settings_a, later = _construct_a_paused_around(
+            settings_cls, paused, resume, [path_a], failing_then_unrelated,
+        )
+
+        assert (settings_a.marker, later.marker) == ("a", "c")
+        assert [str(p) for p in settings_a.SETTINGS_SOURCE_ENV_FILES] == [str(path_a)]
+
+
 
 class TestNestedConstruction:
     def test_outer_hook_constructing_a_different_class_restores_outer_frame(self, marker_source):
@@ -291,6 +455,37 @@ class TestNestedConstruction:
 
         assert _LaterSettings().marker == "unset"
         assert _LaterSettings(config_files=[good_path]).marker == "good"
+
+    def test_nested_construction_hydrates_each_incoming_source_from_its_own_frame(self, tmp_path, local_opens):
+        outer_path = _write_marker(tmp_path / "outer_hydrated.env", "env", "outer")
+        inner_path = _write_marker(tmp_path / "inner_hydrated.env", "env", "inner")
+        local_opens.watch(outer_path)
+        local_opens.watch(inner_path)
+        observed: dict[str, object] = {}
+
+        class _NestingSettings(MountainAshBaseSettings):
+            marker: str = "unset"
+
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                if not getattr(cls, "_nesting_guard", False):
+                    observed["outer_before"] = dict(dotenv_settings.env_vars)
+                    cls._nesting_guard = True
+                    try:
+                        observed["inner"] = _NestingSettings(config_files=[inner_path]).marker
+                    finally:
+                        cls._nesting_guard = False
+                return super().settings_customise_sources(
+                    settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+                )
+
+        outer = _NestingSettings(config_files=[outer_path])
+
+        assert observed == {"outer_before": {"marker": "outer"}, "inner": "inner"}
+        assert outer.marker == "outer"
+        assert (local_opens.count(outer_path), local_opens.count(inner_path)) == (1, 1)
 
 
 class TestCacheMaterializationPrecedence:
@@ -458,6 +653,297 @@ class TestCustomHookCompatibility:
         assert seen["files"] == (str(local),)
         assert settings.marker == "local"
 
+    @pytest.mark.parametrize("shape", _HOOK_SHAPES)
+    def test_every_supported_hook_shape_loads_the_local_dotenv_with_one_parse(
+        self, tmp_path, local_opens, shape,
+    ):
+        path = tmp_path / "shapes.env"
+        path.write_text("marker=local\nother=kept\n")
+        local_opens.watch(path)
+        entered: list[str] = []
+
+        settings = _hooked_settings(shape, entered)(config_files=[path])
+
+        assert (settings.marker, settings.other) == ("local", "kept")
+        assert local_opens.count(path) == 1
+        assert entered == _EXPECTED_ENTRIES[shape]
+
+    @pytest.mark.parametrize("shape", _HOOK_SHAPES)
+    def test_local_dotenv_open_failure_is_safe_before_any_hook_sees_the_source(
+        self, tmp_path, local_opens, shape,
+    ):
+        path = _write_marker(tmp_path / "unreadable.env", "env", "never-loaded")
+        native = local_opens.fail(path)
+        entered: list[str] = []
+
+        with pytest.raises(PermissionError) as caught:
+            _hooked_settings(shape, entered)(config_files=[path])
+
+        # The access error is raised while preparing the incoming source, so not even
+        # a no-super hook body ran, and the native error is unreachable from it.
+        assert entered == []
+        assert caught.value.errno == errno.EACCES
+        assert caught.value.filename == str(path)
+        _assert_native_unreachable(caught.value, native)
+
+    def test_mixed_selection_local_failure_precedes_any_remote_open(
+        self, tmp_path, memory_config_root, memory_reads, local_opens,
+    ):
+        local = _write_marker(tmp_path / "mixed_unreadable.env", "env", "local")
+        remote = _write_marker(memory_config_root / "mixed_remote.env", "env", "remote")
+        native = local_opens.fail(local)
+        entered: list[str] = []
+
+        with pytest.raises(PermissionError) as caught:
+            _hooked_settings("super", entered)(config_files=[str(local), remote])
+
+        assert entered == []
+        assert memory_reads(remote) == 0
+        _assert_native_unreachable(caught.value, native)
+
+    def test_delayed_rethrow_keeps_a_clean_error_clean(self, tmp_path, local_opens):
+        path = _write_marker(tmp_path / "ambient_unreadable.env", "env", "never-loaded")
+        native = local_opens.fail(path)
+        ambient = RuntimeError("ambient failure")
+
+        try:
+            raise ambient
+        except RuntimeError:
+            with pytest.raises(PermissionError) as caught:
+                _hooked_settings("no-super", [])(config_files=[path])
+
+        assert caught.value.__context__ is None
+        _assert_native_unreachable(caught.value, native)
+
+    def test_delayed_rethrow_keeps_an_existing_content_chain(self, tmp_path):
+        path = _write_marker(tmp_path / "chained.env", "env", "value")
+
+        class _ChainingSettings(MountainAshBaseSettings):
+            marker: str = "unset"
+
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                try:
+                    raise KeyError("content-detail")
+                except KeyError as inner:
+                    raise ValueError("bad source content") from inner
+
+        ambient = RuntimeError("ambient failure")
+        try:
+            raise ambient
+        except RuntimeError:
+            with pytest.raises(ValueError, match="bad source content") as caught:
+                _ChainingSettings(config_files=[path])
+
+        # The content cause was raised under the same handler, so its own ambient
+        # context is part of the existing chain and stays; the rethrow adds nothing.
+        error = caught.value
+        assert isinstance(error.__cause__, KeyError) and error.__cause__.args == ("content-detail",)
+        assert error.__context__ is error.__cause__
+        assert error.__cause__.__context__ is ambient
+
+    def test_no_super_hook_receives_the_ordinary_source_hydrated_from_the_local_selection(
+        self, tmp_path, local_opens,
+    ):
+        path = tmp_path / "ordinary.env"
+        path.write_text("APP_marker=local\nAPP_other=kept\nunrelated=x\n")
+        local_opens.watch(path)
+        seen: dict[str, object] = {}
+
+        class _NoSuperSettings(MountainAshBaseSettings):
+            marker: str = "unset"
+            other: str = "unset"
+
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                seen["source"] = dotenv_settings
+                seen["init"] = init_settings
+                return (init_settings, dotenv_settings)
+
+        settings = _NoSuperSettings(config_files=[path], env_prefix="APP_")
+        source = cast(DotEnvSettingsSource, seen["source"])
+
+        assert (settings.marker, settings.other) == ("local", "kept")
+        assert type(source) is DotEnvSettingsSource
+        assert source.env_file == (str(path),)
+        assert dict(source.env_vars) == {"APP_marker": "local", "APP_other": "kept", "unrelated": "x"}
+        assert (source.env_prefix, source.env_file_encoding) == ("APP_", "utf-8")
+        assert (source.case_sensitive, source.env_ignore_empty, source.env_parse_none_str) == (True, True, "None")
+        assert source._init_state is cast(InitSettingsSource, seen["init"])._init_state
+        assert local_opens.count(path) == 1
+
+    def test_source_mutated_before_super_is_neither_reread_nor_replaced(self, tmp_path, local_opens):
+        path = _write_marker(tmp_path / "mutated.env", "env", "from-file")
+        local_opens.watch(path)
+        seen: dict[str, object] = {}
+
+        class _MutatingSettings(MountainAshBaseSettings):
+            marker: str = "unset"
+
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                dotenv_settings.env_vars = {**dotenv_settings.env_vars, "marker": "mutated"}
+                seen["incoming"] = dotenv_settings
+                sources = super().settings_customise_sources(
+                    settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+                )
+                seen["sources"] = sources
+                return sources
+
+        settings = _MutatingSettings(config_files=[path])
+
+        assert settings.marker == "mutated"
+        assert any(source is seen["incoming"] for source in cast(tuple, seen["sources"]))
+        assert local_opens.count(path) == 1
+
+    @pytest.mark.parametrize("calls_super", [False, True])
+    def test_hook_declared_on_a_plain_mixin_sees_the_hydrated_source(self, tmp_path, local_opens, calls_super):
+        path = tmp_path / "mixin.env"
+        path.write_text("marker=local\nother=kept\n")
+        local_opens.watch(path)
+        seen: dict[str, object] = {}
+
+        class _PlainSourceMixin:
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                seen["before"] = dict(dotenv_settings.env_vars)
+                if calls_super:
+                    return cast(Any, super()).settings_customise_sources(
+                        settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+                    )
+                return (init_settings, dotenv_settings)
+
+        class _MixinSettings(_PlainSourceMixin, MountainAshBaseSettings):
+            marker: str = "unset"
+            other: str = "unset"
+
+        settings = _MixinSettings(config_files=[path])
+
+        # The effective hook is the mixin's: direct construction withholds the preliminary
+        # read, so the data must already be present before that hook body runs.
+        assert seen["before"] == {"marker": "local", "other": "kept"}
+        assert (settings.marker, settings.other) == ("local", "kept")
+        assert local_opens.count(path) == 1
+
+    def test_plain_mixin_hook_local_open_failure_is_safe_before_the_hook(self, tmp_path, local_opens):
+        path = _write_marker(tmp_path / "mixin_unreadable.env", "env", "never-loaded")
+        native = local_opens.fail(path)
+        entered: list[str] = []
+
+        class _PlainSourceMixin:
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                entered.append("hook")
+                return (init_settings, dotenv_settings)
+
+        class _MixinSettings(_PlainSourceMixin, MountainAshBaseSettings):
+            marker: str = "unset"
+
+        with pytest.raises(PermissionError) as caught:
+            _MixinSettings(config_files=[path])
+
+        assert entered == []
+        _assert_native_unreachable(caught.value, native)
+
+    def test_replacement_source_passed_to_super_keeps_the_hook_authority(self, tmp_path, local_opens):
+        path = _write_marker(tmp_path / "disabled.env", "env", "from-file")
+        local_opens.watch(path)
+
+        class _DisablingSettings(MountainAshBaseSettings):
+            marker: str = "unset"
+
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                # Deliberately turn local dotenv off by replacing the incoming source.
+                replacement = DotEnvSettingsSource(settings_cls, env_file=None)
+                return super().settings_customise_sources(
+                    settings_cls, init_settings, env_settings, replacement, file_secret_settings,
+                )
+
+        settings = _DisablingSettings(config_files=[path])
+
+        assert settings.marker == "unset"
+        # Only the incoming source was prepared, once, before the hook ran.
+        assert local_opens.count(path) == 1
+
+    def test_manual_same_class_source_passed_to_super_inside_a_hook_is_not_hydrated(
+        self, tmp_path, local_opens,
+    ):
+        path = _write_marker(tmp_path / "probed.env", "env", "from-file")
+        local_opens.watch(path)
+        probes: list[DotEnvSettingsSource] = []
+
+        class _ProbingSettings(MountainAshBaseSettings):
+            marker: str = "unset"
+
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                probe = DotEnvSettingsSource(settings_cls)
+                super().settings_customise_sources(
+                    settings_cls, init_settings, env_settings, probe, file_secret_settings,
+                )
+                probes.append(probe)
+                return super().settings_customise_sources(
+                    settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+                )
+
+        settings = _ProbingSettings(config_files=[path])
+
+        assert (probes[0].env_file, dict(probes[0].env_vars)) == (None, {})
+        assert settings.marker == "from-file"
+        assert local_opens.count(path) == 1
+
+    @pytest.mark.parametrize("form", ["callable-object", "class-bound-descriptor"])
+    def test_uncommon_class_level_hook_forms_still_receive_hydrated_sources(self, tmp_path, local_opens, form):
+        path = _write_marker(tmp_path / "forms.env", "env", "from-file")
+        local_opens.watch(path)
+        seen: dict[str, object] = {}
+
+        def hook(settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings):
+            seen["before"] = dict(dotenv_settings.env_vars)
+            return (init_settings, dotenv_settings)
+
+        class _CallableHook:
+            def __call__(self, *args, **kwargs):
+                return hook(*args, **kwargs)
+
+        class _ClassBoundHook:
+            def __get__(self, obj, owner=None):
+                seen["owner"] = owner
+                return hook
+
+        hook_type, hook_object = (
+            (_CallableHook, _CallableHook()) if form == "callable-object" else (_ClassBoundHook, _ClassBoundHook())
+        )
+
+        class _FormSettings(MountainAshBaseSettings):
+            model_config = cast(SettingsConfigDict, {"ignored_types": (hook_type,)})
+            marker: str = "unset"
+            settings_customise_sources = cast(Any, hook_object)
+
+        settings = _FormSettings(config_files=[path])
+
+        assert seen["before"] == {"marker": "from-file"}
+        assert settings.marker == "from-file"
+        assert local_opens.count(path) == 1
+        if form == "class-bound-descriptor":
+            assert seen["owner"] is _FormSettings
+
+
 
 class TestDirectHookFallback:
     def test_manual_hook_call_without_active_frame_uses_static_class_config(self, tmp_path):
@@ -494,6 +980,62 @@ class TestDirectHookFallback:
         settings = _NoMutationSettings(config_files=[path])
         assert settings.marker == "no-mutation"
         assert dict(_NoMutationSettings.model_config) == before
+
+    def test_standalone_hook_call_leaves_the_ordinary_source_untouched(self, tmp_path, local_opens):
+        path = _write_marker(tmp_path / "standalone_untouched.env", "env", "never-read")
+        local_opens.watch(path)
+
+        class _StandaloneSettings(MountainAshBaseSettings):
+            marker: str = "unset"
+
+        class _Declared(_StandaloneSettings):
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                return super().settings_customise_sources(
+                    settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+                )
+
+        for settings_class in (_StandaloneSettings, _Declared):
+            source = DotEnvSettingsSource(settings_class)
+            settings_class.settings_customise_sources(
+                settings_class, InitSettingsSource(settings_class, {}), EnvSettingsSource(settings_class),
+                source, SecretsSettingsSource(settings_class),
+            )
+            assert source.env_file is None
+            assert dict(source.env_vars) == {}
+        assert local_opens.count(path) == 0
+
+    def test_hook_call_for_another_class_inside_a_direct_frame_is_not_hydrated(self, tmp_path, local_opens):
+        path = _write_marker(tmp_path / "frame_owner.env", "env", "owner")
+        local_opens.watch(path)
+        probes: list[DotEnvSettingsSource] = []
+
+        class _Other(MountainAshBaseSettings):
+            marker: str = "unset"
+
+        class _Owner(MountainAshBaseSettings):
+            marker: str = "unset"
+
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                probe = DotEnvSettingsSource(_Other)
+                _Other.settings_customise_sources(
+                    _Other, InitSettingsSource(_Other, {}), EnvSettingsSource(_Other), probe,
+                    SecretsSettingsSource(_Other),
+                )
+                probes.append(probe)
+                return super().settings_customise_sources(
+                    settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+                )
+
+        assert _Owner(config_files=[path]).marker == "owner"
+        assert (probes[0].env_file, dict(probes[0].env_vars)) == (None, {})
+        assert local_opens.count(path) == 1
+
 
 
 @pytest.mark.parametrize("representation", ["string", "upath"])
@@ -797,3 +1339,49 @@ def test_cached_class_dotenv_accepts_scalar_upath(memory_config_root, isolated_s
     assert params.get_settings().VALUE == "class-upath"
     path.unlink()
     assert params.get_settings().VALUE == "class-upath"
+
+
+class TestHookWrappingKeepsCacheAdmission:
+    def test_inheriting_subclass_shares_the_base_hook_and_stays_cache_admissible(
+        self, tmp_path, isolated_settings_manager,
+    ):
+        path = _write_marker(tmp_path / "inherited.env", "env", "inherited")
+
+        class _Parent(MountainAshBaseSettings):
+            marker: str = "unset"
+
+        class _Child(_Parent):
+            pass
+
+        # Only the base hook and hooks declared in a subclass body are wrapped; an
+        # inheriting subclass resolves to the very same hook function.
+        base_hook = MountainAshBaseSettings.settings_customise_sources.__func__
+        assert _Parent.settings_customise_sources.__func__ is base_hook
+        assert _Child.settings_customise_sources.__func__ is base_hook
+        parameters = SettingsParameters.create(settings_class=_Child, config_files=[path])
+        assert parameters.get_settings().marker == "inherited"
+
+    def test_declared_hook_without_capture_hook_is_still_rejected_for_cache(self, isolated_settings_manager):
+        class _Legacy(MountainAshBaseSettings):
+            marker: str = "unset"
+
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                return super().settings_customise_sources(
+                    settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+                )
+
+        class _Inheriting(_Legacy):
+            pass
+
+        assert _Legacy.settings_customise_sources.__func__ is not (
+            MountainAshBaseSettings.settings_customise_sources.__func__
+        )
+        for settings_class in (_Legacy, _Inheriting):
+            parameters = SettingsParameters.create(settings_class=settings_class)
+            with pytest.raises(ValueError):
+                parameters.get_settings()
+            assert not isolated_settings_manager.is_initialised(parameters)
+        assert _Legacy(marker="direct").marker == "direct"
