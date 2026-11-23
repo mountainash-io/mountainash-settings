@@ -262,14 +262,15 @@ class TestSeparateConfigFiles:
         assert result.yaml_files == (temp_yaml_file,)
 
     @pytest.mark.unit
-    def test_separate_expands_user_path(self, tmp_path, monkeypatch):
+    @pytest.mark.parametrize("representation", [str, UPath])
+    def test_separate_expands_user_path(self, tmp_path, monkeypatch, representation):
         """Test that ~ in paths is expanded."""
         yaml_file = tmp_path / "settings.yaml"
         yaml_file.write_text("TEST: value")
         monkeypatch.setenv("HOME", str(tmp_path))
         monkeypatch.setenv("USERPROFILE", str(tmp_path))
-        result = SettingsFileHandler.separate_config_files(["~/settings.yaml"])
-        assert result.yaml_files == (str(yaml_file),)
+        result = SettingsFileHandler.separate_config_files([representation("~/settings.yaml")])
+        assert result.yaml_files == (representation(yaml_file),)
 
     @pytest.mark.unit
     def test_separate_dotenv_file(self, temp_dotenv_file):
@@ -745,3 +746,18 @@ class TestIntegration:
         grouped = SettingsFileHandler.group_files_by_type(files)
         assert "env" in grouped
         assert len(grouped["env"]) == 2
+
+
+def test_remote_dedup_preserves_distinct_access_options():
+    location = "memory:///normalization/config.yaml"
+    first = UPath(location, headers={"X-Value": "first"})
+    same = UPath(location, headers={"X-Value": "first"})
+    other = UPath(location, headers={"X-Value": "other"})
+    paths = SettingsFileHandler.merge_config_files([first], [same, other])
+    assert [path.storage_options["headers"]["X-Value"] for path in paths] == ["first", "other"]
+    assert SettingsFileHandler.format_config_file_tuple([location, UPath(location)]) == (UPath(location),)
+
+
+def test_http_query_does_not_hide_registered_format():
+    assert FileTypeRegistry.identify("https://example.invalid/config.yaml?signature=private") == "yaml"
+    assert FileTypeRegistry.identify("https://example.invalid/.env?signature=private") == "env"
