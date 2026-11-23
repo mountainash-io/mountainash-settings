@@ -64,10 +64,12 @@ class _SettingsMetaclass(ModelMetaclass):
     Mypy 1.10.1 synthesizes field-only constructors for classes whose metaclass
     is directly decorated as a dataclass transform. An undecorated private
     subclass preserves our inherited constructor and its source controls.
-    Runtime model construction remains Pydantic-owned, apart from wrapping the
-    source hook declared by the base class or in a subclass body (never one that
-    is merely inherited) so a direct construction's incoming dotenv source is
-    prepared through the protected adapter before the hook can see it.
+    Runtime model construction remains Pydantic-owned, apart from wrapping the effective
+    source hook so a direct construction's incoming dotenv source is prepared through the
+    protected adapter before the hook can see it. That is the hook declared in the class
+    body, or, when the body declares none, one declared by an ancestor that is not itself a
+    settings class (a plain mixin). A hook inherited from a settings ancestor was already
+    wrapped there and stays shared, which keeps cache admission's function identity.
     """
 
     def __init__(
@@ -77,4 +79,13 @@ class _SettingsMetaclass(ModelMetaclass):
         # caller's stack depth to capture the defining namespace for forward references.
         super().__init__(cls_name, bases, namespace, *args, **kwargs)
         if _SOURCE_HOOK in namespace:
-            setattr(cls, _SOURCE_HOOK, _wrap_source_hook(namespace[_SOURCE_HOOK]))
+            declared = namespace[_SOURCE_HOOK]
+        else:
+            declared = None
+            for ancestor in cls.__mro__[1:]:
+                if _SOURCE_HOOK in vars(ancestor):
+                    if not isinstance(ancestor, _SettingsMetaclass):
+                        declared = vars(ancestor)[_SOURCE_HOOK]
+                    break
+        if declared is not None:
+            setattr(cls, _SOURCE_HOOK, _wrap_source_hook(declared))

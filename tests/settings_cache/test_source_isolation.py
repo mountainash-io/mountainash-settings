@@ -802,6 +802,147 @@ class TestCustomHookCompatibility:
         assert any(source is seen["incoming"] for source in cast(tuple, seen["sources"]))
         assert local_opens.count(path) == 1
 
+    @pytest.mark.parametrize("calls_super", [False, True])
+    def test_hook_declared_on_a_plain_mixin_sees_the_hydrated_source(self, tmp_path, local_opens, calls_super):
+        path = tmp_path / "mixin.env"
+        path.write_text("marker=local\nother=kept\n")
+        local_opens.watch(path)
+        seen: dict[str, object] = {}
+
+        class _PlainSourceMixin:
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                seen["before"] = dict(dotenv_settings.env_vars)
+                if calls_super:
+                    return cast(Any, super()).settings_customise_sources(
+                        settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+                    )
+                return (init_settings, dotenv_settings)
+
+        class _MixinSettings(_PlainSourceMixin, MountainAshBaseSettings):
+            marker: str = "unset"
+            other: str = "unset"
+
+        settings = _MixinSettings(config_files=[path])
+
+        # The effective hook is the mixin's: direct construction withholds the preliminary
+        # read, so the data must already be present before that hook body runs.
+        assert seen["before"] == {"marker": "local", "other": "kept"}
+        assert (settings.marker, settings.other) == ("local", "kept")
+        assert local_opens.count(path) == 1
+
+    def test_plain_mixin_hook_local_open_failure_is_safe_before_the_hook(self, tmp_path, local_opens):
+        path = _write_marker(tmp_path / "mixin_unreadable.env", "env", "never-loaded")
+        native = local_opens.fail(path)
+        entered: list[str] = []
+
+        class _PlainSourceMixin:
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                entered.append("hook")
+                return (init_settings, dotenv_settings)
+
+        class _MixinSettings(_PlainSourceMixin, MountainAshBaseSettings):
+            marker: str = "unset"
+
+        with pytest.raises(PermissionError) as caught:
+            _MixinSettings(config_files=[path])
+
+        assert entered == []
+        _assert_native_unreachable(caught.value, native)
+
+    def test_replacement_source_passed_to_super_keeps_the_hook_authority(self, tmp_path, local_opens):
+        path = _write_marker(tmp_path / "disabled.env", "env", "from-file")
+        local_opens.watch(path)
+
+        class _DisablingSettings(MountainAshBaseSettings):
+            marker: str = "unset"
+
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                # Deliberately turn local dotenv off by replacing the incoming source.
+                replacement = DotEnvSettingsSource(settings_cls, env_file=None)
+                return super().settings_customise_sources(
+                    settings_cls, init_settings, env_settings, replacement, file_secret_settings,
+                )
+
+        settings = _DisablingSettings(config_files=[path])
+
+        assert settings.marker == "unset"
+        # Only the incoming source was prepared, once, before the hook ran.
+        assert local_opens.count(path) == 1
+
+    def test_manual_same_class_source_passed_to_super_inside_a_hook_is_not_hydrated(
+        self, tmp_path, local_opens,
+    ):
+        path = _write_marker(tmp_path / "probed.env", "env", "from-file")
+        local_opens.watch(path)
+        probes: list[DotEnvSettingsSource] = []
+
+        class _ProbingSettings(MountainAshBaseSettings):
+            marker: str = "unset"
+
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                probe = DotEnvSettingsSource(settings_cls)
+                super().settings_customise_sources(
+                    settings_cls, init_settings, env_settings, probe, file_secret_settings,
+                )
+                probes.append(probe)
+                return super().settings_customise_sources(
+                    settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+                )
+
+        settings = _ProbingSettings(config_files=[path])
+
+        assert (probes[0].env_file, dict(probes[0].env_vars)) == (None, {})
+        assert settings.marker == "from-file"
+        assert local_opens.count(path) == 1
+
+    @pytest.mark.parametrize("form", ["callable-object", "class-bound-descriptor"])
+    def test_uncommon_class_level_hook_forms_still_receive_hydrated_sources(self, tmp_path, local_opens, form):
+        path = _write_marker(tmp_path / "forms.env", "env", "from-file")
+        local_opens.watch(path)
+        seen: dict[str, object] = {}
+
+        def hook(settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings):
+            seen["before"] = dict(dotenv_settings.env_vars)
+            return (init_settings, dotenv_settings)
+
+        class _CallableHook:
+            def __call__(self, *args, **kwargs):
+                return hook(*args, **kwargs)
+
+        class _ClassBoundHook:
+            def __get__(self, obj, owner=None):
+                seen["owner"] = owner
+                return hook
+
+        hook_type, hook_object = (
+            (_CallableHook, _CallableHook()) if form == "callable-object" else (_ClassBoundHook, _ClassBoundHook())
+        )
+
+        class _FormSettings(MountainAshBaseSettings):
+            model_config = cast(SettingsConfigDict, {"ignored_types": (hook_type,)})
+            marker: str = "unset"
+            settings_customise_sources = cast(Any, hook_object)
+
+        settings = _FormSettings(config_files=[path])
+
+        assert seen["before"] == {"marker": "from-file"}
+        assert settings.marker == "from-file"
+        assert local_opens.count(path) == 1
+        if form == "class-bound-descriptor":
+            assert seen["owner"] is _FormSettings
+
 
 
 class TestDirectHookFallback:
