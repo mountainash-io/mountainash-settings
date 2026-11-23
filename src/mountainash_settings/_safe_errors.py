@@ -70,15 +70,19 @@ def safe_detail(native: BaseException) -> str:
 def safe_cause(native: BaseException | None) -> OSError | None:
     """The exception an error may chain as ``__cause__`` in place of *native*.
 
-    ``OSError`` with an errno: a fresh exception of the same type carrying only
-    ``errno`` and ``strerror``. Anything else: ``None``.
+    ``OSError`` with an errno: a fresh exception carrying only ``errno`` and
+    ``strerror``. Preserve its type if construction returns an ``OSError``;
+    otherwise fall back to plain ``OSError``. Other native failures: ``None``.
     """
     if not isinstance(native, OSError) or native.errno is None:
         return None
     try:
-        return type(native)(native.errno, native.strerror)
+        cause = type(native)(native.errno, native.strerror)
+        if isinstance(cause, OSError):
+            return cause
     except Exception:  # A subclass constructor may reject (errno, strerror).
-        return OSError(native.errno, native.strerror)
+        pass
+    return OSError(native.errno, native.strerror)
 
 
 def raise_safe(error: BaseException, native: BaseException | None = None) -> t.NoReturn:

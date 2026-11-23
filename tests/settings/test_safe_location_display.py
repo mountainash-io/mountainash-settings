@@ -126,3 +126,30 @@ def test_cause_reconstruction_falls_back_to_plain_oserror():
     cause = safe_cause(native)
     assert type(cause) is OSError
     assert (cause.errno, cause.strerror, cause.filename) == (5, "Input/output error", None)
+
+
+@pytest.mark.parametrize(
+    "replacement", ["SENTINEL-invalid", None, ValueError("SENTINEL-invalid"), OSError],
+    ids=["non-exception", "none", "non-os-exception", "exception-class"],
+)
+def test_raise_safe_falls_back_when_constructor_returns_non_os_instance(replacement):
+    class UnusualOSError(OSError):
+        def __new__(cls, *args):
+            if len(args) == 2:
+                return replacement
+            return super().__new__(cls, *args)
+
+    native = UnusualOSError(5, "Input/output error", "SENTINEL-file")
+    outer = RuntimeError("controlled failure")
+    try:
+        raise native
+    except OSError:
+        with pytest.raises(RuntimeError) as info:
+            raise_safe(outer, native)
+
+    assert info.value is outer
+    cause = outer.__cause__
+    assert type(cause) is OSError
+    assert (cause.errno, cause.strerror, cause.filename) == (5, "Input/output error", None)
+    assert outer.__context__ is None
+    assert "SENTINEL" not in surfaces(outer)
