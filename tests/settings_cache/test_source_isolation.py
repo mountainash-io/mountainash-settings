@@ -18,7 +18,7 @@ import os
 import threading
 import traceback
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
@@ -217,10 +217,10 @@ def _hooked_settings(shape: str, entered: list[str]):
         return _Child
     if shape == "staticmethod":
         class _Static(_Plain):
-            settings_customise_sources = staticmethod(no_super)
+            settings_customise_sources = cast(Any, staticmethod(no_super))
         return _Static
     class _Function(_Plain):
-        settings_customise_sources = no_super
+        settings_customise_sources = cast(Any, no_super)
     return _Function
 
 

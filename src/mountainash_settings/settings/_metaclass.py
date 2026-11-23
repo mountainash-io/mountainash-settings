@@ -71,10 +71,10 @@ class _SettingsMetaclass(ModelMetaclass):
     """
 
     def __init__(
-        cls, name: str, bases: tuple[type, ...], namespace: dict[str, Any], *args: Any, **kwargs: Any,
+        cls, cls_name: str, bases: tuple[type, ...], namespace: dict[str, Any], *args: Any, **kwargs: Any,
     ) -> None:
         # After construction, not in __new__: Pydantic's own __new__ must stay at the
         # caller's stack depth to capture the defining namespace for forward references.
-        super().__init__(name, bases, namespace, *args, **kwargs)
+        super().__init__(cls_name, bases, namespace, *args, **kwargs)
         if _SOURCE_HOOK in namespace:
             setattr(cls, _SOURCE_HOOK, _wrap_source_hook(namespace[_SOURCE_HOOK]))
