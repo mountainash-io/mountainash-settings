@@ -1,3 +1,4 @@
+import os
 from typing import Optional, Union, List, Any, Dict, Type, Tuple, TypeVar, Self, cast
 from upath import UPath
 from string import Formatter
@@ -16,14 +17,21 @@ from pydantic.json_schema import SkipJsonSchema
 from pydantic_settings import (
     BaseSettings,
     DotEnvSettingsSource,
-    JsonConfigSettingsSource,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
-    TomlConfigSettingsSource,
-    YamlConfigSettingsSource,
 )
 
 from mountainash_settings.settings_parameters import SettingsFileHandler, SettingsParameters, SettingsKwargsHandler, SettingsFiles
+from mountainash_settings._config_files import (
+    ConfigPathOwnershipError,
+    UPathJsonSource,
+    UPathTomlSource,
+    UPathYamlSource,
+    config_path_label,
+    dotenv_view,
+    is_remote_config_path,
+    own_config_paths,
+)
 from mountainash_settings.settings_parameters.filehandler import ConfigFilesInput
 from ._metaclass import _SettingsMetaclass
 
@@ -35,20 +43,56 @@ _CACHE_SOURCE_UNSET = object()
 _LOCAL_PATH_TYPE = type(UPath("."))
 
 
-@dataclass(frozen=True)
+def _safe_labels(paths: Any) -> tuple[Any, ...]:
+    """Public provenance entries: ordinary local form, remote userinfo/query stripped."""
+    return tuple(config_path_label(path) for path in paths)
+
+
+def _selects_remote_dotenv(selection: Any) -> bool:
+    """Whether a dotenv ``env_file`` selection names any non-local location."""
+    if selection is None:
+        return False
+    items = (selection,) if isinstance(selection, (str, os.PathLike, UPath)) else selection
+    return any(is_remote_config_path(item) for item in items)
+
+
+def _dotenv_views(
+    dotenv_settings: DotEnvSettingsSource, env_files: Any,
+) -> tuple[DotEnvSettingsSource, DotEnvSettingsSource]:
+    """The primary dotenv source and its unprefixed fallback, sharing one parse.
+
+    ``env_files`` is the invocation's full ordered selection when a direct frame
+    supplies one (the incoming source then only parsed its local subset); otherwise
+    the incoming source's own selection stands. Only an ordinary incoming source that
+    cannot open its remote selection is adapted; arbitrary custom subclasses and
+    already adapted or local-only sources keep their own parse.
+    """
+    primary = dotenv_settings
+    if type(dotenv_settings) is DotEnvSettingsSource:
+        selection = dotenv_settings.env_file if env_files is _CACHE_SOURCE_UNSET else env_files
+        if _selects_remote_dotenv(selection):
+            primary = dotenv_view(dotenv_settings, selection, dotenv_settings.env_prefix)
+    fallback = dotenv_view(primary, primary.env_file, "", captured_env=primary.env_vars)
+    return primary, fallback
+
+
+@dataclass
 class _DirectSourceFrame:
     """Invocation-local file-source paths for one direct construction (MAS-SEC-004).
 
-    Carries only the declared settings class and normalized YAML/TOML/JSON
-    path tuples -- never resolved credential values. Consulted by
+    Carries only the declared settings class and the full ordered dotenv plus
+    normalized YAML/TOML/JSON path tuples -- never resolved credential values. Consulted by
     ``settings_customise_sources`` only when it belongs to the class
-    currently under construction; never exposed as a public API.
+    currently under construction; never exposed as a public API. ``prepared`` records,
+    for this invocation only, that its preliminary dotenv source has been filled.
     """
 
     settings_class: Type[BaseSettings]
+    env_files: Any
     yaml_files: Any
     toml_files: Any
     json_files: Any
+    prepared: bool = False
 
 
 _CURRENT_DIRECT_SOURCE_FRAME: ContextVar[Optional["_DirectSourceFrame"]] = ContextVar(
@@ -58,7 +102,7 @@ _CURRENT_DIRECT_SOURCE_FRAME: ContextVar[Optional["_DirectSourceFrame"]] = Conte
 
 @contextmanager
 def _direct_source_frame(
-    settings_class: Type[BaseSettings], yaml_files: Any, toml_files: Any, json_files: Any,
+    settings_class: Type[BaseSettings], env_files: Any, yaml_files: Any, toml_files: Any, json_files: Any,
 ):
     """Install this invocation's file-source paths for the duration of construction.
 
@@ -67,12 +111,46 @@ def _direct_source_frame(
     cannot leak one invocation's source paths into another's.
     """
 
-    frame = _DirectSourceFrame(settings_class, yaml_files, toml_files, json_files)
+    frame = _DirectSourceFrame(settings_class, env_files, yaml_files, toml_files, json_files)
     token = _CURRENT_DIRECT_SOURCE_FRAME.set(frame)
     try:
         yield frame
     finally:
         _CURRENT_DIRECT_SOURCE_FRAME.reset(token)
+
+
+def _local_dotenv_selection(env_files: Any) -> Optional[tuple[str, ...]]:
+    """The ordinary local subset of a direct dotenv selection, in the form Pydantic received."""
+    if env_files is None:
+        return None
+    return tuple(str(path) for path in env_files if not is_remote_config_path(path)) or None
+
+
+def _prepare_direct_dotenv(settings_cls: Any, dotenv_settings: Any) -> None:
+    """Fill Pydantic's incoming dotenv source from the active direct frame, once.
+
+    Direct construction hands Pydantic ``_env_file=None`` so the preliminary source reads
+    nothing through unprotected opens. The first wrapped hook callback of the frame's own
+    class is that preliminary source: before the hook body runs, it receives the
+    invocation's local selection and parsed values through the protected adapter, keeping
+    its object, flags and shared init state. The frame then records that ownership was
+    established, so a later super call, a hook's replacement source or any other source
+    passed in the same invocation keeps the hook's own authority and is never read.
+    """
+    frame = _CURRENT_DIRECT_SOURCE_FRAME.get()
+    if (
+        frame is None
+        or frame.prepared
+        or frame.settings_class is not settings_cls
+        or type(dotenv_settings) is not DotEnvSettingsSource
+    ):
+        return
+    frame.prepared = True
+    local_files = _local_dotenv_selection(frame.env_files)
+    if local_files is not None:
+        view = dotenv_view(dotenv_settings, local_files, dotenv_settings.env_prefix)
+        dotenv_settings.env_file = local_files
+        dotenv_settings.env_vars = view.env_vars
 
 
 class _UnownedReconstruction(Exception):
@@ -411,6 +489,8 @@ def _detach_cached_result(instance: BaseSettings) -> None:
     source_private = dict(object.__getattribute__(instance, "__pydantic_private__") or {})
     # The bound secret store travels by identity, never copied or reconstructed.
     retained_secret_store = source_private.pop("_settings_secret_store", None)
+    # Source selectors are owned by the dedicated helper, never the generic copier.
+    retained_source_paths = source_private.pop("_settings_source_paths", None)
     memo: dict[int, Any] = {}
     active: set[int] = set()
     try:
@@ -424,8 +504,15 @@ def _detach_cached_result(instance: BaseSettings) -> None:
         )
     except (_UnownedReconstruction, RecursionError):
         raise ValueError("Cached settings result cannot be safely owned") from None
+    try:
+        detached_source_paths = (
+            None if retained_source_paths is None else own_config_paths(retained_source_paths)
+        )
+    except ConfigPathOwnershipError:
+        raise ValueError("Cached settings result cannot be safely owned") from None
     detached_dict.update(retained_metadata)
     detached_private["_settings_secret_store"] = retained_secret_store
+    detached_private["_settings_source_paths"] = detached_source_paths
     object.__setattr__(instance, "__dict__", detached_dict)
     object.__setattr__(instance, "__pydantic_extra__", detached_extra)
     object.__setattr__(instance, "__pydantic_private__", detached_private)
@@ -487,6 +574,11 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
     SETTINGS_SOURCE_JSON_FILES: Optional[Union[Any, str, List[Any|str]]] =      Field(default=None)
     SETTINGS_SOURCE_KWARG_NAMES: tuple[str, ...] = Field(default=())
     _settings_reconstruction_kwargs: Optional[dict[str, Any]] = PrivateAttr(default=None)
+    # Private, ordered, independently owned source selectors (full options, caller
+    # order) from which extract_settings_parameters() rebuilds the recipe. None
+    # means no faithful owned description exists (existing unowned-recipe convention).
+    # Public SETTINGS_SOURCE_*_FILES carry safe labels only and are never a recipe.
+    _settings_source_paths: Optional[tuple[Any, ...]] = PrivateAttr(default=None)
     _settings_secret_store: Optional[Any] = PrivateAttr(default=None)
     SETTINGS_SOURCE_SECRETS_DIR: Optional[str] = Field(default=None)
 
@@ -562,10 +654,13 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
         object.__setattr__(self, "SETTINGS_CLASS", type(self))
         object.__setattr__(self, "SETTINGS_CLASS_NAME", type(self).__name__)
         object.__setattr__(self, "SETTINGS_SOURCE_ENV_PREFIX", parameters.env_prefix)
-        object.__setattr__(self, "SETTINGS_SOURCE_ENV_FILES", config_files.env_files)
-        object.__setattr__(self, "SETTINGS_SOURCE_YAML_FILES", config_files.yaml_files)
-        object.__setattr__(self, "SETTINGS_SOURCE_TOML_FILES", config_files.toml_files)
-        object.__setattr__(self, "SETTINGS_SOURCE_JSON_FILES", config_files.json_files)
+        object.__setattr__(self, "SETTINGS_SOURCE_ENV_FILES", _safe_labels(config_files.env_files))
+        object.__setattr__(self, "SETTINGS_SOURCE_YAML_FILES", _safe_labels(config_files.yaml_files))
+        object.__setattr__(self, "SETTINGS_SOURCE_TOML_FILES", _safe_labels(config_files.toml_files))
+        object.__setattr__(self, "SETTINGS_SOURCE_JSON_FILES", _safe_labels(config_files.json_files))
+        self._settings_source_paths = own_config_paths(
+            SettingsFileHandler.format_config_file_tuple(parameters.config_files)
+        )
         object.__setattr__(self, "SETTINGS_SOURCE_SECRETS_DIR", parameters.secrets_dir)
         self._settings_secret_store = parameters.secret_store
         fields = type(self).model_fields
@@ -628,6 +723,15 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
             local_settings_params = SettingsParameters.merge(settings_parameters, local_settings_params)
 
         obj_config_files: SettingsFiles = SettingsFileHandler.separate_config_files(local_settings_params.config_files)
+        # Full ordered selectors for the private recipe, owned before any source
+        # opens. Ordinary custom paths stay readable even when no faithful owned
+        # description exists: the recipe is then None and extraction refuses safely.
+        try:
+            source_paths: Optional[tuple[Any, ...]] = own_config_paths(
+                SettingsFileHandler.format_config_file_tuple(local_settings_params.config_files)
+            )
+        except ConfigPathOwnershipError:
+            source_paths = None
 
         # Validate config files exist
         SettingsFileHandler.validate_config_files_exist(obj_config_files.env_files)
@@ -661,6 +765,7 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
         construction_error: Optional[Exception] = None
         with _direct_source_frame(
             self.__class__,
+            obj_config_files.env_files or None,
             obj_config_files.yaml_files or None,
             obj_config_files.toml_files or None,
             obj_config_files.json_files or None,
@@ -669,7 +774,10 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
                 super().__init__(   _case_sensitive=True,
                                     _nested_model_default_partial_update=False,
                                     _env_prefix=            local_settings_params.env_prefix,
-                                    _env_file=              tuple(str(path) for path in obj_config_files.env_files) or None,
+                                    # No preliminary file read: the incoming dotenv source is filled from
+                                    # this invocation's frame by the source hook wrapper (_metaclass), through
+                                    # the protected adapter, before any hook sees it.
+                                    _env_file=              None,
                                     _env_file_encoding =    'utf-8',
                                     _env_ignore_empty =     True,
                                     _env_nested_delimiter = None,
@@ -694,7 +802,14 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
             from mountainash_settings.resolve import _sanitize_if_implicated
 
             _sanitize_if_implicated(self.__class__, construction_error, _resolved_field_names)
-            raise construction_error
+            # Rethrowing inside a caller's active handler would make Python attach that
+            # ambient exception as the error's __context__ (replacing a cleared or existing
+            # one); put back the context the construction left.
+            saved_context = construction_error.__context__
+            try:
+                raise construction_error
+            finally:
+                construction_error.__context__ = saved_context
 
 
         # Meta-field bookkeeping only. super().__init__ above already applied
@@ -714,10 +829,11 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
         object.__setattr__(self, "SETTINGS_CLASS",            local_settings_params.settings_class or MountainAshBaseSettings)
         object.__setattr__(self, "SETTINGS_CLASS_NAME",       local_settings_params.settings_class.__name__ if local_settings_params.settings_class else "MountainAshBaseSettings")
         object.__setattr__(self, "SETTINGS_SOURCE_ENV_PREFIX", local_settings_params.env_prefix)
-        object.__setattr__(self, "SETTINGS_SOURCE_ENV_FILES",  obj_config_files.env_files)
-        object.__setattr__(self, "SETTINGS_SOURCE_YAML_FILES", obj_config_files.yaml_files)
-        object.__setattr__(self, "SETTINGS_SOURCE_TOML_FILES", obj_config_files.toml_files)
-        object.__setattr__(self, "SETTINGS_SOURCE_JSON_FILES", obj_config_files.json_files)
+        object.__setattr__(self, "SETTINGS_SOURCE_ENV_FILES",  _safe_labels(obj_config_files.env_files))
+        object.__setattr__(self, "SETTINGS_SOURCE_YAML_FILES", _safe_labels(obj_config_files.yaml_files))
+        object.__setattr__(self, "SETTINGS_SOURCE_TOML_FILES", _safe_labels(obj_config_files.toml_files))
+        object.__setattr__(self, "SETTINGS_SOURCE_JSON_FILES", _safe_labels(obj_config_files.json_files))
+        self._settings_source_paths = source_paths
         object.__setattr__(self, "SETTINGS_SOURCE_SECRETS_DIR", local_settings_params.secrets_dir)
         self._settings_secret_store = local_settings_params.secret_store
 
@@ -743,23 +859,10 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
         yaml_files: Any = _CACHE_SOURCE_UNSET,
         toml_files: Any = _CACHE_SOURCE_UNSET,
         json_files: Any = _CACHE_SOURCE_UNSET,
+        env_files: Any = _CACHE_SOURCE_UNSET,
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
         """Build the shared MountainAsh source ordering for direct and cached use."""
-        unprefixed_dotenv_settings = DotEnvSettingsSource(
-            settings_cls,
-            env_file=dotenv_settings.env_file,
-            env_file_encoding=dotenv_settings.env_file_encoding,
-            dotenv_filtering=dotenv_settings.dotenv_filtering,
-            case_sensitive=dotenv_settings.case_sensitive,
-            env_prefix="",
-            env_prefix_target=dotenv_settings.env_prefix_target,
-            env_nested_delimiter=dotenv_settings.env_nested_delimiter,
-            env_nested_max_split=dotenv_settings.env_nested_max_split,
-            env_ignore_empty=dotenv_settings.env_ignore_empty,
-            env_parse_none_str=dotenv_settings.env_parse_none_str,
-            env_parse_enums=dotenv_settings.env_parse_enums,
-            _init_state=dotenv_settings._init_state,
-        )
+        dotenv_settings, unprefixed_dotenv_settings = _dotenv_views(dotenv_settings, env_files)
         yaml_kwargs = {} if yaml_files is _CACHE_SOURCE_UNSET else {"yaml_file": yaml_files}
         toml_kwargs = {} if toml_files is _CACHE_SOURCE_UNSET else {"toml_file": toml_files}
         json_kwargs = {} if json_files is _CACHE_SOURCE_UNSET else {"json_file": json_files}
@@ -768,9 +871,9 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
             env_settings,
             dotenv_settings,
             unprefixed_dotenv_settings,
-            YamlConfigSettingsSource(settings_cls, deep_merge=True, **yaml_kwargs),
-            TomlConfigSettingsSource(settings_cls, deep_merge=True, **toml_kwargs),
-            JsonConfigSettingsSource(settings_cls, deep_merge=True, **json_kwargs),
+            UPathYamlSource(settings_cls, deep_merge=True, **yaml_kwargs),
+            UPathTomlSource(settings_cls, deep_merge=True, **toml_kwargs),
+            UPathJsonSource(settings_cls, deep_merge=True, **json_kwargs),
             file_secret_settings,
         )
 
@@ -797,6 +900,7 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
         if frame is not None and frame.settings_class is settings_cls:
             return cls._cache_default_sources(
                 settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+                env_files=frame.env_files,
                 yaml_files=frame.yaml_files, toml_files=frame.toml_files, json_files=frame.json_files,
             )
         return cls._cache_default_sources(
@@ -980,6 +1084,13 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
         """
         Returns a SettingsParameters object reconstructed from a BaseSettings object.
 
+        Config files come from the private, ordered, independently owned source
+        selectors (local paths, remote URLs and UPath access options, in the
+        original caller order), never from the safe public ``SETTINGS_SOURCE_*``
+        labels. Borrowed access objects are retained by identity. No source is
+        reread. Raises TypeError when no faithful owned recipe exists.
+
+
         Args:
             objSettings (BaseSettings): The settings object.
 
@@ -987,22 +1098,18 @@ class MountainAshBaseSettings(BaseSettings, metaclass=_SettingsMetaclass):
             SettingsParameters: The settings parameters object
         """
 
-        # combine the config files into a single list
-        config_files : List = []
-        if self.SETTINGS_SOURCE_ENV_FILES:
-            config_files += self.SETTINGS_SOURCE_ENV_FILES
-        if self.SETTINGS_SOURCE_YAML_FILES:
-            config_files += self.SETTINGS_SOURCE_YAML_FILES
-        if self.SETTINGS_SOURCE_TOML_FILES:
-            config_files += self.SETTINGS_SOURCE_TOML_FILES
-        if self.SETTINGS_SOURCE_JSON_FILES:
-            config_files += self.SETTINGS_SOURCE_JSON_FILES
-
-
-        existing_config_files =     SettingsFileHandler.format_config_file_list(config_files=config_files)
+        # The ordered, full-option recipe is private; the public SETTINGS_SOURCE_*
+        # fields hold safe labels only and are never read back.
+        source_paths = self._settings_source_paths
+        existing_config_files: Optional[List[Any]] = None
+        if source_paths is not None:
+            try:
+                existing_config_files = list(own_config_paths(source_paths))
+            except ConfigPathOwnershipError:
+                existing_config_files = None
         recipe = self._settings_reconstruction_kwargs
         existing_kwargs = _snapshot_reconstruction(recipe) if recipe is not None else None
-        if existing_kwargs is None:
+        if existing_config_files is None or existing_kwargs is None:
             raise TypeError(
                 f"Cannot extract settings parameters for {type(self).__name__}: "
                 "source inputs have no faithful independently owned reconstruction"

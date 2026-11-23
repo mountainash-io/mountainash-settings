@@ -48,7 +48,7 @@ with tempfile.TemporaryDirectory() as d:
 <!-- concept:32 -->
 ## Config file handling
 
-`config_files` accepts a single path, a list of paths, or `None`. Before loading, the paths are normalised (a leading `~` is expanded), deduplicated with the first occurrence kept, and sorted by format into `.env`, YAML, TOML and JSON groups, each in first-seen order.
+`config_files` accepts a single path, a list of paths, or `None`. Before loading, local paths have a leading `~` expanded (remote paths are never expanded), entries are deduplicated with the first occurrence kept, and sorted by format into `.env`, YAML, TOML and JSON groups, each in first-seen order. The format groups load with a fixed priority: dotenv, then YAML, then TOML, then JSON. Structured files deep-merge; dotenv files are not deep-merged.
 
 Every referenced file must exist. A missing file raises `FileNotFoundError` when the settings object is constructed, so a configuration error shows up at construction time and not when a value is first read. A file whose extension is not recognised raises `ValueError`.
 
@@ -84,14 +84,14 @@ The file type comes from the extension. For a regular file such as `config.yaml`
 <!-- concept:34 -->
 ## File categorization
 
-Categorization sorts the mixed `config_files` list into its format groups, so a caller does not need to know which files are YAML, TOML, JSON or `.env`. Duplicates are removed on the normalised path, and the first occurrence keeps its position. Entries given as strings stay strings, and entries given as `UPath` objects stay `UPath` objects.
+Categorization groups the mixed `config_files` list by format, so a caller does not need to know which files are YAML, TOML, JSON or `.env`. Duplicates are removed on the first occurrence, which keeps its position. For a `UPath`, duplicate detection takes its filesystem options into account: the same location with different options is a different source, and a URL string is the same source as a `UPath` with default options. Local string entries remain strings; remote URL strings are normalized to UPaths. Supplied UPaths retain their filesystem options.
 
 The example in [From raw input to validated fields](#from-raw-input-to-validated-fields) shows this: `base.yaml` appears twice in the list and is loaded once, and the three formats are each routed to their own source.
 
 <!-- concept:41 -->
 ## UPath config paths
 
-Configuration file paths may be strings or `UPath` objects (from `universal_pathlib`). Both are valid `config_files` entries. A `UPath` entry is kept as a `UPath`, so any filesystem options it carries are retained.
+Configuration file paths may be strings or `UPath` objects (from `universal_pathlib`). Both are valid `config_files` entries, and remote locations such as `memory:///app/cfg.json`, `https://host/cfg.yaml` or `s3://bucket/cfg.toml` work for all four formats. A `UPath` entry is kept as a `UPath`, so any filesystem options it carries are retained and used when the file is opened.
 
 ```python
 from upath import UPath
@@ -104,10 +104,30 @@ with tempfile.TemporaryDirectory() as d:
     # 20280101
 ```
 
-!!! warning "Remote config paths are not supported"
-    Only local config paths work. A remote path such as `s3://bucket/cfg.json` or `memory:///cfg.json` raises `NotImplementedError` when the settings object is constructed, so keep configuration files on the local filesystem.
+!!! note "Remote config paths"
+    A remote path is opened through the installed `universal_pathlib`/`fsspec` backend for its scheme. The application installs that backend (for example the S3 or HTTP extras) and supplies any credentials; the settings package does not add dependencies or credential handling for them. Opaque access objects carried by a path, such as sessions or clients, are borrowed by identity and never closed or managed by settings. A missing remote file raises `FileNotFoundError` at construction, like a local one.
 
-This applies to configuration file paths only. Templated field values are plain strings, so a template such as `"s3://{BUCKET}/{ENVIRONMENT}/{DATASET}.parquet"` works normally.
+Public config-source labels omit userinfo and filesystem options; HTTP(S) labels also omit query strings and fragments. Literal `?` and `#` characters in object-store keys remain part of the key. These diagnostic labels do not replace the complete recipe from `extract_settings_parameters()`, which keeps the full selectors and options in their original order. Treat that recipe as private and use it only in trusted code. Cached retrieval reads each source once per source context and pins the values, while direct construction reads on each call.
+
+Configuration access errors use a separate display rule: hierarchical locations
+retain only scheme, host, port and path, without userinfo, query or fragment;
+other scheme-prefixed locations display as `***`. Local paths and path segments
+remain visible. Native OS causes retain only errno and strerror, without native
+filenames or extra attributes; other native errors contribute their class name.
+Missing files remain `FileNotFoundError`. Parser and decoding errors about file
+content are not sanitized by this boundary.
+
+The same protection covers direct and cached reads, including the preliminary
+local dotenv read before custom source hooks. Loading configuration machinery
+also installs process-wide filters on the `fsspec`, `fsspec.http`,
+`fsspec.caching` and `fsspec.asyn` loggers. Records keep their severity and handlers,
+but use controlled filesystem messages without raw arguments, exception payloads
+or stack text. Unrelated fsspec users in the same process receive this reduced
+diagnostic detail too. This is not a universal settings-value masking facility:
+trusted recipes, file contents, visible path segments and arbitrary user-defined
+sources remain outside that guarantee.
+
+Templated field values are plain strings and are not config paths, so a template such as `"s3://{BUCKET}/{ENVIRONMENT}/{DATASET}.parquet"` works normally and is never expanded or opened.
 
 <!-- concept:35 -->
 <!-- concept:36 -->

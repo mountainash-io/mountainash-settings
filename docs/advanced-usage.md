@@ -164,6 +164,37 @@ caller-supplied values. Keep those operations in trusted code paths.
 
 If an otherwise valid supplied value cannot be faithfully represented in, and independently owned by, the reconstruction recipe, construction and updates retain their normal behavior, but extraction raises a value-free `TypeError`. This includes an update whose accepted alias/path would make faithful reconstruction change an independently supplied sibling. It does not return a partial recipe, alter another field to invent a representation, or use a shared input tree.
 
+### Configuration access diagnostics
+
+Errors from library-owned path preparation and file access use a display form,
+not the operational selector. For example,
+`https://user:password@host/config.yaml?token=value#fragment` is shown as
+`https://host/config.yaml`. Other scheme-prefixed, non-hierarchical locations
+are shown as `***`. Local paths, hosts and path segments remain visible: do not
+put credentials in directory or object-key names.
+
+Missing files remain `FileNotFoundError`. Native I/O errors carry a controlled
+category; an OS error with an errno retains its errno and strerror through a
+fresh cause without native filenames, extra attributes or notes. Other native
+exceptions contribute their class name, not their text or original chain.
+Content-parser and decoding errors retain their existing diagnostics.
+
+This applies to direct construction and cached retrieval, including local
+dotenv loading before a custom source hook runs. It does not rewrite arbitrary
+user-authored sources. Successful source labels and trusted reconstruction
+recipes keep their existing contracts; a recipe still contains complete
+selectors and filesystem options.
+
+Loading the configuration machinery installs process-wide filters on `fsspec`,
+`fsspec.http`, `fsspec.caching` and `fsspec.asyn`. Their records retain their
+severity and handlers, but messages become controlled filesystem categories and
+arguments, exception payloads and stack text are cleared. This also reduces
+diagnostic detail for unrelated fsspec operations in the same process, including
+background-cache work. It is not a universal secret filter: permitted literal
+backend paths and records from other emitters follow their own diagnostic
+contracts.
+
+
 ### Service registry pattern
 
 Store reusable `SettingsParameters` objects under application-owned service names:
