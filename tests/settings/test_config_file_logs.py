@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
 import logging
 from pathlib import Path
 import subprocess
@@ -17,7 +18,7 @@ from upath import UPath
 
 from mountainash_settings import MountainAshBaseSettings, get_settings
 
-EMITTERS = ("fsspec", "fsspec.http", "fsspec.caching", "fsspec.asyn")
+EMITTERS = ("fsspec", "fsspec.http", "fsspec.caching", "fsspec.asyn", "fsspec.reference")
 USER, PASSWORD, QUERY, FRAGMENT = "LOG_USER", "LOG_PASSWORD", "LOG_QUERY", "LOG_FRAGMENT"
 SENTINELS = (USER, PASSWORD, QUERY, FRAGMENT)
 LARGE_ITEMS = 6000
@@ -82,6 +83,8 @@ def range_server() -> Iterator[tuple[str, list[str]]]:
                 self.send_error(403)
                 return
             body = large if name.startswith("large") else b"VALUE: 12\n"
+            if name == "refs.json":
+                body = json.dumps({"version": 1, "refs": {"config.json": '{"VALUE": 42}'}}).encode()
             start, end, status = 0, len(body) - 1, 200
             spec = self.headers.get("Range")
             if spec and spec.startswith("bytes="):
@@ -148,6 +151,24 @@ def test_successful_http_load_logs_are_clean(
     assert value == 77
     assert any(f"token={QUERY}" in request for request in requests)
     assert_clean_and_emitted(captured_records)
+
+
+@pytest.mark.parametrize("cached", [False, True])
+def test_reference_document_url_logs_are_clean(
+    range_server, isolated_settings_manager, captured_records, cached,
+):
+    """A reference-document URL in storage options must not leak through INFO records."""
+    origin, requests = range_server
+    path = UPath("reference://config.json", fo=credential_url(origin, "refs.json"))
+    settings = (get_settings(settings_class=LogSettings, config_files=path) if cached
+                else LogSettings(config_files=path))
+    assert settings.VALUE == 42
+    assert any(f"token={QUERY}" in request for request in requests)
+    reference_records = [r for r in captured_records if r.name == "fsspec.reference"]
+    assert any(r.levelno == logging.INFO for r in reference_records)
+    for record in reference_records:
+        for sentinel in SENTINELS:
+            assert sentinel not in record_surfaces(record)
 
 
 @pytest.mark.parametrize("cached", [False, True])

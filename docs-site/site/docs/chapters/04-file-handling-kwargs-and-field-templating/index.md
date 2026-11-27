@@ -120,12 +120,13 @@ content are not sanitized by this boundary.
 The same protection covers direct and cached reads, including the preliminary
 local dotenv read before custom source hooks. Loading configuration machinery
 also installs process-wide filters on the `fsspec`, `fsspec.http`,
-`fsspec.caching` and `fsspec.asyn` loggers. Records keep their severity and handlers,
+`fsspec.caching`, `fsspec.asyn` and `fsspec.reference` loggers. Records keep their severity and handlers,
 but use controlled filesystem messages without raw arguments, exception payloads
 or stack text. Unrelated fsspec users in the same process receive this reduced
-diagnostic detail too. This is not a universal settings-value masking facility:
-trusted recipes, file contents, visible path segments and arbitrary user-defined
-sources remain outside that guarantee.
+diagnostic detail too, including reference-document URL logs. This is not a
+universal settings-value masking facility: trusted recipes, file contents,
+visible path segments, other backend emitters and arbitrary user-defined sources
+remain outside that guarantee.
 
 Templated field values are plain strings and are not config paths, so a template such as `"s3://{BUCKET}/{ENVIRONMENT}/{DATASET}.parquet"` works normally and is never expanded or opened.
 

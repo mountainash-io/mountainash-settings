@@ -1385,3 +1385,81 @@ class TestHookWrappingKeepsCacheAdmission:
                 parameters.get_settings()
             assert not isolated_settings_manager.is_initialised(parameters)
         assert _Legacy(marker="direct").marker == "direct"
+
+
+_LOCAL_OPTIONS = {"auto_mkdir": True}
+
+
+@pytest.fixture
+def upath_opens(monkeypatch, tmp_path):
+    """Record the storage options of each local UPath at its real opening boundary, by file name."""
+    from upath import UPath
+
+    opens: list[tuple[str, dict]] = []
+    local_class = type(UPath(tmp_path))
+    original = local_class.open
+
+    def recording(self, *args, **kwargs):
+        opens.append((self.name, dict(self.storage_options)))
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(local_class, "open", recording)
+    return lambda path: [options for name, options in opens if name == path.name]
+
+
+class TestLocalUPathOptionsReachTheDotenvRead:
+    def _local(self, tmp_path, name, content):
+        from upath import UPath
+
+        (tmp_path / name).write_text(content)
+        return UPath(tmp_path / name, **_LOCAL_OPTIONS)
+
+    def test_direct_construction_reads_a_local_upath_with_its_options(self, tmp_path, upath_opens):
+        path = self._local(tmp_path, "optioned_direct.env", "marker=local\n")
+
+        class _Plain(MountainAshBaseSettings):
+            marker: str = "unset"
+
+        assert _Plain(config_files=[path]).marker == "local"
+        assert upath_opens(path) == [_LOCAL_OPTIONS]
+
+    def test_no_super_hook_keeps_string_env_file_but_reads_with_upath_options(self, tmp_path, upath_opens):
+        path = self._local(tmp_path, "optioned_hook.env", "marker=local\n")
+        seen: dict[str, object] = {}
+
+        class _NoSuper(MountainAshBaseSettings):
+            marker: str = "unset"
+
+            @classmethod
+            def settings_customise_sources(
+                cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
+            ):
+                seen["source"] = dotenv_settings
+                return (init_settings, dotenv_settings)
+
+        settings = _NoSuper(config_files=[path])
+        source = cast(DotEnvSettingsSource, seen["source"])
+
+        assert settings.marker == "local"
+        assert type(source) is DotEnvSettingsSource
+        assert source.env_file == (str(path),)
+        assert upath_opens(path) == [_LOCAL_OPTIONS]
+
+    @pytest.mark.parametrize("remote_first", [False, True])
+    def test_mixed_selection_keeps_order_and_reads_local_upath_with_its_options(
+        self, tmp_path, memory_config_root, upath_opens, remote_first,
+    ):
+        local = self._local(tmp_path, "optioned_mixed.env", "marker=local\nother=local\n")
+        remote = memory_config_root / "optioned_mixed_remote.env"
+        remote.write_text("marker=remote\n")
+
+        class _Plain(MountainAshBaseSettings):
+            marker: str = "unset"
+            other: str = "unset"
+
+        files = [remote, local] if remote_first else [local, remote]
+        settings = _Plain(config_files=files)
+
+        assert (settings.marker, settings.other) == (("local", "local") if remote_first else ("remote", "local"))
+        opened = upath_opens(local)
+        assert opened and all(options == _LOCAL_OPTIONS for options in opened)

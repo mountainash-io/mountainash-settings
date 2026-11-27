@@ -119,11 +119,11 @@ def _direct_source_frame(
         _CURRENT_DIRECT_SOURCE_FRAME.reset(token)
 
 
-def _local_dotenv_selection(env_files: Any) -> Optional[tuple[str, ...]]:
-    """The ordinary local subset of a direct dotenv selection, in the form Pydantic received."""
+def _local_dotenv_selection(env_files: Any) -> Optional[tuple[Any, ...]]:
+    """The ordinary local subset of a direct dotenv selection, as originally selected."""
     if env_files is None:
         return None
-    return tuple(str(path) for path in env_files if not is_remote_config_path(path)) or None
+    return tuple(path for path in env_files if not is_remote_config_path(path)) or None
 
 
 def _prepare_direct_dotenv(settings_cls: Any, dotenv_settings: Any) -> None:
@@ -149,7 +149,7 @@ def _prepare_direct_dotenv(settings_cls: Any, dotenv_settings: Any) -> None:
     local_files = _local_dotenv_selection(frame.env_files)
     if local_files is not None:
         view = dotenv_view(dotenv_settings, local_files, dotenv_settings.env_prefix)
-        dotenv_settings.env_file = local_files
+        dotenv_settings.env_file = tuple(str(path) for path in local_files)
         dotenv_settings.env_vars = view.env_vars
 
 

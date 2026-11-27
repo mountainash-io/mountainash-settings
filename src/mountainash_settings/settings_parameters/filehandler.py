@@ -52,6 +52,9 @@ class FileTypeRegistry:
 
     @classmethod
     def register_type(cls, extension: str, file_type: str) -> None:
+        file_type = FileType.YAML if file_type == FileType.YML else file_type
+        if file_type not in (FileType.ENV, FileType.YAML, FileType.TOML, FileType.JSON):
+            raise_safe(ValueError("Unsupported configuration file parser"))
         cls._registry[extension] = file_type
 
     @classmethod
