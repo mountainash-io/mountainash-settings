@@ -181,3 +181,6 @@ coverage.*
 .hiivmind/
 .ruff_cache/
 .benchmarks/
+
+# Libraries publish version ranges; no lock file is committed.
+uv.lock
