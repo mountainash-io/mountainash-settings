@@ -11,6 +11,12 @@
 - Protect direct and cached source reads, including local dotenv reads before
   custom source hooks, without replacing content parsers or changing recipes.
 - Reduce diagnostic payloads process-wide on `fsspec`, `fsspec.http`,
-  `fsspec.caching` and `fsspec.asyn`; preserve records, severity and handlers,
-  including background-cache diagnostics. Local paths and path segments remain
+  `fsspec.caching`, `fsspec.asyn` and `fsspec.reference`; preserve records, severity
+  and handlers, including background-cache and reference-document diagnostics.
+  Local paths and path segments remain
   visible, and file-content errors retain their existing diagnostics.
+- Preserve local dotenv UPath storage options during the preliminary read before
+  direct-construction source hooks, while retaining the ordinary source interface.
+- Reject unsupported `FileTypeRegistry.register_type()` parser targets before
+  changing registration; accept `yml` as a YAML target alongside custom extension
+  aliases for the existing env, YAML, TOML and JSON parsers.

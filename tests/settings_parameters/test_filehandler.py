@@ -20,6 +20,8 @@ import pytest
 from pathlib import Path
 from upath import UPath
 
+from mountainash_settings import MountainAshBaseSettings
+
 from mountainash_settings.settings_parameters.filehandler import (
     FileType,
     FileTypeRegistry,
@@ -112,14 +114,62 @@ class TestFileTypeRegistry:
         assert result == "yaml"
 
     @pytest.mark.unit
-    def test_register_type_adds_new_extension(self, monkeypatch):
-        """Test registering a new file type."""
+    @pytest.mark.parametrize("target", ["ini", "", "YAML", "yml-secret-token"])
+    def test_register_type_rejects_unsupported_parser_without_mutation(self, monkeypatch, target):
+        """Unsupported parser targets fail safely and leave the registry untouched."""
         monkeypatch.setattr(FileTypeRegistry, "_registry", dict(FileTypeRegistry._registry))
-        FileTypeRegistry.register_type("ini", "ini")
+        FileTypeRegistry.register_type("custom", FileType.TOML)
 
-        # Verify it's registered
-        result = FileTypeRegistry.identify("config.ini")
-        assert result == "ini"
+        for extension in ("custom", "fresh"):
+            with pytest.raises(ValueError, match="Unsupported") as excinfo:
+                FileTypeRegistry.register_type(extension, target)
+            assert "secret-token" not in str(excinfo.value)
+
+        assert FileTypeRegistry.identify("config.custom") == FileType.TOML
+        assert FileTypeRegistry.identify("config.fresh") is None
+
+    @pytest.mark.unit
+    def test_register_type_normalizes_yml_target_and_loads_values(self, monkeypatch, tmp_path):
+        """FileType.YML alias reaches the YAML parser and its values load."""
+        monkeypatch.setattr(FileTypeRegistry, "_registry", dict(FileTypeRegistry._registry))
+        FileTypeRegistry.register_type("cfg", FileType.YML)
+        path = tmp_path / "app.cfg"
+        path.write_text("VALUE: 41\n")
+
+        class AliasSettings(MountainAshBaseSettings):
+            VALUE: int = 0
+
+        assert AliasSettings(config_files=str(path)).VALUE == 41
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("target,text", [
+        (FileType.ENV, "VALUE=43\n"),
+        (FileType.YAML, "VALUE: 43\n"),
+        (FileType.TOML, "VALUE = 43\n"),
+        (FileType.JSON, '{"VALUE": 43}'),
+    ])
+    def test_register_type_supported_alias_loads_values(self, monkeypatch, tmp_path, target, text):
+        monkeypatch.setattr(FileTypeRegistry, "_registry", dict(FileTypeRegistry._registry))
+        FileTypeRegistry.register_type("cfg", target)
+        path = tmp_path / "app.cfg"
+        path.write_text(text)
+
+        class AliasSettings(MountainAshBaseSettings):
+            VALUE: int = 0
+
+        assert AliasSettings(config_files=str(path)).VALUE == 43
+
+    @pytest.mark.unit
+    def test_register_type_dotfile_alias_loads_values(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(FileTypeRegistry, "_registry", dict(FileTypeRegistry._registry))
+        FileTypeRegistry.register_type("appconf", FileType.YAML)
+        path = tmp_path / ".appconf"
+        path.write_text("VALUE: 47\n")
+
+        class AliasSettings(MountainAshBaseSettings):
+            VALUE: int = 0
+
+        assert AliasSettings(config_files=str(path)).VALUE == 47
 
     @pytest.mark.unit
     def test_identify_dotenv_file(self):
