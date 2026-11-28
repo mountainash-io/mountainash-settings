@@ -97,7 +97,7 @@ def raise_safe(error: BaseException, native: BaseException | None = None) -> t.N
         error.__context__ = None
 
 
-_LOG_EMITTERS = ("fsspec", "fsspec.http", "fsspec.caching", "fsspec.asyn")
+_LOG_EMITTERS = ("fsspec", "fsspec.http", "fsspec.caching", "fsspec.asyn", "fsspec.reference")
 
 
 class _ConfigLogFilter(logging.Filter):
@@ -121,6 +121,6 @@ _CONFIG_LOG_FILTER = _ConfigLogFilter()
 
 
 def install_config_log_filters() -> None:
-    """Attach the package-owned filter to the four authorized fsspec emitters (idempotent)."""
+    """Attach the package-owned filter to the authorized fsspec emitters (idempotent)."""
     for name in _LOG_EMITTERS:
         logging.getLogger(name).addFilter(_CONFIG_LOG_FILTER)  # no-op if already attached

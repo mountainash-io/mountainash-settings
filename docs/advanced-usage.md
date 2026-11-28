@@ -186,13 +186,15 @@ recipes keep their existing contracts; a recipe still contains complete
 selectors and filesystem options.
 
 Loading the configuration machinery installs process-wide filters on `fsspec`,
-`fsspec.http`, `fsspec.caching` and `fsspec.asyn`. Their records retain their
+`fsspec.http`, `fsspec.caching`, `fsspec.asyn` and `fsspec.reference`. Their records retain their
 severity and handlers, but messages become controlled filesystem categories and
 arguments, exception payloads and stack text are cleared. This also reduces
 diagnostic detail for unrelated fsspec operations in the same process, including
-background-cache work. It is not a universal secret filter: permitted literal
-backend paths and records from other emitters follow their own diagnostic
-contracts.
+background-cache work and reference-document loading. Reference-document URLs
+passed in filesystem options retain their credentials for requests, but not in
+these records. This is not a universal secret filter: permitted literal backend
+paths and records from other emitters (including `s3fs` and `gcsfs`) follow their
+own diagnostic contracts; cloud-backend log safety has not been qualified.
 
 
 ### Service registry pattern
